@@ -1,0 +1,75 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "africancuisine-b8759",
+          "appId": "1:367349792428:android:3c5c4545c3939f6c706909",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "africancuisine-b8759",
+          "appId": "1:367349792428:ios:8c90537864d380b0706909",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "africancuisine-b8759",
+          "appId": "1:367349792428:ios:2d3aaf34f14754dc706909",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "africancuisine-b8759",
+          "configurations": {
+            "android": "1:367349792428:android:3c5c4545c3939f6c706909",
+            "ios": "1:367349792428:ios:8c90537864d380b0706909",
+            "macos": "1:367349792428:ios:2d3aaf34f14754dc706909",
+            "web": "1:367349792428:web:87890f4c489af5b0706909",
+            "windows": "1:367349792428:web:960e86db8e78c249706909"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true
+    },
+    "singleProjectMode": true
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

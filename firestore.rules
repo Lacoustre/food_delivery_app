@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🔐 MAIN ORDERS COLLECTION (global /orders)
+    match /orders/{orderId} {
+      allow create: if (
+        (request.auth != null &&
+         request.resource.data.keys().hasAll(['userId']) &&
+         request.resource.data.userId == request.auth.uid)
+        ||
+        (request.auth == null &&
+         request.resource.data.keys().hasAll(['userId']) &&
+         request.resource.data.userId is string)
+      );
+
+      allow read: if request.auth != null &&
+        (
+          resource.data.userId == request.auth.uid ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+          )
+        );
+
+      allow update: if (
+        (request.auth != null &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+         request.resource.data.status in ['preparing', 'out for delivery', 'delivered', 'cancelled'] &&
+         resource.data.status != 'cancelled')
+        ||
+        (request.auth == null)
+      );
+
+      // ✅ Allow delete for Admins or Server (e.g., Cloud Function)
+      allow delete: if (
+        (request.auth != null &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+        ||
+        (request.auth == null)
+      );
+    }
+
+    // 👤 USER DATA AND SUBCOLLECTIONS
+    match /users/{userId} {
+      allow read, update, delete: if (
+        (request.auth != null && request.auth.uid == userId) ||
+        (request.auth == null)
+      );
+
+      allow create: if (
+        (request.auth != null &&
+         request.auth.uid == userId &&
+         request.resource.data.keys().hasAll(['userId']) &&
+         request.resource.data.userId == request.auth.uid)
+        ||
+        (request.auth == null &&
+         request.resource.data.keys().hasAll(['userId']) &&
+         request.resource.data.userId is string)
+      );
+
+      // 🧾 USER ORDERS SUBCOLLECTION
+      match /orders/{orderId} {
+        allow create: if (
+          (request.auth != null &&
+           userId == request.auth.uid &&
+           request.resource.data.userId == request.auth.uid &&
+           request.resource.data.orderId is string)
+          ||
+          (request.auth == null &&
+           request.resource.data.userId is string)
+        );
+
+        allow read: if (
+          (request.auth != null && request.auth.uid == userId) ||
+          (request.auth == null)
+        );
+
+        allow update: if request.auth == null;
+
+        // ✅ Allow deletion by owner or admin
+        allow delete: if (
+          (request.auth != null && request.auth.uid == userId)
+          ||
+          (request.auth != null &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
+          ||
+          (request.auth == null)
+        );
+      }
+
+      // 🛒 USER CART ITEMS
+      match /cart/{itemId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // ❤️ USER FAVORITES
+      match /favorites/{mealId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // 📍 USER ADDRESSES
+      match /addresses/{addressId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // 💳 SAVED CARDS
+      match /saved_cards/{cardId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // 🔔 NOTIFICATIONS
+      match /notifications/{noteId} {
+        allow read, write, delete: if (
+          (request.auth != null && request.auth.uid == userId) ||
+          (request.auth == null)
+        );
+      }
+    }
+
+    // 🌟 REVIEWS
+    match /reviews/{reviewId} {
+      allow create: if request.auth != null &&
+                    request.resource.data.userId == request.auth.uid;
+
+      allow read: if true;
+
+      allow update, delete: if request.auth != null &&
+        (
+          request.auth.uid == resource.data.userId ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        );
+    }
+
+    // 🛠️ ADMIN SETTINGS
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 🌍 PUBLIC COLLECTION
+    match /public/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 🍽️ MENU ITEMS
+    match /menu/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 📊 ANALYTICS
+    match /analytics/{document=**} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 🎯 CATEGORIES
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 🎉 PROMOTIONS
+    match /promotions/{promoId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+  }
+}

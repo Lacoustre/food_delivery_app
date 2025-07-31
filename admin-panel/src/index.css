@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* Simple Toast Styles */
+.Toastify__toast {
+  background: white;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.Toastify__progress-bar {
+  background: #6b7280;
+}
+
+.Toastify__close-button {
+  color: #6b7280;
+}
+
+.Toastify__close-button:hover {
+  color: #374151;
+}
