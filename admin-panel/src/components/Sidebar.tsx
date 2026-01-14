@@ -1,12 +1,18 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Utensils, Users } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Utensils, Users, BarChart3, Settings, MessageCircle, Calendar, Car, Star } from "lucide-react";
 import logo from "../assets/images/logo.png";
 
 const navItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
   { name: "Orders", path: "/orders", icon: ShoppingBag },
+  { name: "Scheduled Orders", path: "/scheduled-orders", icon: Calendar },
   { name: "Meals", path: "/meals", icon: Utensils },
   { name: "Customers", path: "/users", icon: Users },
+  { name: "Drivers", path: "/drivers", icon: Car },
+  { name: "Reviews", path: "/reviews", icon: Star },
+  { name: "Support", path: "/support", icon: MessageCircle },
+  { name: "Analytics", path: "/analytics", icon: BarChart3 },
+  { name: "Settings", path: "/settings", icon: Settings },
 ];
 
 export default function Sidebar({ className = "" }) {

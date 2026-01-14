@@ -192,9 +192,12 @@ class FavoritesPage extends StatelessWidget {
                           'instructions': '',
                         });
                         Fluttertoast.showToast(
-                          msg: "${meal['name']} added to cart",
+                          msg: "🛍️ ${meal['name']} added to cart",
                           toastLength: Toast.LENGTH_SHORT,
-                          gravity: ToastGravity.BOTTOM,
+                          gravity: ToastGravity.TOP,
+                          backgroundColor: Colors.deepOrange,
+                          textColor: Colors.white,
+                          fontSize: 14.0,
                         );
                       },
                       child: const Text("Add to Cart"),

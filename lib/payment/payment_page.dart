@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:african_cuisine/orders/order_number_generator.dart';
 import 'package:flutter/material.dart';
@@ -12,25 +13,32 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:african_cuisine/payment/confirmation_page.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
+import 'package:african_cuisine/services/email_service.dart';
+import 'package:african_cuisine/services/push_notification_service.dart';
+import 'package:intl/intl.dart';
 
 // ===== CONSTANTS =====
 class PaymentConstants {
-  static const double taxRate = 0.0735;
+  static const double defaultTaxRate = 0.0635; // Default CT tax rate
   static const double minimumPaymentAmount = 0.50;
   static const double maxDeliveryDistance = 15.0;
   static const double maxTipAmount = 999.99;
   static const int paymentIntentTimeoutSeconds = 30;
-  static const int maxRetryAttempts = 3;
+  static const int maxRetryAttempts = 1;
   static const String merchantName = 'Taste of African Cuisine';
   static const String merchantCountryCode = 'US';
   static const String defaultCurrency = 'USD';
 
   static const List<String> validOrderStatuses = [
     'received',
+    'confirmed',
     'preparing',
-    'out for delivery',
+    'ready for pickup',
+    'picked up',
+    'on the way',
     'delivered',
     'cancelled',
+    'completed',
   ];
 
   static const List<double> defaultTipOptions = [0.0, 5.0, 10.0, 15.0, 20.0];
@@ -138,6 +146,8 @@ class OrderData {
   final Map<String, dynamic> statusHistory;
   final String createdAt;
   final String updatedAt;
+  final String? orderType;
+  final String? deliveryMethod;
 
   const OrderData({
     required this.orderNumber,
@@ -150,6 +160,8 @@ class OrderData {
     required this.statusHistory,
     required this.createdAt,
     required this.updatedAt,
+    this.orderType,
+    this.deliveryMethod,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -165,6 +177,8 @@ class OrderData {
       'eta': null,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      if (orderType != null) 'orderType': orderType,
+      if (deliveryMethod != null) 'deliveryMethod': deliveryMethod,
     };
   }
 }
@@ -215,7 +229,9 @@ class PaymentService {
       }
 
       // Prepare function call
-      final callable = _functions.httpsCallable('createPaymentIntent');
+      final callable = FirebaseFunctions.instanceFor(
+        region: "us-central1",
+      ).httpsCallable('createPaymentIntent');
 
       final requestData = {
         'amount': amount, // Send as dollars
@@ -351,7 +367,7 @@ class PaymentService {
       case 'already-exists':
         return 'Duplicate payment request. Please try with a new order.';
       case 'resource-exhausted':
-        return 'Payment service is busy. Please try again in a moment.';
+        return 'Service quota exceeded. Please contact support or try again later.';
       case 'failed-precondition':
         return 'Payment cannot be processed at this time.';
       case 'aborted':
@@ -393,7 +409,9 @@ class PaymentService {
       await currentUser.getIdToken(true);
       debugPrint('✅ Token refreshed for order save');
 
-      final callable = _functions.httpsCallable('createOrder');
+      final callable = FirebaseFunctions.instanceFor(
+        region: "us-central1",
+      ).httpsCallable('createOrder');
       final response = await callable.call(orderData.toFirestore());
 
       debugPrint('✅ Order saved successfully: ${response.data}');
@@ -444,7 +462,7 @@ class LocationService {
         'latitude': position.latitude,
         'longitude': position.longitude,
         'accuracy': position.accuracy,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': DateTime.now().toIso8601String(),
         'address': address,
       };
     } catch (e) {
@@ -498,6 +516,15 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   bool _isCustomTip = false;
   int _retryCount = 0;
   final List<double> _tipOptions = PaymentConstants.defaultTipOptions;
+  double _taxRate = PaymentConstants.defaultTaxRate;
+  bool _isScheduledOrder = false;
+  DateTime? _scheduledTime;
+  bool _isRestaurantOpen = true;
+
+  // Cached settings
+  Map<String, dynamic>? _cachedSettings;
+  DateTime? _lastSettingsFetch;
+  StreamSubscription<DocumentSnapshot>? _restaurantStatusSubscription;
 
   // Controllers
   final TextEditingController _customTipController = TextEditingController();
@@ -511,6 +538,54 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _customTipController.addListener(_onCustomTipChanged);
+    _loadSettings();
+    _listenToRestaurantStatus();
+  }
+
+  void _listenToRestaurantStatus() {
+    _restaurantStatusSubscription = FirebaseFirestore.instance
+        .collection('settings')
+        .doc('restaurant')
+        .snapshots()
+        .listen((snapshot) {
+          if (snapshot.exists && mounted) {
+            setState(() {
+              _isRestaurantOpen = snapshot.data()?['isOpen'] ?? true;
+            });
+          }
+        });
+  }
+
+  Future<void> _loadSettings() async {
+    // Use cached settings if available and recent (5 minutes)
+    if (_cachedSettings != null &&
+        _lastSettingsFetch != null &&
+        DateTime.now().difference(_lastSettingsFetch!).inMinutes < 5) {
+      _taxRate =
+          (_cachedSettings!['taxRate'] ?? PaymentConstants.defaultTaxRate) /
+          100;
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('restaurant')
+          .get();
+
+      if (doc.exists && mounted) {
+        _cachedSettings = doc.data() ?? {};
+        _lastSettingsFetch = DateTime.now();
+        setState(() {
+          _taxRate =
+              (_cachedSettings!['taxRate'] ??
+                  PaymentConstants.defaultTaxRate * 100) /
+              100;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching payment settings: $e');
+    }
   }
 
   @override
@@ -518,6 +593,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _customTipController.removeListener(_onCustomTipChanged);
     _customTipController.dispose();
+    _restaurantStatusSubscription?.cancel();
     super.dispose();
   }
 
@@ -552,7 +628,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     );
 
     final subtotal = cartProvider.totalPrice;
-    final tax = subtotal * PaymentConstants.taxRate;
+    final tax = subtotal * _taxRate;
 
     final tipAmount = _isCustomTip && _customTipController.text.isNotEmpty
         ? double.tryParse(_customTipController.text) ?? 0.0
@@ -642,6 +718,12 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   }
 
   Future<void> _executePaymentFlow(PaymentTotals totals) async {
+    // Handle scheduled orders (either manually scheduled or restaurant closed)
+    if ((_isScheduledOrder || !_isRestaurantOpen) && _scheduledTime != null) {
+      await _processScheduledOrderPayment(totals);
+      return;
+    }
+
     debugPrint('🚀 === PAYMENT FLOW STARTED ===');
     debugPrint('💰 Payment totals:');
     debugPrint('   Subtotal: \$${totals.subtotal.toStringAsFixed(2)}');
@@ -706,6 +788,17 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       await PaymentService.saveOrder(orderData);
       debugPrint('✅ Order saved successfully');
 
+      // Send push notification only (skip email for now)
+      try {
+        await PushNotificationService.sendOrderReceivedNotification(
+          orderId: orderId,
+          userId: user.uid,
+        );
+      } catch (e) {
+        debugPrint('Push notification failed: $e');
+        // Continue without notification - don't block order completion
+      }
+
       // Cleanup and navigation
       cartProvider.clearCart();
       setState(() => _paymentState = PaymentState.completed);
@@ -716,7 +809,10 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         debugPrint('🎉 === PAYMENT COMPLETED - NAVIGATING ===');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => ConfirmationPage(orderId: orderId)),
+          MaterialPageRoute(
+            builder: (_) =>
+                ConfirmationPage(orderId: orderId, isScheduled: false),
+          ),
         );
       }
     } catch (e, stackTrace) {
@@ -756,6 +852,11 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       listen: false,
     );
     final nowIso = DateTime.now().toIso8601String();
+    final user = FirebaseAuth.instance.currentUser!;
+    final customerName =
+        user.displayName ??
+        (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
+            'Customer');
 
     final items = cartProvider.items
         .map(
@@ -794,11 +895,15 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
             : 0.0,
         'address': deliveryAddress,
       },
+      orderType: deliveryProvider.deliveryOption.displayName.toLowerCase(),
+      deliveryMethod: deliveryProvider.deliveryOption.displayName.toLowerCase(),
       payment: {
         'method': _selectedPaymentMethod!.displayName,
         'methodId': _selectedPaymentMethod!.id,
         'status': 'completed',
         'processedAt': nowIso,
+        'customerName': customerName,
+        'customerEmail': user.email ?? '',
       },
       status: 'received',
       statusHistory: {'received': nowIso},
@@ -831,7 +936,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     return {
       'latitude': pos.latitude,
       'longitude': pos.longitude,
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': DateTime.now().toIso8601String(),
       'address': address,
     };
   }
@@ -857,7 +962,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                 _selectedPaymentMethod == PaymentMethod.googlePay
             ? const PaymentSheetGooglePay(
                 merchantCountryCode: PaymentConstants.merchantCountryCode,
-                testEnv: true,
+                testEnv: false,
               )
             : null,
       ),
@@ -894,9 +999,6 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       final retryableCodes = [
         'unavailable', // Service temporarily unavailable
         'deadline-exceeded', // Request timed out
-        'internal', // Internal server error (might be temporary)
-        'resource-exhausted', // Rate limiting
-        'aborted', // Request was aborted
       ];
 
       final shouldRetry =
@@ -1074,7 +1176,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
               const SizedBox(height: 8),
               _buildConfirmationRow('Subtotal', totals.subtotal),
               _buildConfirmationRow(
-                'Tax (${(PaymentConstants.taxRate * 100).toStringAsFixed(2)}%)',
+                'Tax (${(_taxRate * 100).toStringAsFixed(2)}%)',
                 totals.tax,
               ),
               _buildConfirmationRow('Tip', totals.tip),
@@ -1173,18 +1275,23 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
             iconTheme: const IconThemeData(color: Colors.white),
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.05),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!_isRestaurantOpen) _buildRestaurantClosedBanner(),
+                if (!_isRestaurantOpen)
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.025),
                 _buildDeliveryOptions(deliveryProvider),
-                const SizedBox(height: 20),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.025),
+                _buildScheduleSection(isDark),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.025),
                 _buildOrderSummary(isDark, totals),
-                const SizedBox(height: 20),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.025),
                 _buildTipSelector(isDark),
-                const SizedBox(height: 20),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.025),
                 _buildPaymentMethodsSection(isDark),
-                const SizedBox(height: 20),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.025),
                 _buildPayButton(totals.total),
               ],
             ),
@@ -1340,7 +1447,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
             const SizedBox(height: 16),
             _buildSummaryRow("Subtotal", totals.subtotal),
             _buildSummaryRow(
-              "Tax (${(PaymentConstants.taxRate * 100).toStringAsFixed(2)}%)",
+              "Tax (${(_taxRate * 100).toStringAsFixed(2)}%)",
               totals.tax,
             ),
             _buildSummaryRow("Tip", totals.tip),
@@ -1397,7 +1504,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 50,
+            height: MediaQuery.of(context).size.height * 0.06,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _tipOptions.length + 1,
@@ -1566,6 +1673,323 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _processScheduledOrderPayment(PaymentTotals totals) async {
+    debugPrint('🚀 === SCHEDULED ORDER PAYMENT FLOW STARTED ===');
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw const PaymentException('User not authenticated');
+    }
+
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final orderId = OrderNumberGenerator.generate();
+
+    try {
+      // Create payment intent for scheduled order
+      debugPrint('💳 Creating payment intent for scheduled order');
+      final paymentIntent = await PaymentService.createPaymentIntent(
+        amount: totals.total,
+        orderId: orderId,
+        customerName: user.displayName ?? user.email ?? 'Customer',
+        itemsDescription: cartProvider.items
+            .map((item) => '${item.name} x${item.quantity}')
+            .join(', '),
+      );
+
+      // Initialize and present payment sheet
+      await _initializePaymentSheet(paymentIntent);
+      await Stripe.instance.presentPaymentSheet();
+
+      debugPrint('✅ Payment completed for scheduled order');
+
+      // Save as scheduled order instead of regular order
+      await _saveScheduledOrderWithPayment(user.uid, orderId, totals);
+
+      cartProvider.clearCart();
+      setState(() => _paymentState = PaymentState.completed);
+
+      _showSuccessSnack('Scheduled order payment successful!');
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ConfirmationPage(orderId: orderId, isScheduled: true),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Scheduled order payment failed: $e');
+      setState(() => _paymentState = PaymentState.failed);
+      rethrow;
+    }
+  }
+
+  Future<void> _saveScheduledOrderWithPayment(
+    String userId,
+    String orderId,
+    PaymentTotals totals,
+  ) async {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final deliveryProvider = Provider.of<DeliveryFeeProvider>(
+      context,
+      listen: false,
+    );
+    final nowIso = DateTime.now().toIso8601String();
+
+    final items = cartProvider.items
+        .map(
+          (item) => {
+            'name': item.name,
+            'price': item.price,
+            'quantity': item.quantity,
+            'image': item.image,
+            'category': item.category,
+            'extras': item.extras,
+            'instructions': item.instructions,
+          },
+        )
+        .toList();
+
+    Map<String, dynamic>? deliveryAddress;
+    if (deliveryProvider.deliveryOption == DeliveryOption.delivery) {
+      try {
+        deliveryAddress = deliveryProvider.deliveryLocation != null
+            ? await _getDeliveryAddressFromProvider(deliveryProvider)
+            : await LocationService.getCurrentDeliveryAddress();
+      } catch (e) {
+        debugPrint('Failed to get delivery address: $e');
+      }
+    }
+
+    final user = FirebaseAuth.instance.currentUser!;
+    final customerName =
+        user.displayName ??
+        (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
+            'Customer');
+
+    final scheduledOrderData = {
+      'orderNumber': orderId,
+      'userId': userId,
+      'customerName': customerName,
+      'customerEmail': user.email ?? '',
+      'items': items,
+      'pricing': totals.toMap(),
+      'delivery': {
+        'option': deliveryProvider.deliveryOption.displayName,
+        'fee': deliveryProvider.deliveryOption == DeliveryOption.delivery
+            ? deliveryProvider.deliveryFee
+            : 0.0,
+        'address': deliveryAddress,
+      },
+      'orderType': deliveryProvider.deliveryOption.displayName.toLowerCase(),
+      'deliveryMethod': deliveryProvider.deliveryOption.displayName
+          .toLowerCase(),
+      'payment': {
+        'method': _selectedPaymentMethod!.displayName,
+        'methodId': _selectedPaymentMethod!.id,
+        'status': 'completed',
+        'processedAt': nowIso,
+      },
+      'scheduledTime': _scheduledTime!.toIso8601String(),
+      'status': 'scheduled',
+      'statusHistory': {'scheduled': nowIso},
+      'createdAt': nowIso,
+      'updatedAt': nowIso,
+    };
+
+    // Use Cloud Function for secure scheduled order creation
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: "us-central1",
+      ).httpsCallable('createScheduledOrder');
+      await callable.call(scheduledOrderData);
+      debugPrint('✅ Scheduled order saved successfully via Cloud Function');
+    } catch (e) {
+      debugPrint('❌ Failed to save scheduled order via Cloud Function: $e');
+      throw PaymentException(
+        'Failed to save scheduled order',
+        originalError: e,
+      );
+    }
+  }
+
+  Widget _buildScheduleSection(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[800] : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade300,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.schedule, color: Colors.deepOrange),
+              const SizedBox(width: 8),
+              const Text(
+                'Schedule Order',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Switch(
+                value: _isScheduledOrder || !_isRestaurantOpen,
+                onChanged: _isRestaurantOpen
+                    ? (value) {
+                        setState(() {
+                          _isScheduledOrder = value;
+                          if (!value) _scheduledTime = null;
+                        });
+                      }
+                    : null,
+                activeColor: Colors.deepOrange,
+              ),
+            ],
+          ),
+          if (!_isRestaurantOpen) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: const Text(
+                '🏪 Restaurant is currently closed. Orders will be scheduled automatically.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+          if (_isScheduledOrder || !_isRestaurantOpen) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Select when you want your order to be prepared:',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _selectScheduledTime(),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.access_time, color: Colors.deepOrange),
+                    const SizedBox(width: 8),
+                    Text(
+                      _scheduledTime != null
+                          ? DateFormat(
+                              'MMM d, yyyy h:mm a',
+                            ).format(_scheduledTime!)
+                          : 'Select date and time',
+                      style: TextStyle(
+                        color: _scheduledTime != null ? null : Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _selectScheduledTime() async {
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: tomorrow,
+      firstDate: tomorrow,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+
+    if (date != null && mounted) {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: const TimeOfDay(hour: 12, minute: 0),
+      );
+
+      if (time != null && mounted) {
+        setState(() {
+          _scheduledTime = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      }
+    }
+  }
+
+  Widget _buildRestaurantClosedBanner() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.store_mall_directory_outlined,
+            color: Colors.red,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Restaurant Closed',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'We are currently closed. Your order will be scheduled for when we reopen.',
+                  style: TextStyle(fontSize: 14, color: Colors.red),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Business Hours: Tue-Sat 11:00 AM - 8:00 PM',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPayButton(double total) {
     final deliveryProvider = Provider.of<DeliveryFeeProvider>(
       context,
@@ -1575,12 +1999,13 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         _isProcessing ||
         total < PaymentConstants.minimumPaymentAmount ||
         _selectedPaymentMethod == null ||
+        ((_isScheduledOrder || !_isRestaurantOpen) && _scheduledTime == null) ||
         (deliveryProvider.deliveryOption == DeliveryOption.delivery &&
             !deliveryProvider.deliveryAvailable);
 
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: MediaQuery.of(context).size.height * 0.07,
       child: ElevatedButton(
         onPressed: isDisabled ? null : _processPayment,
         style: ElevatedButton.styleFrom(
@@ -1601,7 +2026,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                 ),
               )
             : Text(
-                "Pay \$${total.toStringAsFixed(2)}",
+                (_isScheduledOrder || !_isRestaurantOpen)
+                    ? "Schedule Order"
+                    : "Pay \$${total.toStringAsFixed(2)}",
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

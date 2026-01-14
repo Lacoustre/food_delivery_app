@@ -54,8 +54,12 @@ class _ReorderPageState extends State<ReorderPage> {
       }
 
       Fluttertoast.showToast(
-        msg: "Items from your last order have been added to your cart",
-        backgroundColor: Colors.green,
+        msg: "🛍️ Items from your last order added to cart",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.TOP,
+        backgroundColor: Colors.green.shade600,
+        textColor: Colors.white,
+        fontSize: 14.0,
       );
 
       if (mounted) {
@@ -67,8 +71,12 @@ class _ReorderPageState extends State<ReorderPage> {
         _isLoading = false;
       });
       Fluttertoast.showToast(
-        msg: "Error: ${e.toString()}",
-        backgroundColor: Colors.red,
+        msg: "❌ Error: ${e.toString()}",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.TOP,
+        backgroundColor: Colors.red.shade600,
+        textColor: Colors.white,
+        fontSize: 14.0,
       );
     }
   }

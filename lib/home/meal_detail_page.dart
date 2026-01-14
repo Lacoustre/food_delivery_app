@@ -55,12 +55,22 @@ class _MealDetailPageState extends State<MealDetailPage> {
         .map((e) => e['group'])
         .toSet();
 
+    // For protein group, check if at least one protein is selected
+    if (requiredGroups.contains('Protein')) {
+      final selectedProteins = selectedExtras.values
+          .where((e) => e['group'] == 'Protein')
+          .toList();
+      if (selectedProteins.isEmpty) return false;
+    }
+
+    // For other required groups, check normal validation
+    final otherRequiredGroups = requiredGroups.where((g) => g != 'Protein').toSet();
     final selectedGroups = selectedExtras.values
-        .where((e) => e['required'] == true && e.containsKey('group'))
+        .where((e) => e['required'] == true && e.containsKey('group') && e['group'] != 'Protein')
         .map((e) => e['group'])
         .toSet();
 
-    return requiredGroups.difference(selectedGroups).isEmpty;
+    return otherRequiredGroups.difference(selectedGroups).isEmpty;
   }
 
   @override
@@ -80,6 +90,7 @@ class _MealDetailPageState extends State<MealDetailPage> {
               0.0;
 
     final totalPrice = basePrice + getExtrasTotal();
+    final isUnavailable = widget.meal['available'] == false;
 
     return Scaffold(
       appBar: AppBar(
@@ -87,17 +98,87 @@ class _MealDetailPageState extends State<MealDetailPage> {
         backgroundColor: Colors.deepOrange,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(17.0),
+        padding: EdgeInsets.all(
+          MediaQuery.of(context).size.width * 0.04,
+        ),
         child: ListView(
           children: [
-            Image.asset(widget.meal['image'], height: 201),
-            const SizedBox(height: 17),
+            Stack(
+              children: [
+                ColorFiltered(
+                  colorFilter: isUnavailable 
+                      ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                      : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                  child: widget.meal['image'].toString().startsWith('http')
+                      ? Image.network(
+                          widget.meal['image'], 
+                          height: MediaQuery.of(context).size.height * 0.25,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: MediaQuery.of(context).size.height * 0.25,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image_not_supported, size: 50),
+                            );
+                          },
+                        )
+                      : Image.asset(
+                          widget.meal['image'], 
+                          height: MediaQuery.of(context).size.height * 0.25,
+                          fit: BoxFit.cover,
+                        ),
+                ),
+                if (isUnavailable)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withOpacity(0.6),
+                      child: const Center(
+                        child: Text(
+                          'UNAVAILABLE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.02),
             Text(
               widget.meal['name'],
-              style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: MediaQuery.of(context).size.width * 0.06,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 9),
-            const Text("Customize your meal below."),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.01),
+            if (isUnavailable)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.block, color: Colors.red, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'This item is currently unavailable',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Text(isUnavailable ? "This item is currently unavailable." : "Customize your meal below."),
             const SizedBox(height: 17),
             for (var entry in groupedExtras.entries)
               Column(
@@ -106,6 +187,8 @@ class _MealDetailPageState extends State<MealDetailPage> {
                   Text(
                     entry.key == 'optional'
                         ? 'Optional Extras'
+                        : entry.key == 'Protein'
+                        ? '${entry.key} (Required - Choose at least 1)'
                         : '${entry.key} (Required - Choose 1)',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -139,11 +222,22 @@ class _MealDetailPageState extends State<MealDetailPage> {
                             if (extra['required'] == true &&
                                 extra.containsKey('group')) {
                               final group = extra['group'];
-                              selectedExtras.removeWhere(
-                                (key, e) => e['group'] == group,
-                              );
-                              if (selected) {
-                                selectedExtras[name] = extra;
+                              
+                              // Special handling for Protein group - allow multiple selections
+                              if (group == 'Protein') {
+                                if (selected) {
+                                  selectedExtras[name] = extra;
+                                } else {
+                                  selectedExtras.remove(name);
+                                }
+                              } else {
+                                // For other required groups, only allow one selection
+                                selectedExtras.removeWhere(
+                                  (key, e) => e['group'] == group,
+                                );
+                                if (selected) {
+                                  selectedExtras[name] = extra;
+                                }
                               }
                             } else {
                               if (isSelected) {
@@ -180,12 +274,15 @@ class _MealDetailPageState extends State<MealDetailPage> {
             ),
             const SizedBox(height: 17),
             ElevatedButton(
-              onPressed: () {
+              onPressed: isUnavailable ? null : () {
                 if (!validateRequiredExtras()) {
                   Fluttertoast.showToast(
-                    msg: "Please select required extras before adding to cart.",
-                    backgroundColor: Colors.red,
+                    msg: "⚠️ Please select required extras first",
+                    toastLength: Toast.LENGTH_SHORT,
+                    gravity: ToastGravity.TOP,
+                    backgroundColor: Colors.red.shade600,
                     textColor: Colors.white,
+                    fontSize: 14.0,
                   );
                   return;
                 }
@@ -194,7 +291,7 @@ class _MealDetailPageState extends State<MealDetailPage> {
                   'name': widget.meal['name'],
                   'image': widget.meal['image'],
                   'category': widget.meal['category'],
-                  'price': totalPrice,
+                  'price': basePrice, // Store base price only
                   'extras': selectedExtras.values.toList(),
                   'instructions': instructionsController.text,
                   'quantity': 1,
@@ -208,29 +305,37 @@ class _MealDetailPageState extends State<MealDetailPage> {
                 if (widget.editingIndex != null) {
                   cartProvider.updateItem(widget.editingIndex!, cartItem);
                   Fluttertoast.showToast(
-                    msg: "${widget.meal['name']} updated!",
-                    backgroundColor: Colors.orange,
+                    msg: "✏️ ${widget.meal['name']} updated!",
+                    toastLength: Toast.LENGTH_SHORT,
+                    gravity: ToastGravity.TOP,
+                    backgroundColor: Colors.orange.shade600,
                     textColor: Colors.white,
+                    fontSize: 14.0,
                   );
                 } else {
                   cartProvider.addToCart(cartItem);
                   Fluttertoast.showToast(
-                    msg: "${widget.meal['name']} added to cart!",
-                    backgroundColor: Colors.green,
+                    msg: "🛍️ ${widget.meal['name']} added to cart!",
+                    toastLength: Toast.LENGTH_SHORT,
+                    gravity: ToastGravity.TOP,
+                    backgroundColor: Colors.green.shade600,
                     textColor: Colors.white,
+                    fontSize: 14.0,
                   );
                 }
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
+                backgroundColor: isUnavailable ? Colors.grey : Colors.deepOrange,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(11),
                 ),
               ),
               child: Text(
-                widget.editingIndex != null ? "Update Cart" : "Add to Cart",
+                isUnavailable 
+                    ? "Unavailable" 
+                    : (widget.editingIndex != null ? "Update Cart" : "Add to Cart"),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

@@ -47,6 +47,14 @@ export default function NotificationCenter() {
       console.warn('NotificationCenter: Firestore error (non-critical):', {
         allOrdersError, receivedOrdersError, reviewsError, mealsError
       });
+      // Don't generate notifications if there are permission errors
+      if (allOrdersError?.toString().includes('Missing or insufficient permissions') ||
+          receivedOrdersError?.toString().includes('Missing or insufficient permissions') ||
+          reviewsError?.toString().includes('Missing or insufficient permissions') ||
+          mealsError?.toString().includes('Missing or insufficient permissions')) {
+        console.log('Permission errors detected - skipping notification generation');
+        return;
+      }
     }
     
     const generatedNotifications: Notification[] = [];

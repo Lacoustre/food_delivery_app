@@ -6,5 +6,7 @@
 	<array>
 		<string>merchant.com.khestra.africanCuisine</string>
 	</array>
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

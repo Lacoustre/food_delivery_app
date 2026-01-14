@@ -26,18 +26,17 @@ class _CartPageState extends State<CartPage> {
   double calculateItemTotal(Map<String, dynamic> item) {
     final double basePrice = safeToDouble(item['price']);
     final int quantity = item['quantity'] ?? 1;
-
-    double extrasTotal = 0.0;
-    final extras = item['extras'] as List?;
-    if (extras != null) {
-      for (final extra in extras) {
-        if (extra is Map<String, dynamic>) {
-          extrasTotal += safeToDouble(extra['price']);
-        }
+    final extras = item['extras'] as List? ?? [];
+    
+    final extrasPrice = extras.fold(0.0, (sum, extra) {
+      if (extra is Map<String, dynamic>) {
+        final extraPrice = safeToDouble(extra['price'] ?? 0);
+        return extraPrice > 0 ? sum + extraPrice : sum;
       }
-    }
+      return sum;
+    });
 
-    return (basePrice * quantity) + (extrasTotal * quantity);
+    return (basePrice + extrasPrice) * quantity;
   }
 
   bool hasRequiredExtras(Map<String, dynamic> item) {
@@ -50,13 +49,24 @@ class _CartPageState extends State<CartPage> {
         .map((e) => e['group'] as String)
         .toSet();
 
+    // Special handling for Protein group - check if at least one protein is selected
+    if (requiredGroups.contains('Protein')) {
+      final selectedProteins = selectedExtras
+          .whereType<Map<String, dynamic>>()
+          .where((e) => e['group'] == 'Protein')
+          .toList();
+      if (selectedProteins.isEmpty) return false;
+    }
+
+    // For other required groups, check normal validation
+    final otherRequiredGroups = requiredGroups.where((g) => g != 'Protein').toSet();
     final selectedGroups = selectedExtras
         .whereType<Map<String, dynamic>>()
-        .where((e) => e['required'] == true && e.containsKey('group'))
+        .where((e) => e['required'] == true && e.containsKey('group') && e['group'] != 'Protein')
         .map((e) => e['group'] as String)
         .toSet();
 
-    return requiredGroups.difference(selectedGroups).isEmpty;
+    return otherRequiredGroups.difference(selectedGroups).isEmpty;
   }
 
   bool allRequiredExtrasSelected() {
@@ -72,10 +82,7 @@ class _CartPageState extends State<CartPage> {
     final cartProvider = Provider.of<CartProvider>(context);
     final cartItems = cartProvider.cartItems;
 
-    final subtotal = cartItems.fold(
-      0.0,
-      (sum, item) => sum + calculateItemTotal(item),
-    );
+    final subtotal = cartProvider.totalPrice;
     final tax = subtotal * 0.0735;
     final total = subtotal + tax;
     final canCheckout = allRequiredExtrasSelected() && cartItems.isNotEmpty;
@@ -88,7 +95,9 @@ class _CartPageState extends State<CartPage> {
       ),
       backgroundColor: const Color(0xFFFDF1EC),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(
+          MediaQuery.of(context).size.width * 0.04,
+        ),
         child: cartItems.isEmpty
             ? const Center(child: Text("Your cart is empty."))
             : Column(
@@ -123,12 +132,27 @@ class _CartPageState extends State<CartPage> {
                                   children: [
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(10),
-                                      child: Image.asset(
-                                        item['image'],
-                                        width: 60,
-                                        height: 60,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child: item['image'].toString().startsWith('http')
+                                          ? Image.network(
+                                              item['image'],
+                                              width: MediaQuery.of(context).size.width * 0.15,
+                                              height: MediaQuery.of(context).size.width * 0.15,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Container(
+                                                  width: MediaQuery.of(context).size.width * 0.15,
+                                                  height: MediaQuery.of(context).size.width * 0.15,
+                                                  color: Colors.grey[300],
+                                                  child: const Icon(Icons.image_not_supported),
+                                                );
+                                              },
+                                            )
+                                          : Image.asset(
+                                              item['image'],
+                                              width: MediaQuery.of(context).size.width * 0.15,
+                                              height: MediaQuery.of(context).size.width * 0.15,
+                                              fit: BoxFit.cover,
+                                            ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(

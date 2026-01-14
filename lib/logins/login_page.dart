@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:african_cuisine/home/main_home_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'sign_up_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -52,35 +52,64 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> loginUser() async {
-    if (_formKey.currentState!.validate()) {
-      FocusScope.of(context).unfocus(); // Dismiss keyboard
-      setState(() => _isLoading = true);
-      try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
+    if (!_formKey.currentState!.validate()) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isLoading = true);
+
+    try {
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
+
+      final user = userCredential.user;
+      if (user == null) {
+        throw FirebaseAuthException(
+          code: 'internal-error',
+          message: 'Login failed.',
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainFoodPage()),
-        );
-      } on FirebaseAuthException catch (e) {
-        String message = "Login failed.";
-        if (e.code == 'user-not-found') {
-          message = "No user found for that email.";
-        } else if (e.code == 'wrong-password') {
-          message = "Incorrect password.";
-        }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login failed: ${e.toString()}")),
-        );
-      } finally {
-        setState(() => _isLoading = false);
       }
+
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get(const GetOptions(source: Source.serverAndCache));
+
+      if (!mounted) return;
+
+      if (!snap.exists) {
+        Navigator.pushReplacementNamed(context, '/auth');
+        return;
+      }
+
+      Navigator.pushReplacementNamed(context, '/auth');
+    } on FirebaseAuthException catch (e) {
+      String message = "Login failed.";
+      switch (e.code) {
+        case 'user-not-found':
+          message = "No user found for that email.";
+          break;
+        case 'wrong-password':
+          message = "Incorrect password.";
+          break;
+        case 'user-disabled':
+          message = "Account has been disabled. Please contact support.";
+          break;
+        case 'invalid-credential':
+          message = "Invalid email or password.";
+          break;
+        default:
+          message = e.message ?? message;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login failed: ${e.toString()}")));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -108,23 +137,22 @@ class _LoginPageState extends State<LoginPage>
             onPressed: () async {
               final email = resetEmailController.text.trim();
               if (email.isEmpty) {
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Please enter your email')),
                 );
                 return;
               }
               try {
-                await FirebaseAuth.instance.sendPasswordResetEmail(
-                  email: email,
-                );
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Password reset email sent')),
                 );
                 Navigator.pop(context);
               } on FirebaseAuthException catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
               }
             },
             child: const Text('Send'),
@@ -137,15 +165,6 @@ class _LoginPageState extends State<LoginPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args == 'logout_success') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Logged out successfully')),
-        );
-      });
-    }
 
     return Scaffold(
       appBar: AppBar(title: const Text("Welcome Back")),
@@ -162,7 +181,7 @@ class _LoginPageState extends State<LoginPage>
                   child: ScaleTransition(
                     scale: _scaleAnimation,
                     child: Image.asset(
-                      'assets/images/logo.png', // adjust path if needed
+                      'assets/images/logo.png',
                       width: 120,
                       height: 120,
                       fit: BoxFit.contain,
@@ -179,36 +198,38 @@ class _LoginPageState extends State<LoginPage>
                 ),
                 const SizedBox(height: 30),
                 TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(labelText: "Email"),
-                  validator: (value) =>
-                      value!.isEmpty ? "Enter your email" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.password],
-                  decoration: const InputDecoration(labelText: "Password"),
-                  validator: (value) =>
-                      value!.isEmpty ? "Enter your password" : null,
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _showResetPasswordDialog,
-                    child: const Text('Forgot Password?'),
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: const InputDecoration(labelText: "Email"),
+                    validator: (value) => (value == null || value.isEmpty)
+                        ? "Enter your email"
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : loginUser,
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Login"),
-                ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    decoration: const InputDecoration(labelText: "Password"),
+                    validator: (value) => (value == null || value.isEmpty)
+                        ? "Enter your password"
+                        : null,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _showResetPasswordDialog,
+                      child: const Text('Forgot Password?'),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : loginUser,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Login"),
+                  ),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => Navigator.pushReplacement(

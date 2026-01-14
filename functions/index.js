@@ -9,13 +9,26 @@ const stripe = require("stripe");
 admin.initializeApp();
 const messaging = admin.messaging();
 
+const RESTAURANT_LOCATION = {
+  lat: 41.824375,
+  lng: -72.497971,
+};
+
 // Secrets
 const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
 const FROM_EMAIL = defineSecret("FROM_EMAIL");
+const GOOGLE_ROUTES_API_KEY = defineSecret("GOOGLE_ROUTES_API_KEY");
+
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
 
 // --- FCM Token Management ---
-exports.updateFCMToken = onCall(async (request) => {
+exports.updateFCMToken = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required');
   }
@@ -36,7 +49,7 @@ exports.updateFCMToken = onCall(async (request) => {
       
     return { success: true };
   } catch (error) {
-    logger.error("❌ Error updating FCM token", { error: error.message });
+    logger.error("Error updating FCM token", { error: error.message });
     throw new HttpsError('internal', 'Failed to update FCM token');
   }
 });
@@ -48,6 +61,12 @@ exports.updateFCMToken = onCall(async (request) => {
 
 exports.createPaymentIntent = onCall(
   {
+    region: "us-central1",
+    timeoutSeconds: 120,
+    memory: "1GiB",
+    minInstances: 1,
+    maxInstances: 100,
+    concurrency: 80,
     secrets: [STRIPE_SECRET_KEY],
     enforceAppCheck: false,
     cors: true,
@@ -57,32 +76,32 @@ exports.createPaymentIntent = onCall(
       logger.log("🚀 Function started");
 
       const stripeSecretKey = STRIPE_SECRET_KEY.value();
-      logger.log("🔑 Stripe key check", {
+      logger.log("Stripe key check", {
         hasKey: !!stripeSecretKey,
         keyLength: stripeSecretKey?.length || 0,
         keyPrefix: stripeSecretKey?.substring(0, 8) || 'none',
       });
 
       if (!stripeSecretKey) {
-        logger.error("❌ No Stripe secret key found");
+        logger.error("No Stripe secret key found");
         throw new HttpsError("internal", "Stripe configuration missing");
       }
 
       if (!stripeSecretKey.startsWith('sk_')) {
-        logger.error("❌ Invalid Stripe secret key format", {
+        logger.error("nvalid Stripe secret key format", {
           keyPrefix: stripeSecretKey.substring(0, 10),
         });
         throw new HttpsError("internal", "Invalid Stripe key format");
       }
 
       if (!request.auth) {
-        logger.error("❌ No authentication");
+        logger.error("No authentication");
         throw new HttpsError("unauthenticated", "User must be authenticated");
       }
 
       const { amount, orderId, customerName, currency = "usd" } = request.data;
 
-      logger.log("📦 Request data", {
+      logger.log("Request data", {
         amount,
         amountType: typeof amount,
         orderId,
@@ -92,31 +111,30 @@ exports.createPaymentIntent = onCall(
       });
 
       if (typeof amount !== "number" || amount <= 0 || isNaN(amount)) {
-        logger.error("❌ Invalid amount", { amount, type: typeof amount });
+        logger.error("Invalid amount", { amount, type: typeof amount });
         throw new HttpsError("invalid-argument", `Invalid amount: ${amount}`);
       }
 
       if (!orderId || typeof orderId !== "string") {
-        logger.error("❌ Invalid orderId", { orderId, type: typeof orderId });
+        logger.error("Invalid orderId", { orderId, type: typeof orderId });
         throw new HttpsError("invalid-argument", "Invalid orderId");
       }
 
       if (!customerName || typeof customerName !== "string") {
-        logger.error("❌ Invalid customerName", { customerName, type: typeof customerName });
+        logger.error("Invalid customerName", { customerName, type: typeof customerName });
         throw new HttpsError("invalid-argument", "Invalid customerName");
       }
 
       logger.log("🔧 Initializing Stripe client");
-      const stripeLib = require("stripe");
-      const stripeClient = stripeLib(stripeSecretKey);
+      const stripeClient = stripe(stripeSecretKey);
 
       if (!stripeClient) {
-        logger.error("❌ Failed to initialize Stripe client");
+        logger.error("Failed to initialize Stripe client");
         throw new HttpsError("internal", "Stripe initialization failed");
       }
 
       const amountInCents = Math.round(amount * 100);
-      logger.log("💰 Amount processing", {
+      logger.log("Amount processing", {
         originalAmount: amount,
         amountInCents,
         isValidAmount: amountInCents >= 50,
@@ -126,7 +144,7 @@ exports.createPaymentIntent = onCall(
         throw new HttpsError("invalid-argument", `Minimum amount is $0.50, got $${amount}`);
       }
 
-      logger.log("💳 Creating Stripe PaymentIntent");
+      logger.log("Creating Stripe PaymentIntent");
 
       const paymentIntentParams = {
         amount: amountInCents,
@@ -145,11 +163,11 @@ exports.createPaymentIntent = onCall(
         paymentIntentParams.receipt_email = request.auth.token.email;
       }
 
-      logger.log("📋 PaymentIntent params", paymentIntentParams);
+      logger.log("PaymentIntent params", paymentIntentParams);
 
       const paymentIntent = await stripeClient.paymentIntents.create(paymentIntentParams);
 
-      logger.log("✅ PaymentIntent created successfully", {
+      logger.log("PaymentIntent created successfully", {
         id: paymentIntent.id,
         amount: paymentIntent.amount,
         status: paymentIntent.status,
@@ -164,7 +182,7 @@ exports.createPaymentIntent = onCall(
         orderId: orderId,
       };
 
-      logger.log("📤 Returning response", {
+      logger.log("Returning response", {
         hasClientSecret: !!response.client_secret,
         clientSecretLength: response.client_secret?.length,
       });
@@ -172,9 +190,9 @@ exports.createPaymentIntent = onCall(
       return response;
 
     } catch (error) {
-      console.error("💥 Unexpected function error:", error);
+      console.error("Unexpected function error:", error);
 
-      logger.error("💥 Function error", {
+      logger.error("Function error", {
         errorMessage: error?.message || 'No message',
         errorType: error?.constructor?.name || 'UnknownType',
         errorCode: error?.code?.toString?.() ?? 'none',
@@ -197,7 +215,7 @@ exports.createPaymentIntent = onCall(
 
       if (error?.type?.startsWith?.('Stripe')) {
         const stripeErrorMessage = `Stripe error: ${error.message || 'Unknown stripe error'}`;
-        logger.error("🔴 Stripe API error", {
+        logger.error("Stripe API error", {
           type: error?.type,
           code: error?.code,
           message: error?.message,
@@ -206,7 +224,7 @@ exports.createPaymentIntent = onCall(
       }
 
       const genericMessage = `Internal error: ${error.message || 'Unknown error'}`;
-      logger.error("🔴 Unexpected error", {
+      logger.error("Unexpected error", {
         errorMessage: genericMessage,
       });
 
@@ -215,22 +233,139 @@ exports.createPaymentIntent = onCall(
   }
 );
 
+exports.getDrivingDistance = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 30,
+    secrets: [GOOGLE_ROUTES_API_KEY],
+  },
+  async (request) => {
+    try {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Authentication required");
+      }
+
+      const { customerLat, customerLon } = request.data;
+
+      if (
+        typeof customerLat !== "number" ||
+        typeof customerLon !== "number"
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "customerLat and customerLon must be numbers"
+        );
+      }
+
+      const response = await fetch(
+        "https://routes.googleapis.com/directions/v2:computeRoutes",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": GOOGLE_ROUTES_API_KEY.value(),
+            "X-Goog-FieldMask": "routes.distanceMeters",
+          },
+          body: JSON.stringify({
+            origin: {
+              location: {
+                latLng: {
+                  latitude: RESTAURANT_LOCATION.lat,
+                  longitude: RESTAURANT_LOCATION.lng,
+                },
+              },
+            },
+            destination: {
+              location: {
+                latLng: {
+                  latitude: customerLat,
+                  longitude: customerLon,
+                },
+              },
+            },
+            travelMode: "DRIVE",
+            routingPreference: "TRAFFIC_AWARE",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        logger.error("Routes API error", { text });
+        throw new Error("Routes API request failed");
+      }
+
+      const data = await response.json();
+
+      if (!data.routes || !data.routes.length) {
+        throw new Error("No routes returned");
+      }
+
+      const meters = data.routes[0].distanceMeters;
+      const miles = meters / 1609.34;
+
+      return {
+        distanceMiles: Number(miles.toFixed(2)),
+      };
+
+    } catch (error) {
+      logger.error("getDrivingDistance failed", {
+        message: error.message,
+        stack: error.stack,
+      });
+
+      if (error instanceof HttpsError) throw error;
+
+      throw new HttpsError(
+        "internal",
+        "Failed to calculate driving distance"
+      );
+    }
+  }
+);
+
 // --- Create Order Function with FCM ---
 exports.createOrder = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 120,
+    memory: "1GiB",
+    maxInstances: 100,
+    concurrency: 80,
+  },
   async (request) => {
     const { data } = request;
+    
+    logger.info("🚀 Creating order", { 
+      orderNumber: data?.orderNumber,
+      userId: data?.userId,
+      authUid: request.auth?.uid,
+      hasItems: !!data?.items,
+      hasPricing: !!data?.pricing,
+      hasDelivery: !!data?.delivery,
+      hasPayment: !!data?.payment
+    });
+    
     if (!request.auth) {
-      logger.error("❌ Unauthenticated request");
+      logger.error("Unauthenticated request");
       throw new HttpsError("unauthenticated", "User must be authenticated");
     }
 
     if (!data.orderNumber || !data.userId || !data.items || !data.pricing || !data.delivery || !data.payment || !data.status) {
-      logger.error("❌ Missing required fields", { data });
+      logger.error("Missing required fields", { 
+        orderNumber: !!data.orderNumber,
+        userId: !!data.userId,
+        items: !!data.items,
+        pricing: !!data.pricing,
+        delivery: !!data.delivery,
+        payment: !!data.payment,
+        status: !!data.status
+      });
       throw new HttpsError("invalid-argument", "Missing required order fields");
     }
 
     if (data.userId !== request.auth.uid) {
-      logger.error("❌ User ID mismatch", { dataUserId: data.userId, authUid: request.auth.uid });
+      logger.error("User ID mismatch", { dataUserId: data.userId, authUid: request.auth.uid });
       throw new HttpsError("permission-denied", "User ID does not match authenticated user");
     }
 
@@ -248,6 +383,7 @@ exports.createOrder = onCall(
         delivery: data.delivery,
         payment: data.payment,
         status: "received", // Always set to 'received' for new orders
+        deliveryStatus: "pending", // Client-side expects deliveryStatus
         statusHistory: data.statusHistory,
         eta: data.eta || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -262,6 +398,7 @@ exports.createOrder = onCall(
         userId: data.userId,
         total: data.pricing.total,
         status: "received", // Always set to 'received' for new orders
+        deliveryStatus: "pending", // Client-side expects deliveryStatus
         items: data.items,
         pricing: data.pricing,
         delivery: data.delivery,
@@ -270,47 +407,70 @@ exports.createOrder = onCall(
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Get customer name from payment or user data
+      const customerName = data.payment?.customerName || 
+                          data.customerName || 
+                          request.auth.token?.name || 
+                          request.auth.token?.email?.split('@')[0] || 
+                          "Customer";
+
       // Create order confirmation notification
       const notificationRef = db.collection("users").doc(data.userId).collection("notifications").doc();
       batch.set(notificationRef, {
         type: "order_confirmed",
         title: "Order Confirmed",
-        body: `Thank you, ${data.payment.customerName || "Customer"}! Your order #${data.orderNumber} has been confirmed.`,
+        body: `Thank you, ${customerName}! Your order #${data.orderNumber} has been confirmed.`,
         orderId: data.orderNumber,
         items: data.items.map(item => `${item.name} x${item.quantity}`).join(", ") || "N/A",
         totalAmount: data.pricing.total.toFixed(2),
-        customerName: data.payment.customerName || "Customer",
+        customerName: customerName,
         estimatedDelivery: data.delivery.option === "Delivery" ? "30-45 minutes" : "N/A",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      logger.info("💾 Committing order batch", { orderId: data.orderNumber });
       await batch.commit();
+      logger.info("Order batch committed successfully", { orderId: data.orderNumber });
       
       // Send FCM notification
-      const userDoc = await db.collection('users').doc(data.userId).get();
-      if (userDoc.exists && userDoc.data().fcmToken) {
-        const message = {
-          notification: {
-            title: "✅ Order Confirmed",
-            body: `Your order #${data.orderNumber} has been received!`
-          },
-          data: {
-            type: "order_confirmed",
-            orderId: data.orderNumber,
-            click_action: "FLUTTER_NOTIFICATION_CLICK",
-            screen: "orderDetails"
-          },
-          token: userDoc.data().fcmToken
-        };
-        
-        await messaging.send(message);
-        logger.info("📲 Order confirmation FCM sent", { orderId: data.orderNumber });
+      try {
+        const userDoc = await db.collection('users').doc(data.userId).get();
+        if (userDoc.exists && userDoc.data().fcmToken) {
+          const message = {
+            notification: {
+              title: "Order Confirmed",
+              body: `Your order #${data.orderNumber} has been received!`
+            },
+            data: {
+              type: "order_confirmed",
+              orderId: data.orderNumber,
+              click_action: "FLUTTER_NOTIFICATION_CLICK",
+              screen: "orderDetails"
+            },
+            token: userDoc.data().fcmToken
+          };
+          
+          await messaging.send(message);
+          logger.info("Order confirmation FCM sent", { orderId: data.orderNumber });
+        } else {
+          logger.info("No FCM token found for user", { userId: data.userId });
+        }
+      } catch (fcmError) {
+        logger.warn("FCM notification failed but order saved", { 
+          orderId: data.orderNumber,
+          error: fcmError.message 
+        });
       }
 
-      logger.info("✅ Order and notification created", { orderId: data.orderNumber, userId: data.userId });
+      logger.info("Order and notification created", { orderId: data.orderNumber, userId: data.userId });
       return { success: true, orderId: data.orderNumber };
     } catch (error) {
-      logger.error("❌ Error saving order", { error: error.message });
+      logger.error("Error saving order", { 
+        error: error.message,
+        stack: error.stack,
+        orderId: data?.orderNumber,
+        userId: data?.userId
+      });
       throw new HttpsError("internal", `Failed to save order: ${error.message}`);
     }
   }
@@ -326,7 +486,7 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
     const userId = newData.userId;
 
     if (!userId) {
-      logger.warn("⚠️ No userId found in order", { orderId });
+      logger.warn("No userId found in order", { orderId });
       return;
     }
 
@@ -338,29 +498,35 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
     const userData = userDoc.data();
     const fcmToken = userData?.fcmToken;
 
-    // Handle order status changes
-    if (newData.status !== previousData.status) {
+    // Handle order status changes - check both status and deliveryStatus
+    const currentStatus = newData.deliveryStatus || newData.status;
+    const previousStatus = previousData.deliveryStatus || previousData.status;
+    
+    if (currentStatus !== previousStatus) {
       let notificationData = null;
       let fcmMessage = null;
       
       // Update order with status timestamp
       const statusTimestamp = admin.firestore.FieldValue.serverTimestamp();
       const statusUpdateData = {
-        [`${newData.status}Time`]: statusTimestamp,
-        updatedAt: statusTimestamp
+        [`${currentStatus}Time`]: statusTimestamp,
+        updatedAt: statusTimestamp,
+        deliveryStatus: currentStatus // Ensure deliveryStatus is always set
       };
       
       // Update the order document with timestamp
       await db.collection('orders').doc(orderId).update(statusUpdateData);
 
-      switch (newData.status) {
+      switch (currentStatus) {
+        case "pending":
         case "received":
           notificationData = {
             type: "order_received",
             title: "Order Received",
             body: `Your order #${orderId} has been received and will be processed shortly!`,
             orderId: orderId,
-            customerName: newData.customerName || "Customer",
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
             receivedTime: statusTimestamp,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
@@ -379,6 +545,32 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
           };
           break;
           
+        case "confirmed":
+          notificationData = {
+            type: "order_confirmed",
+            title: "Order Confirmed",
+            body: `Your order #${orderId} has been confirmed and will be prepared shortly!`,
+            orderId: orderId,
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
+            confirmedTime: statusTimestamp,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          
+          fcmMessage = {
+            notification: {
+              title: "Order Confirmed",
+              body: `Your order #${orderId} has been confirmed!`
+            },
+            data: {
+              type: "order_confirmed",
+              orderId: orderId,
+              click_action: "FLUTTER_NOTIFICATION_CLICK",
+              screen: "orderDetails"
+            }
+          };
+          break;
+          
         case "preparing":
           notificationData = {
             type: "order_preparing",
@@ -386,14 +578,15 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
             body: `Your order #${orderId} is being prepared!`,
             orderId: orderId,
             estimatedTime: newData.estimatedTime || "20-30 minutes",
-            customerName: newData.customerName || "Customer",
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
             preparingTime: statusTimestamp,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
           
           fcmMessage = {
             notification: {
-              title: "👨‍🍳 Order Being Prepared",
+              title: "Order Being Prepared",
               body: `Chefs are working on your order #${orderId}`
             },
             data: {
@@ -414,13 +607,14 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
             orderId: orderId,
             pickupLocation: newData.delivery?.address || "Restaurant",
             readyTime: statusTimestamp,
-            customerName: newData.customerName || "Customer",
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
           
           fcmMessage = {
             notification: {
-              title: "🍽️ Order Ready!",
+              title: "Order Ready!",
               body: `Your order #${orderId} is ready for pickup`
             },
             data: {
@@ -439,13 +633,14 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
             body: `Your order #${orderId} has been picked up! Enjoy your meal!`,
             orderId: orderId,
             pickupTime: statusTimestamp,
-            customerName: newData.customerName || "Customer",
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
           
           fcmMessage = {
             notification: {
-              title: "✅ Order Picked Up!",
+              title: "Order Picked Up!",
               body: `Your order #${orderId} has been picked up! Enjoy!`
             },
             data: {
@@ -465,13 +660,14 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
             orderId: orderId,
             deliveryAddress: newData.delivery?.address || "N/A",
             deliveryTime: statusTimestamp,
-            customerName: newData.customerName || "Customer",
+            customerName: newData.payment?.customerName || newData.customerName || "Customer",
+            customerEmail: newData.payment?.customerEmail || newData.customerEmail || "",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
           
           fcmMessage = {
             notification: {
-              title: "🎉 Order Delivered!",
+              title: "Order Delivered!",
               body: `Your order #${orderId} has arrived! Enjoy your meal!`
             },
             data: {
@@ -484,14 +680,14 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
           break;
           
         default:
-          logger.info("ℹ️ No notification needed for status", { status: newData.status });
+          logger.info("ℹ️ No notification needed for status", { status: currentStatus });
           return;
       }
 
       if (notificationData) {
         // Save to Firestore
         await notificationRef.add(notificationData);
-        logger.info("✅ Notification created for status", { status: newData.status, orderId, userId });
+        logger.info("Notification created for status", { status: newData.status, orderId, userId });
         
         // Send FCM if token exists
         if (fcmToken) {
@@ -499,7 +695,7 @@ exports.onOrderStatusUpdated = onDocumentUpdated(
             await messaging.send({ ...fcmMessage, token: fcmToken });
             logger.info("📲 FCM notification sent", { orderId, userId });
           } catch (error) {
-            logger.error("❌ FCM send error", { error: error.message });
+            logger.error("FCM send error", { error: error.message });
           }
         }
       }
@@ -542,17 +738,21 @@ async function notifyDriverAssigned(orderId, driverId) {
       .add({
         type: 'new_assignment',
         title: 'New Delivery Assignment',
-        body: `Order #${orderId} - ${orderData.items.length} items`,
-        orderId: orderId,
-        customerName: orderData.payment.customerName || 'Customer',
-        deliveryAddress: orderData.delivery?.address || 'N/A',
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
+        body: `Order #${orderId} - ${orderData.items?.length || 0} items`,
+        data: {
+          orderId: orderId,
+          customerName: orderData.payment?.customerName || 'Customer',
+          deliveryAddress: orderData.delivery?.address?.street || 'N/A',
+          total: orderData.pricing?.total || 0
+        },
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
     // Send FCM to driver
     const message = {
       notification: {
-        title: '🚗 New Delivery Assignment',
+        title: '🚚 New Delivery Assignment',
         body: `Order #${orderId} - Tap to view details`
       },
       data: {
@@ -565,10 +765,10 @@ async function notifyDriverAssigned(orderId, driverId) {
     };
     
     await messaging.send(message);
-    logger.info('🚗 Driver assignment notification sent', { orderId, driverId });
+    logger.info('Driver assignment notification sent', { orderId, driverId });
     
   } catch (error) {
-    logger.error('❌ Driver notification error', { 
+    logger.error('Driver notification error', { 
       error: error.message,
       orderId,
       driverId
@@ -576,8 +776,75 @@ async function notifyDriverAssigned(orderId, driverId) {
   }
 }
 
+// --- Driver Order Status Updates ---
+exports.onDriverOrderUpdate = onDocumentUpdated(
+  "orders/{orderId}",
+  async (event) => {
+    const newData = event.data.after.data();
+    const previousData = event.data.before.data();
+    const orderId = event.params.orderId;
+    const driverId = newData.driverId;
+
+    if (!driverId) return;
+
+    const db = admin.firestore();
+    
+    // Get driver's FCM token
+    const driverDoc = await db.collection('drivers').doc(driverId).get();
+    if (!driverDoc.exists) return;
+    
+    const driverData = driverDoc.data();
+    const fcmToken = driverData.fcmToken;
+    
+    if (!fcmToken) return;
+
+    // Check for order ready status
+    const currentStatus = newData.deliveryStatus || newData.status;
+    const previousStatus = previousData.deliveryStatus || previousData.status;
+    
+    if (currentStatus === 'ready for pickup' && currentStatus !== previousStatus) {
+      // Notify driver that order is ready for pickup
+      await db.collection('drivers')
+        .doc(driverId)
+        .collection('notifications')
+        .add({
+          type: 'order_ready_pickup',
+          title: 'Order Ready for Pickup',
+          body: `Order #${orderId} is ready at the restaurant`,
+          data: {
+            orderId: orderId,
+            restaurantAddress: 'Taste of African Cuisine Restaurant'
+          },
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+      const message = {
+        notification: {
+          title: '📦 Order Ready for Pickup',
+          body: `Order #${orderId} is ready at the restaurant`
+        },
+        data: {
+          type: 'order_ready_pickup',
+          orderId: orderId,
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          screen: 'driverOrderDetails'
+        },
+        token: fcmToken
+      };
+      
+      await messaging.send(message);
+      logger.info('Driver pickup notification sent', { orderId, driverId });
+    }
+  }
+);
+
 // --- Promotional Notifications ---
 exports.sendPromotionalNotification = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 120,
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Authentication required');
@@ -670,7 +937,7 @@ exports.sendPromotionalNotification = onCall(
         failedCount: failureCount
       };
     } catch (error) {
-      logger.error('❌ Promo notification error', { error: error.message });
+      logger.error('Promo notification error', { error: error.message });
       throw new HttpsError('internal', 'Failed to send notifications');
     }
   }
@@ -679,6 +946,8 @@ exports.sendPromotionalNotification = onCall(
 // --- Send Email Function ---
 exports.sendOrderEmail = onCall(
   {
+    region: "us-central1",
+    timeoutSeconds: 60,
     secrets: [SENDGRID_API_KEY],
   },
   async (request) => {
@@ -687,7 +956,7 @@ exports.sendOrderEmail = onCall(
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!to || !emailRegex.test(to) || !subject || !html) {
-      logger.error("❌ Invalid email fields", { to, subject });
+      logger.error("Invalid email fields", { to, subject });
       throw new HttpsError("invalid-argument", "Missing or invalid email fields.");
     }
 
@@ -699,10 +968,10 @@ exports.sendOrderEmail = onCall(
         subject,
         html,
       });
-      logger.info("✅ Email sent", { to, subject });
+      logger.info("Email sent", { to, subject });
       return { success: true };
     } catch (error) {
-      logger.error("❌ SendGrid Error:", { error: error.message });
+      logger.error("SendGrid Error:", { error: error.message });
       throw new HttpsError("internal", "Failed to send email: " + error.message);
     }
   }
@@ -733,7 +1002,7 @@ exports.onNotificationCreated = onDocumentCreated(
         .get();
 
       if (!userDoc.exists) {
-        logger.warn("⚠️ User not found", { userId });
+        logger.warn("User not found", { userId });
         return;
       }
 
@@ -741,39 +1010,39 @@ exports.onNotificationCreated = onDocumentCreated(
       const userEmail = userData.email;
 
       if (!userEmail) {
-        logger.warn("⚠️ User email not found", { userId });
+        logger.warn("User email not found", { userId });
         return;
       }
 
       if (userData.emailNotifications === false) {
-        logger.info("📧 Email notifications disabled for user", { userId });
+        logger.info("Email notifications disabled for user", { userId });
         return;
       }
 
       // Notification type mapping
       const notificationTypes = {
         order_received: {
-          subject: '📥 Order Received - Taste of African Cuisine',
+          subject: 'Order Received - Taste of African Cuisine',
           template: createOrderReceivedEmail
         },
         order_confirmed: {
-          subject: '✅ Order Confirmed - Taste of African Cuisine',
+          subject: 'Order Confirmed - Taste of African Cuisine',
           template: createOrderConfirmationEmail
         },
         order_preparing: {
-          subject: '👨‍🍳 Your Order is Being Prepared - Taste of African Cuisine',
+          subject: 'Your Order is Being Prepared - Taste of African Cuisine',
           template: createOrderPreparingEmail
         },
         order_ready: {
-          subject: '🍽️ Your Order is Ready - Taste of African Cuisine',
+          subject: 'Your Order is Ready - Taste of African Cuisine',
           template: createOrderReadyEmail
         },
         order_picked_up: {
-          subject: '✅ Order Picked Up - Taste of African Cuisine',
+          subject: 'Order Picked Up - Taste of African Cuisine',
           template: createOrderPickedUpEmail
         },
         order_delivered: {
-          subject: '🎉 Order Delivered - Taste of African Cuisine',
+          subject: 'Order Delivered - Taste of African Cuisine',
           template: createDeliveryNotificationEmail
         },
         default: {
@@ -797,7 +1066,7 @@ exports.onNotificationCreated = onDocumentCreated(
             subject: subject,
             html: htmlContent,
           });
-          logger.info("✅ Email sent successfully", { userEmail, type: notificationData.type });
+          logger.info("Email sent successfully", { userEmail, type: notificationData.type });
 
           await event.data.ref.update({
             emailSent: true,
@@ -807,7 +1076,7 @@ exports.onNotificationCreated = onDocumentCreated(
         } catch (error) {
           retries++;
           if (retries === MAX_RETRIES) {
-            logger.error("❌ Max retries reached for email", { error: error.message });
+            logger.error("Max retries reached for email", { error: error.message });
             await event.data.ref.update({
               emailSent: false,
               emailError: error.message,
@@ -819,7 +1088,7 @@ exports.onNotificationCreated = onDocumentCreated(
         }
       }
     } catch (error) {
-      logger.error("❌ Error in onNotificationCreated", { error: error.message });
+      logger.error("Error in onNotificationCreated", { error: error.message });
       await event.data.ref.update({
         emailSent: false,
         emailError: error.message,
@@ -830,12 +1099,15 @@ exports.onNotificationCreated = onDocumentCreated(
 );
 
 // --- Update Notification Preferences ---
-exports.updateNotificationPreferences = onCall(async (request) => {
+exports.updateNotificationPreferences = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+}, async (request) => {
   const { auth } = request;
   const { enabled, preferences } = request.data;
 
   if (!auth) {
-    logger.error("❌ Unauthenticated request");
+    logger.error("Unauthenticated request");
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
 
@@ -856,10 +1128,10 @@ exports.updateNotificationPreferences = onCall(async (request) => {
         { merge: true }
       );
 
-    logger.info("✅ Notification preferences updated", { userId: auth.uid, enabled });
+    logger.info("Notification preferences updated", { userId: auth.uid, enabled });
     return { success: true, message: 'Notification preferences updated' };
   } catch (error) {
-    logger.error("❌ Error updating notification preferences", { error: error.message });
+    logger.error("Error updating notification preferences", { error: error.message });
     throw new HttpsError('internal', 'Failed to update preferences: ' + error.message);
   }
 });
@@ -1212,3 +1484,167 @@ function createGenericNotificationEmail(notificationData) {
     </html>
   `;
 }
+
+// --- Send Push Notification (called by PushNotificationService) ---
+exports.sendPushNotification = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required');
+  }
+
+  const { userId, title, body, data } = request.data;
+  
+  if (!userId || !title || !body) {
+    throw new HttpsError('invalid-argument', 'Missing required fields');
+  }
+
+  try {
+    // Get user's FCM token
+    const userDoc = await admin.firestore()
+      .collection('users')
+      .doc(userId)
+      .get();
+      
+    if (!userDoc.exists || !userDoc.data().fcmToken) {
+      logger.warn('No FCM token found for user', { userId });
+      return { success: false, message: 'No FCM token found' };
+    }
+
+    const message = {
+      notification: { title, body },
+      data: data || {},
+      token: userDoc.data().fcmToken
+    };
+
+    await messaging.send(message);
+    logger.info('Push notification sent', { userId, title });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Push notification error', { error: error.message });
+    throw new HttpsError('internal', 'Failed to send notification');
+  }
+});
+
+// --- Send Order Confirmation Email (called by EmailService) ---
+exports.sendOrderConfirmationEmail = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+  secrets: [SENDGRID_API_KEY, FROM_EMAIL]
+}, async (request) => {
+  const { orderId, customerEmail, customerName, items, total, deliveryMethod } = request.data;
+  
+  if (!orderId || !customerEmail || !customerName) {
+    throw new HttpsError('invalid-argument', 'Missing required fields');
+  }
+
+  try {
+    const fromEmail = FROM_EMAIL.value() || "orders@tasteofafricancuisine.com";
+    const itemsList = items.map(item => `${item.name} x${item.quantity}`).join(', ');
+    
+    const htmlContent = `
+      <h2>Order Confirmation</h2>
+      <p>Hi ${customerName},</p>
+      <p>Thank you for your order! Here are the details:</p>
+      <div style="border: 1px solid #ddd; padding: 15px; margin: 20px 0;">
+        <h3>Order #${orderId}</h3>
+        <p><strong>Items:</strong> ${itemsList}</p>
+        <p><strong>Total:</strong> $${total.toFixed(2)}</p>
+        <p><strong>Method:</strong> ${deliveryMethod}</p>
+      </div>
+      <p>We'll notify you when your order is ready!</p>
+    `;
+
+    sgMail.setApiKey(SENDGRID_API_KEY.value());
+    await sgMail.send({
+      to: customerEmail,
+      from: fromEmail,
+      subject: `Order Confirmation #${orderId}`,
+      html: htmlContent
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Confirmation email error', { error: error.message });
+    throw new HttpsError('internal', 'Failed to send email');
+  }
+});
+
+// --- Send Order Completion Email (called by EmailService) ---
+exports.sendOrderCompletionEmail = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+  secrets: [SENDGRID_API_KEY, FROM_EMAIL]
+}, async (request) => {
+  const { orderId, customerEmail, customerName, status } = request.data;
+  
+  if (!orderId || !customerEmail || !customerName || !status) {
+    throw new HttpsError('invalid-argument', 'Missing required fields');
+  }
+
+  try {
+    const fromEmail = FROM_EMAIL.value() || "orders@tasteofafricancuisine.com";
+    
+    const statusMessages = {
+      'delivered': 'Your order has been delivered! Enjoy your meal!',
+      'picked up': 'Thank you for picking up your order! Enjoy!',
+      'cancelled': 'Your order has been cancelled. You will receive a refund shortly.'
+    };
+
+    const message = statusMessages[status] || `Your order status: ${status}`;
+    
+    const htmlContent = `
+      <h2>Order Update</h2>
+      <p>Hi ${customerName},</p>
+      <p>${message}</p>
+      <p><strong>Order #${orderId}</strong></p>
+      <p>Thank you for choosing Taste of African Cuisine!</p>
+    `;
+
+    sgMail.setApiKey(SENDGRID_API_KEY.value());
+    await sgMail.send({
+      to: customerEmail,
+      from: fromEmail,
+      subject: `Order Update #${orderId}`,
+      html: htmlContent
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Completion email error', { error: error.message });
+    throw new HttpsError('internal', 'Failed to send email');
+  }
+});
+
+// --- Create Scheduled Order (called by PaymentPage) ---
+exports.createScheduledOrder = onCall({
+  region: "us-central1",
+  timeoutSeconds: 60,
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required');
+  }
+
+  const data = request.data;
+  
+  if (data.userId !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'User ID mismatch');
+  }
+
+  try {
+    const db = admin.firestore();
+    
+    await db.collection('scheduled_orders').doc(data.orderNumber).set({
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, orderId: data.orderNumber };
+  } catch (error) {
+    logger.error('Scheduled order error', { error: error.message });
+    throw new HttpsError('internal', 'Failed to create scheduled order');
+  }
+});

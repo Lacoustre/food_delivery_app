@@ -4,6 +4,7 @@ import { signOut } from "firebase/auth";
 import { LogOut, User } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import NotificationCenter from "../components/NotificationCenter";
+import AdminAuthHelper from "../components/AdminAuthHelper";
 import { auth } from "../firebase";
 
 import type { ReactNode } from "react";
@@ -53,6 +54,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      <AdminAuthHelper />
       <Sidebar />
 
       <div className="flex-1 pl-64">

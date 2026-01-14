@@ -1,0 +1,346 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ghana-gold: #FFD700;
+  --color-ghana-red: #CE1126;
+  --color-ghana-green: #006B3F;
+  --color-ghana-black: #000000;
+  
+  --font-primary: 'Inter', system-ui, sans-serif;
+  --font-display: 'Playfair Display', serif;
+  
+  --animate-gradient: gradient 3s ease infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-float-delayed: float-delayed 4s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 20s linear infinite;
+  --animate-pulse-slow: pulse-slow 2s ease-in-out infinite;
+  --animate-bounce-subtle: bounce-subtle 2s ease-in-out infinite;
+  
+  --drop-shadow-glow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+@utility pattern-dots {
+  background-image: radial-gradient(var(--color-amber-400) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+@utility pattern-diagonal {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(255, 215, 0, 0.05) 10px,
+    rgba(255, 215, 0, 0.05) 20px
+  );
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(3deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(3deg);
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(0px) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(-6deg);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Base Styles */
+body {
+  background-color: #FDF1EC;
+  color: #333;
+  font-family: var(--font-primary);
+  overflow-x: hidden;
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FDF1EC;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, var(--color-amber-500), var(--color-orange-500));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, var(--color-amber-600), var(--color-orange-600));
+}
+
+/* Selection Color */
+::selection {
+  background-color: var(--color-amber-200);
+  color: var(--color-amber-900);
+}
+
+/* Custom Utilities */
+.bg-gradient-ghana {
+  background: linear-gradient(135deg, var(--color-ghana-red), var(--color-ghana-gold), var(--color-ghana-green));
+}
+
+.text-gradient-ghana {
+  background: linear-gradient(135deg, var(--color-ghana-red), var(--color-ghana-gold), var(--color-ghana-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.border-gradient-ghana {
+  border: double 3px transparent;
+  background-image: linear-gradient(white, white), 
+                    linear-gradient(135deg, var(--color-ghana-red), var(--color-ghana-gold), var(--color-ghana-green));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.shadow-ghana {
+  box-shadow: 0 10px 30px rgba(206, 17, 38, 0.1),
+              0 5px 15px rgba(255, 215, 0, 0.1);
+}
+
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Hover Effects */
+.card-hover {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.card-hover:hover::before {
+  left: 100%;
+}
+
+/* Button Styles */
+.btn-ghana {
+  background: linear-gradient(135deg, var(--color-amber-500), var(--color-orange-600));
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-ghana::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-ghana:hover::before {
+  left: 100%;
+}
+
+.btn-ghana:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3);
+}
+
+/* Loading Animation */
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
+  background-color: var(--color-amber-500);
+  border-radius: 50%;
+  animation: bounce-subtle 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+/* Image Zoom Effect */
+.img-zoom {
+  transition: transform 0.5s ease;
+}
+
+.img-zoom:hover {
+  transform: scale(1.05);
+}
+
+/* Text Reveal Animation */
+.text-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: reveal 0.8s ease forwards;
+}
+
+@keyframes reveal {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ghana Pattern Overlay */
+.ghana-pattern {
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(206, 17, 38, 0.1) 2px, transparent 2px),
+    radial-gradient(circle at 75% 75%, rgba(0, 107, 63, 0.1) 2px, transparent 2px);
+  background-size: 40px 40px;
+}
+
+/* Responsive Text Sizes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .text-shadow-lg {
+    text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.2);
+  }
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #0f172a;
+    color: #e2e8f0;
+  }
+  
+  .container {
+    background-color: #1e293b;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .btn-ghana {
+    border: 2px solid #000;
+  }
+}

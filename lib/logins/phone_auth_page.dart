@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sms_autofill/sms_autofill.dart';
-import 'auth_service.dart';
 
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({super.key});
@@ -12,21 +12,24 @@ class PhoneAuthPage extends StatefulWidget {
 }
 
 class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
-  final AuthService _authService = AuthService();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
 
   String? _verificationId;
-  bool _isLoading = false;
-  bool _codeSent = false;
   int? _resendToken;
+  bool _codeSent = false;
+  bool _isLoading = false;
+
   int _cooldown = 0;
   Timer? _timer;
+
+  int _attemptCount = 0;
+  DateTime? _lastAttempt;
 
   @override
   void initState() {
     super.initState();
-    listenForCode();
+    listenForCode(); // sms_autofill
   }
 
   @override
@@ -38,18 +41,21 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
     super.dispose();
   }
 
+  // Auto-filled code callback
   @override
   void codeUpdated() {
-    _otpController.text = code!;
-    _verifyOTP(); // auto-submit
+    if (code != null && code!.length == 6) {
+      _otpController.text = code!;
+      _verifyOTP();
+    }
   }
 
   void _startCooldown() {
     setState(() => _cooldown = 60);
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_cooldown == 0) {
-        timer.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_cooldown <= 0) {
+        t.cancel();
       } else {
         setState(() => _cooldown--);
       }
@@ -58,85 +64,170 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
 
   Future<void> _verifyPhoneNumber({bool isResend = false}) async {
     final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return;
+
+    if (phone.isEmpty) {
+      _toast('Please enter a phone number');
+      return;
+    }
+    if (!phone.startsWith('+') || phone.length < 10) {
+      _toast('Include country code (e.g., +1234567890)');
+      return;
+    }
+
+    // Simple rate limit: 3 attempts per minute
+    if (_lastAttempt != null &&
+        DateTime.now().difference(_lastAttempt!).inMinutes < 1 &&
+        _attemptCount >= 3) {
+      _toast('Too many attempts. Please wait a minute.');
+      return;
+    }
 
     setState(() => _isLoading = true);
-    try {
-      await _authService.verifyPhoneNumber(
-        phoneNumber: phone,
-        forceResendingToken: isResend ? _resendToken : null,
-        onVerificationCompleted: (PhoneAuthCredential credential) async {
-          final result = await _authService.signInWithPhoneCredential(
-            credential,
-          );
-          await _authService.saveUserPhoneToFirestore(result.user!);
-          if (mounted) Navigator.pushReplacementNamed(context, '/auth');
-        },
-        onVerificationFailed: (FirebaseAuthException e) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
-        },
-        onCodeSent: (String verificationId, int? resendToken) {
-          setState(() {
-            _verificationId = verificationId;
-            _resendToken = resendToken;
-            _codeSent = true;
-            _isLoading = false;
-          });
-          _startCooldown();
-        },
-        onCodeAutoRetrievalTimeout: (String verificationId) {
+    _attemptCount++;
+    _lastAttempt = DateTime.now();
+
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: phone,
+      forceResendingToken: isResend ? _resendToken : null,
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        // Instant verification or auto-retrieval
+        try {
+          await _applyCredential(credential, expectedPhone: phone);
+          if (!mounted) return;
+          _toast('Phone verified');
+          Navigator.pushReplacementNamed(context, '/auth');
+        } on FirebaseAuthException catch (e) {
+          if (!mounted) return;
+          _handleAuthError(e);
+        } catch (e) {
+          if (!mounted) return;
+          _toast('Sign in failed: $e', error: true);
+        }
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        _handleAuthError(e);
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        if (!mounted) return;
+        setState(() {
           _verificationId = verificationId;
-        },
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    }
+          _resendToken = resendToken;
+          _codeSent = true;
+          _isLoading = false;
+        });
+        _startCooldown();
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        _verificationId = verificationId;
+      },
+      timeout: const Duration(seconds: 60),
+    );
   }
 
   Future<void> _verifyOTP() async {
     if (_verificationId == null) return;
+    final sms = _otpController.text.trim();
+    if (sms.length != 6) return;
 
     setState(() => _isLoading = true);
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: _verificationId!,
-        smsCode: _otpController.text.trim(),
+        smsCode: sms,
       );
+      await _applyCredential(credential);
+      if (!mounted) return;
+      _toast('🎉 Successfully signed in!');
+      Navigator.pushReplacementNamed(context, '/auth');
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-      final result = await _authService.signInWithPhoneCredential(credential);
-      await _authService.saveUserPhoneToFirestore(result.user!);
-
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null &&
-          currentUser.email != null &&
-          currentUser.uid != result.user!.uid) {
-        try {
-          await currentUser.linkWithCredential(credential);
-        } catch (_) {}
-      }
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("🎉 Successfully signed in!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacementNamed(context, '/auth');
+      if (e.code == 'invalid-verification-code') {
+        _toast('Invalid verification code.', error: true);
+      } else if (e.code == 'session-expired') {
+        _toast('Session expired. Please request a new code.', error: true);
+        setState(() => _codeSent = false);
+      } else {
+        _handleAuthError(e);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Invalid OTP. Please try again.')),
-      );
+      _toast('Verification failed: $e', error: true);
     }
+  }
+
+  /// Decide whether to LINK (if a user is already signed in) or SIGN IN (no user).
+  Future<void> _applyCredential(
+    PhoneAuthCredential cred, {
+    String? expectedPhone,
+  }) async {
+    final current = FirebaseAuth.instance.currentUser;
+
+    UserCredential result;
+    if (current != null && current.phoneNumber == null) {
+      // Link phone to existing account (email/password user)
+      result = await current.linkWithCredential(cred);
+    } else {
+      // Pure phone sign-in (or user already has phone)
+      result = await FirebaseAuth.instance.signInWithCredential(cred);
+    }
+
+    final user = result.user!;
+    // Save phone + verified flag in Firestore (merge)
+    final phone = expectedPhone ?? user.phoneNumber;
+    if (phone != null && phone.isNotEmpty) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'phone': phone,
+        'phoneVerified': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _handleAuthError(FirebaseAuthException e) {
+    String message = 'Verification failed.';
+
+    switch (e.code) {
+      case 'too-many-requests':
+        message = 'Too many requests. Try again later.';
+        break;
+      case 'invalid-phone-number':
+        message = 'Invalid phone number format. Use +1234567890';
+        break;
+      case 'app-not-authorized':
+        message = 'App not authorized for phone auth.';
+        break;
+      case 'captcha-check-failed':
+        message = 'reCAPTCHA failed. Please try again.';
+        break;
+      case 'quota-exceeded':
+        message = 'SMS quota exceeded. Try again later.';
+        break;
+      case 'credential-already-in-use':
+        message = 'This phone number is already linked to another account.';
+        break;
+      case 'provider-already-linked':
+        message = 'Phone already linked to this account.';
+        break;
+      default:
+        message = e.message ?? message;
+    }
+
+    _toast(message, error: true);
+  }
+
+  void _toast(String msg, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: error ? Colors.red : Colors.green,
+      ),
+    );
   }
 
   @override
@@ -173,6 +264,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
                   labelText: 'Phone Number',
                   hintText: '+1 234 567 8900',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone),
+                  helperText: 'Include country code (e.g., +1 for US)',
                 ),
                 autofillHints: const [AutofillHints.telephoneNumber],
               ),
@@ -189,15 +282,11 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
             ] else ...[
               const Text('Enter the 6-digit code sent to your phone'),
               const SizedBox(height: 20),
-
-              // 🎨 Custom OTP Autofill field
               PinFieldAutoFill(
                 controller: _otpController,
                 codeLength: 6,
-                onCodeChanged: (code) {
-                  if (code != null && code.length == 6) {
-                    _verifyOTP();
-                  }
+                onCodeChanged: (c) {
+                  if (c != null && c.length == 6) _verifyOTP();
                 },
                 decoration: BoxLooseDecoration(
                   gapSpace: 12,
@@ -211,7 +300,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: const Icon(Icons.verified),
@@ -227,11 +315,15 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> with CodeAutoFill {
                 Text("⏱ Resend available in $_cooldown seconds")
               else
                 TextButton(
-                  onPressed: () => _verifyPhoneNumber(isResend: true),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _verifyPhoneNumber(isResend: true),
                   child: const Text('🔁 Resend Code'),
                 ),
               TextButton(
-                onPressed: () => setState(() => _codeSent = false),
+                onPressed: _isLoading
+                    ? null
+                    : () => setState(() => _codeSent = false),
                 child: const Text('📞 Change Phone Number'),
               ),
             ],

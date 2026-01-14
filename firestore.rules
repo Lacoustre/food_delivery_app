@@ -1,176 +1,107 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // 🔐 MAIN ORDERS COLLECTION (global /orders)
-    match /orders/{orderId} {
-      allow create: if (
-        (request.auth != null &&
-         request.resource.data.keys().hasAll(['userId']) &&
-         request.resource.data.userId == request.auth.uid)
-        ||
-        (request.auth == null &&
-         request.resource.data.keys().hasAll(['userId']) &&
-         request.resource.data.userId is string)
-      );
-
-      allow read: if request.auth != null &&
-        (
-          resource.data.userId == request.auth.uid ||
-          (
-            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-          )
-        );
-
-      allow update: if (
-        (request.auth != null &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
-         request.resource.data.status in ['preparing', 'out for delivery', 'delivered', 'cancelled'] &&
-         resource.data.status != 'cancelled')
-        ||
-        (request.auth == null)
-      );
-
-      // ✅ Allow delete for Admins or Server (e.g., Cloud Function)
-      allow delete: if (
-        (request.auth != null &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
-        ||
-        (request.auth == null)
-      );
-    }
-
-    // 👤 USER DATA AND SUBCOLLECTIONS
+    // Users collection - users can read/write their own data
     match /users/{userId} {
-      allow read, update, delete: if (
-        (request.auth != null && request.auth.uid == userId) ||
-        (request.auth == null)
-      );
-
-      allow create: if (
-        (request.auth != null &&
-         request.auth.uid == userId &&
-         request.resource.data.keys().hasAll(['userId']) &&
-         request.resource.data.userId == request.auth.uid)
-        ||
-        (request.auth == null &&
-         request.resource.data.keys().hasAll(['userId']) &&
-         request.resource.data.userId is string)
-      );
-
-      // 🧾 USER ORDERS SUBCOLLECTION
-      match /orders/{orderId} {
-        allow create: if (
-          (request.auth != null &&
-           userId == request.auth.uid &&
-           request.resource.data.userId == request.auth.uid &&
-           request.resource.data.orderId is string)
-          ||
-          (request.auth == null &&
-           request.resource.data.userId is string)
-        );
-
-        allow read: if (
-          (request.auth != null && request.auth.uid == userId) ||
-          (request.auth == null)
-        );
-
-        allow update: if request.auth == null;
-
-        // ✅ Allow deletion by owner or admin
-        allow delete: if (
-          (request.auth != null && request.auth.uid == userId)
-          ||
-          (request.auth != null &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true)
-          ||
-          (request.auth == null)
-        );
-      }
-
-      // 🛒 USER CART ITEMS
-      match /cart/{itemId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // ❤️ USER FAVORITES
-      match /favorites/{mealId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // 📍 USER ADDRESSES
-      match /addresses/{addressId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // 💳 SAVED CARDS
-      match /saved_cards/{cardId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // 🔔 NOTIFICATIONS
-      match /notifications/{noteId} {
-        allow read, write, delete: if (
-          (request.auth != null && request.auth.uid == userId) ||
-          (request.auth == null)
-        );
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // User subcollections (orders, notifications, addresses, etc.)
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
-
-    // 🌟 REVIEWS
+    
+    // Favorites - users can read/write their own favorites
+    match /favorites/{favoriteId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Orders - users can read their own orders, authenticated users can read for analytics
+    match /orders/{orderId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         request.auth.uid == resource.data.driverId ||
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Scheduled orders - users can read/write their own
+    match /scheduled_orders/{orderId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         request.auth.uid == request.resource.data.userId ||
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow create: if request.auth != null;
+    }
+    
+    // Meals - public read, admin write
+    match /meals/{mealId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Settings - public read for restaurant status
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Reviews - public read, authenticated write
     match /reviews/{reviewId} {
-      allow create: if request.auth != null &&
-                    request.resource.data.userId == request.auth.uid;
-
       allow read: if true;
-
-      allow update, delete: if request.auth != null &&
-        (
-          request.auth.uid == resource.data.userId ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-        );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
     }
-
-    // 🛠️ ADMIN SETTINGS
-    match /admin/{document=**} {
-      allow read, write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
-
-    // 🌍 PUBLIC COLLECTION
-    match /public/{document=**} {
+    
+    match /order_reviews/{reviewId} {
       allow read: if true;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
     }
-
-    // 🍽️ MENU ITEMS
-    match /menu/{itemId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    
+    // Drivers - authenticated access
+    match /drivers/{driverId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == driverId || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow create: if request.auth != null;
+      
+      // Driver subcollections
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == driverId;
+      }
     }
-
-    // 📊 ANALYTICS
-    match /analytics/{document=**} {
-      allow read, write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    
+    // Support - authenticated access
+    match /support_chats/{chatId} {
+      allow read, write: if request.auth != null;
     }
-
-    // 🎯 CATEGORIES
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    
+    match /support_messages/{messageId} {
+      allow read, write: if request.auth != null;
     }
-
-    // 🎉 PROMOTIONS
-    match /promotions/{promoId} {
-      allow read: if true;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    
+    // Admin collections
+    match /admins/{adminId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /admin_notifications/{notificationId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Complaints - users can create, admins can read/write
+    match /users/{userId}/complaints/{complaintId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow create: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

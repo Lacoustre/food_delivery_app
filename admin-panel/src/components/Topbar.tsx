@@ -19,7 +19,7 @@ export default function Topbar() {
       {/* Right-side Controls */}
       <div className="flex items-center gap-4">
         <span className="hidden md:block font-medium text-gray-600 dark:text-gray-300 text-sm">
-          Welcome, Admin
+          Welcome, Irene
         </span>
         <button
           type="button"

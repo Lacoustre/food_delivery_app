@@ -22,7 +22,8 @@ import {
   doc,
 } from "firebase/firestore";
 import { useCollectionData, useDocumentData, useCollection } from "react-firebase-hooks/firestore";
-import { db } from "../firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { db, auth } from "../firebase";
 import Loader from "../components/Loader";
 import moment from "moment";
 
@@ -61,8 +62,11 @@ interface Review {
 }
 
 export default function Dashboard() {
+  const [, userLoading, userError] = useAuthState(auth);
   const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
   const [showAllOrders, setShowAllOrders] = useState(false);
+  
+
   
   const allOrdersQuery = query(
     collection(db, "orders"),
@@ -85,9 +89,9 @@ export default function Dashboard() {
   const [users, usersLoading, usersError] = useCollectionData(usersQuery);
 
   const reviewsQuery = query(
-    collection(db, "reviews"),
+    collection(db, "order_reviews"),
     orderBy("createdAt", "desc"),
-    limit(10)
+    limit(100)
   );
   const [reviews] = useCollectionData(reviewsQuery);
 
@@ -207,12 +211,13 @@ export default function Dashboard() {
   const hasMoreOrders = (allOrders as Order[] || []).length > orderCount;
 
   const isLoading =
+    userLoading ||
     ordersLoading ||
     mealsLoading ||
     usersLoading ||
     allOrdersLoading ||
     restaurantLoading;
-  const error = ordersError || mealsError || usersError || restaurantError || allOrdersError || usersSnapshotError;
+  const error = userError || ordersError || mealsError || usersError || restaurantError || allOrdersError || usersSnapshotError;
 
   if (isLoading) {
     return (
@@ -223,10 +228,10 @@ export default function Dashboard() {
   }
 
   if (error) {
-    console.warn('Dashboard error (non-critical):', error);
-    // Don't block the UI for Firestore cache errors
-    if (error.toString().includes('BloomFilter')) {
-      console.log('BloomFilter error detected - continuing with available data');
+    // Silently handle permission errors for non-essential data
+    if (error.toString().includes('BloomFilter') || 
+        error.toString().includes('Missing or insufficient permissions')) {
+      // Continue with available data
     } else {
       return (
         <div className="text-red-600 text-center font-semibold bg-red-50 p-4 rounded-xl max-w-6xl mx-auto border border-red-200">
@@ -246,6 +251,7 @@ export default function Dashboard() {
           <p className="text-gray-600">
             Welcome back! Here's what's happening with your restaurant.
           </p>
+
         </div>
 
         <div className="mb-6">
@@ -300,7 +306,7 @@ export default function Dashboard() {
             title="Avg Rating"
             icon={<Star className="text-amber-600" />}
             value={avgRating.toFixed(1)}
-            link="#reviews"
+            link="/reviews"
             color="amber"
             change={`${reviews?.length || 0} reviews`}
           />
@@ -361,6 +367,70 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Meal Analytics */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Top Performing Meals</h2>
+            <div className="space-y-3">
+              {(() => {
+                // Calculate meal analytics from orders
+                const mealStats = new Map();
+                completedOrders.forEach((order: Order) => {
+                  if (order.items && Array.isArray(order.items)) {
+                    order.items.forEach((item: any) => {
+                      const mealName = item.name;
+                      const quantity = item.quantity || 1;
+                      const revenue = quantity * (item.price || 0);
+                      
+                      if (mealStats.has(mealName)) {
+                        const existing = mealStats.get(mealName);
+                        mealStats.set(mealName, {
+                          ...existing,
+                          totalOrders: existing.totalOrders + quantity,
+                          totalRevenue: existing.totalRevenue + revenue
+                        });
+                      } else {
+                        mealStats.set(mealName, {
+                          name: mealName,
+                          totalOrders: quantity,
+                          totalRevenue: revenue
+                        });
+                      }
+                    });
+                  }
+                });
+                
+                const topMeals = Array.from(mealStats.values())
+                  .sort((a, b) => b.totalOrders - a.totalOrders)
+                  .slice(0, 5);
+                
+                return topMeals.length > 0 ? topMeals.map((meal, index) => (
+                  <div key={meal.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">
+                        {index + 1}
+                      </span>
+                      <span className="font-medium text-gray-900">{meal.name}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">{meal.totalOrders} orders</div>
+                      <div className="text-xs text-gray-500">${meal.totalRevenue.toFixed(2)} revenue</div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>No meal data available</p>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <Link to="/meals" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                View detailed analytics →
+              </Link>
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Recent Orders</h2>

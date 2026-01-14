@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class LiveChatSupportPage extends StatefulWidget {
   const LiveChatSupportPage({super.key});
@@ -8,32 +11,127 @@ class LiveChatSupportPage extends StatefulWidget {
 }
 
 class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
-  final List<Map<String, String>> _messages = [
-    {"sender": "support", "text": "👋🏾 Hello! How can we help you today?"},
-  ];
   final TextEditingController _controller = TextEditingController();
+  String? _chatId;
+  User? user;
 
-  void _sendMessage() {
-    final message = _controller.text.trim();
-    if (message.isEmpty) return;
-
-    setState(() {
-      _messages.add({"sender": "user", "text": message});
-      _controller.clear();
-    });
-
-    Future.delayed(const Duration(seconds: 1), () {
-      setState(() {
-        _messages.add({
-          "sender": "support",
-          "text": "😊 Thank you for reaching out! We’ll respond shortly.",
-        });
-      });
+  @override
+  void initState() {
+    super.initState();
+    FirebaseAuth.instance.authStateChanges().listen((u) {
+      if (u != null) {
+        setState(() => user = u);
+        _initializeChat();
+      }
     });
   }
 
-  Widget _buildMessage(Map<String, String> msg) {
-    final isUser = msg["sender"] == "user";
+  Future<void> _initializeChat() async {
+    try {
+      if (user == null) return;
+
+      final existingChats = await FirebaseFirestore.instance
+          .collection('support_chats')
+          .where('customerId', isEqualTo: user!.uid)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      if (existingChats.docs.isNotEmpty) {
+        setState(() => _chatId = existingChats.docs.first.id);
+      } else {
+        final chatDoc = await FirebaseFirestore.instance
+            .collection('support_chats')
+            .add({
+              'customerId': user!.uid,
+              'customerName': user!.displayName ?? user!.email ?? 'Customer',
+              'customerEmail': user!.email ?? '',
+              'lastMessage': 'Chat started',
+              'lastMessageTime': FieldValue.serverTimestamp(),
+              'unreadCount': 0,
+              'status': 'active',
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+        await FirebaseFirestore.instance.collection('support_messages').add({
+          'chatId': chatDoc.id,
+          'senderId': 'admin',
+          'senderType': 'admin',
+          'message':
+              '👋🏾 Hello! Welcome to Taste of African Cuisine. This is Irene, how can I help you today?',
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+
+        setState(() => _chatId = chatDoc.id);
+      }
+    } catch (e) {
+      debugPrint('🔥 Error initializing chat: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load chat: $e')));
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final message = _controller.text.trim();
+    if (message.isEmpty || _chatId == null || user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('support_messages').add({
+        'chatId': _chatId,
+        'senderId': user!.uid,
+        'senderType': 'customer',
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      await FirebaseFirestore.instance
+          .collection('support_chats')
+          .doc(_chatId)
+          .update({
+            'lastMessage': message,
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'unreadCount': FieldValue.increment(1),
+          });
+
+      _controller.clear();
+    } catch (e) {
+      debugPrint('🔥 Error sending message: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to send message: $e')));
+    }
+  }
+
+  Future<void> _endChat() async {
+    if (_chatId == null) return;
+    
+    try {
+      await FirebaseFirestore.instance
+          .collection('support_chats')
+          .doc(_chatId)
+          .update({
+            'status': 'closed',
+            'lastMessage': 'Chat ended by customer',
+            'lastMessageTime': FieldValue.serverTimestamp(),
+          });
+      
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chat ended successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to end chat: $e')),
+      );
+    }
+  }
+
+  Widget _buildMessage(Map<String, dynamic> msg) {
+    final isUser = msg['senderType'] == 'customer';
+    final timestamp = msg['timestamp'] as Timestamp?;
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -42,14 +140,30 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
         constraints: const BoxConstraints(maxWidth: 280),
         decoration: BoxDecoration(
           color: isUser ? Colors.deepOrange : Colors.grey[200],
-          borderRadius: BorderRadius.circular(20), // ✅ Rounded bubble
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          msg["text"]!,
-          style: TextStyle(
-            color: isUser ? Colors.white : Colors.black87,
-            fontSize: 15,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              msg['message'] ?? '',
+              style: TextStyle(
+                color: isUser ? Colors.white : Colors.black87,
+                fontSize: 15,
+              ),
+            ),
+            if (timestamp != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  DateFormat('h:mm a').format(timestamp.toDate()),
+                  style: TextStyle(
+                    color: isUser ? Colors.white70 : Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -68,23 +182,80 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
             const Text('Live Chat Support'),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('End Chat'),
+                  content: const Text('Are you sure you want to end this chat?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _endChat();
+                      },
+                      child: const Text('End Chat'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
           const Padding(
             padding: EdgeInsets.all(12),
             child: Text(
-              'Business Hours: 12 PM – 7 PM (Closed on Mondays)',
+              'Business Hours: 12 PM – 8 PM (Closed on Mondays)',
               style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ),
           const Divider(),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) => _buildMessage(_messages[index]),
-            ),
+            child: _chatId == null
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('support_messages')
+                        .where('chatId', isEqualTo: _chatId)
+                        .orderBy('timestamp', descending: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}'));
+                      }
+
+                      final messages = snapshot.data?.docs ?? [];
+                      if (messages.isEmpty) {
+                        return const Center(
+                          child: Text('No messages yet. Say hi 👋🦾'),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final msg =
+                              messages[index].data() as Map<String, dynamic>;
+                          return _buildMessage(msg);
+                        },
+                      );
+                    },
+                  ),
           ),
           SafeArea(
             child: Padding(

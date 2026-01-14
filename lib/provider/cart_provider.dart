@@ -13,34 +13,72 @@ class CartProvider extends ChangeNotifier {
   List<CartItem> get items => _cartItems.map(CartItem.fromMap).toList();
 
   double get totalPrice => _cartItems.fold(0.0, (sum, item) {
-    final price = item['price'] is num
-        ? (item['price'] as num).toDouble()
-        : double.tryParse(item['price'].toString()) ?? 0.0;
-    final quantity = item['quantity'] ?? 1;
-    return sum + (price * quantity);
+    final price = _asDouble(item['price']);
+    final quantity = (item['quantity'] ?? 1) as int;
+
+    // Calculate extras price - only add if extra has a price > 0
+    final extras = (item['extras'] ?? []) as List;
+    final extrasPrice = extras.fold(0.0, (extrasSum, extra) {
+      final extraPrice = _asDouble(extra['price'] ?? 0);
+      return extraPrice > 0 ? extrasSum + extraPrice : extrasSum;
+    });
+
+    return sum + ((price + extrasPrice) * quantity);
   });
 
+  // --- helper normalizers (used only for matching) ---
+  static double _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '0') ?? 0.0;
+  }
+
+  static String _normNote(dynamic v) =>
+      (v ?? '').toString().trim().toLowerCase();
+
+  // Keep your original order-insensitive comparison
+  bool _areExtrasEqual(List<dynamic>? extras1, List<dynamic>? extras2) {
+    if (extras1 == null && extras2 == null) return true;
+    if (extras1 == null || extras2 == null) return false;
+    if (extras1.length != extras2.length) return false;
+
+    // Create sets of extra names for comparison
+    final set1 = extras1.map((e) => e['name'].toString()).toSet();
+    final set2 = extras2.map((e) => e['name'].toString()).toSet();
+    
+    return set1.length == set2.length && set1.containsAll(set2);
+  }
+
   void addToCart(Map<String, dynamic> meal) {
-    final index = _cartItems.indexWhere(
-      (item) =>
-          item['name'] == meal['name'] &&
-          item['price'] == meal['price'] &&
-          item['instructions'] == meal['instructions'] &&
-          _areExtrasEqual(item['extras'], meal['extras']),
-    );
+    // normalize inputs for matching
+    final incomingName = (meal['name'] ?? '').toString();
+    final incomingPrice = _asDouble(meal['price']);
+    final incomingNote = _normNote(meal['instructions']);
+    final incomingExtras = (meal['extras'] ?? []) as List;
+
+    final index = _cartItems.indexWhere((item) {
+      final sameName = (item['name'] ?? '').toString() == incomingName;
+      final samePrice = _asDouble(item['price']) == incomingPrice;
+      final sameNote = _normNote(item['instructions']) == incomingNote;
+      final sameExtras = _areExtrasEqual(
+        (item['extras'] ?? []) as List?,
+        incomingExtras,
+      );
+      return sameName && samePrice && sameNote && sameExtras;
+    });
 
     if (index != -1) {
       _cartItems[index]['quantity'] =
           (_cartItems[index]['quantity'] ?? 1) + (meal['quantity'] ?? 1);
     } else {
       _cartItems.add({
-        'name': meal['name'],
-        'price': meal['price'],
+        'name': incomingName,
+        'price': incomingPrice,
         'image': meal['image'],
         'category': meal['category'],
         'quantity': meal['quantity'] ?? 1,
-        'extras': meal['extras'] ?? [],
-        'instructions': meal['instructions'] ?? '',
+        'extras': incomingExtras,
+        // store normalized note so future comparisons match
+        'instructions': incomingNote,
       });
     }
 
@@ -59,13 +97,13 @@ class CartProvider extends ChangeNotifier {
   void updateItem(int index, Map<String, dynamic> updatedItem) {
     if (index >= 0 && index < _cartItems.length) {
       _cartItems[index] = {
-        'name': updatedItem['name'],
-        'price': updatedItem['price'],
+        'name': (updatedItem['name'] ?? '').toString(),
+        'price': _asDouble(updatedItem['price']),
         'image': updatedItem['image'],
         'category': updatedItem['category'],
         'quantity': updatedItem['quantity'] ?? 1,
         'extras': updatedItem['extras'] ?? [],
-        'instructions': updatedItem['instructions'] ?? '',
+        'instructions': _normNote(updatedItem['instructions']),
       };
       _saveCart();
       notifyListeners();
@@ -113,26 +151,6 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _areExtrasEqual(List<dynamic>? extras1, List<dynamic>? extras2) {
-    if (extras1 == null && extras2 == null) return true;
-    if (extras1 == null || extras2 == null) return false;
-    if (extras1.length != extras2.length) return false;
-
-    final sorted1 = [...extras1]
-      ..sort((a, b) => a['name'].compareTo(b['name']));
-    final sorted2 = [...extras2]
-      ..sort((a, b) => a['name'].compareTo(b['name']));
-
-    for (int i = 0; i < sorted1.length; i++) {
-      if (sorted1[i]['name'] != sorted2[i]['name'] ||
-          sorted1[i]['price'] != sorted2[i]['price']) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   Future<void> _saveCart() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('cartItems', jsonEncode(_cartItems));
@@ -170,7 +188,10 @@ class CartProvider extends ChangeNotifier {
 
     _cartItems.clear();
     for (var doc in snapshot.docs) {
-      _cartItems.add(doc.data());
+      final data = doc.data();
+      // normalize note on load too (keeps matching consistent)
+      data['instructions'] = _normNote(data['instructions']);
+      _cartItems.add(data);
     }
 
     notifyListeners();
@@ -224,14 +245,12 @@ class CartItem {
   factory CartItem.fromMap(Map<String, dynamic> map) {
     return CartItem(
       name: map['name'] ?? '',
-      price: map['price'] is num
-          ? (map['price'] as num).toDouble()
-          : double.tryParse(map['price'].toString()) ?? 0.0,
-      quantity: map['quantity'] ?? 1,
+      price: CartProvider._asDouble(map['price']),
+      quantity: (map['quantity'] ?? 1) as int,
       image: map['image'] ?? '',
       category: map['category'] ?? '',
       extras: map['extras'] ?? [],
-      instructions: map['instructions'] ?? '',
+      instructions: CartProvider._normNote(map['instructions']),
     );
   }
 }

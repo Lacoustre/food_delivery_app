@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
-import 'notification_detail_page.dart';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
@@ -17,34 +16,21 @@ class NotificationPage extends StatelessWidget {
         title: const Text("Notifications"),
         backgroundColor: Colors.deepOrange,
         actions: [
+          // Mark All as Read
           IconButton(
             tooltip: "Mark All as Read",
             icon: const Icon(Icons.done_all),
             onPressed: () async {
-              if (user != null) {
-                final allSnapshot = await FirebaseFirestore.instance
+              if (user == null) return;
+              try {
+                final coll = FirebaseFirestore.instance
                     .collection('users')
                     .doc(user.uid)
-                    .collection('notifications')
-                    .get();
+                    .collection('notifications');
 
-                if (allSnapshot.docs.isEmpty) {
-                  _showCustomDialog(
-                    context,
-                    title: "Nothing Here",
-                    message: "You have no notifications to mark as read.",
-                  );
-                  return;
-                }
+                final unread = await coll.where('read', isEqualTo: false).get();
 
-                final unreadSnapshot = await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('notifications')
-                    .where('read', isEqualTo: false)
-                    .get();
-
-                if (unreadSnapshot.docs.isEmpty) {
+                if (unread.docs.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("All notifications are already read."),
@@ -54,31 +40,39 @@ class NotificationPage extends StatelessWidget {
                 }
 
                 final batch = FirebaseFirestore.instance.batch();
-                for (var doc in unreadSnapshot.docs) {
-                  batch.update(doc.reference, {'read': true});
+                for (final d in unread.docs) {
+                  batch.update(d.reference, {'read': true});
                 }
-
                 await batch.commit();
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text("All notifications marked as read."),
                   ),
                 );
+              } catch (_) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Failed to mark notifications as read."),
+                  ),
+                );
               }
             },
           ),
+          // Clear All
           IconButton(
             tooltip: "Clear All",
             icon: const Icon(Icons.delete_sweep),
             onPressed: () async {
-              if (user != null) {
-                final snapshot = await FirebaseFirestore.instance
+              if (user == null) return;
+              try {
+                final coll = FirebaseFirestore.instance
                     .collection('users')
                     .doc(user.uid)
-                    .collection('notifications')
-                    .get();
+                    .collection('notifications');
 
-                if (snapshot.docs.isEmpty) {
+                final snap = await coll.limit(1).get();
+                if (snap.docs.isEmpty) {
                   _showCustomDialog(
                     context,
                     title: "Already Empty",
@@ -110,17 +104,29 @@ class NotificationPage extends StatelessWidget {
                   ),
                 );
 
-                if (confirm == true) {
+                if (confirm != true) return;
+
+                // Delete in batches to be safe
+                const pageSize = 400;
+                while (true) {
+                  final page = await coll.limit(pageSize).get();
+                  if (page.docs.isEmpty) break;
                   final batch = FirebaseFirestore.instance.batch();
-                  for (var doc in snapshot.docs) {
-                    batch.delete(doc.reference);
+                  for (final d in page.docs) {
+                    batch.delete(d.reference);
                   }
                   await batch.commit();
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("All notifications cleared.")),
-                  );
                 }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("All notifications cleared.")),
+                );
+              } catch (_) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Failed to clear notifications."),
+                  ),
+                );
               }
             },
           ),
@@ -130,7 +136,7 @@ class NotificationPage extends StatelessWidget {
           ? const Center(child: Text("Please log in to see notifications."))
           : RefreshIndicator(
               onRefresh: () async =>
-                  Future.delayed(const Duration(milliseconds: 500)),
+                  Future.delayed(const Duration(milliseconds: 400)),
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('users')
@@ -146,50 +152,43 @@ class NotificationPage extends StatelessWidget {
                     );
                   }
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  if (snapshot.hasError) {
                     return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.notifications_off,
-                            size: 100,
-                            color: Colors.grey.shade300,
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            "You're all caught up!",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "You have no new notifications at the moment.",
-                            style: TextStyle(fontSize: 14, color: Colors.grey),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          "Failed to load notifications.\n${snapshot.error}",
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     );
                   }
 
-                  final notifications = snapshot.data!.docs;
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return _emptyState();
+                  }
 
                   return ListView.separated(
                     padding: const EdgeInsets.all(12),
-                    itemCount: notifications.length,
+                    itemCount: docs.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final doc = notifications[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      final title = data['title'] ?? 'No Title';
-                      final body = data['body'] ?? 'No Message';
-                      final type = data['type'] ?? 'General';
-                      final orderId = data['orderId'];
-                      final read = data['read'] ?? false;
-                      final timestamp = (data['timestamp'] as Timestamp?)
-                          ?.toDate();
+                      final doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>? ?? {};
+                      final title = (data['title'] ?? 'No Title').toString();
+                      final body = (data['body'] ?? 'No Message').toString();
+                      final type = (data['type'] ?? 'General').toString();
+                      final read = (data['read'] ?? false) == true;
+                      final ts = data['timestamp'];
+                      DateTime? timestamp;
+
+                      if (ts is Timestamp) {
+                        timestamp = ts.toDate();
+                      } else if (ts is int) {
+                        timestamp = DateTime.fromMillisecondsSinceEpoch(ts);
+                      } // else leave null
+
                       final formattedDate = timestamp != null
                           ? DateFormat('MMM d, h:mm a').format(timestamp)
                           : "";
@@ -204,44 +203,68 @@ class NotificationPage extends StatelessWidget {
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         onDismissed: (_) async {
-                          await doc.reference.delete();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text("Notification deleted."),
-                              action: SnackBarAction(
-                                label: "Undo",
-                                onPressed: () async {
-                                  await doc.reference.set(data);
-                                },
+                          try {
+                            await doc.reference.delete();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Notification deleted."),
                               ),
-                            ),
-                          );
+                            );
+                          } catch (_) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Failed to delete notification."),
+                              ),
+                            );
+                          }
                         },
                         child: GestureDetector(
                           onTap: () async {
-                            await doc.reference.update({'read': true});
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => NotificationDetailPage(
-                                  title: title,
-                                  body: body,
-                                  timestamp: timestamp,
-                                  type: type,
-                                  orderId: orderId,
-                                ),
-                              ),
-                            );
+                            try {
+                              if (!read) {
+                                await doc.reference.update({'read': true});
+                              }
+
+                              if (type == 'order' ||
+                                  type.toLowerCase().contains('order')) {
+                                Navigator.pushNamed(context, '/orderHistory');
+                              } else if (type == 'chat') {
+                                Navigator.pushNamed(context, '/support');
+                              } else {
+                                _showNotificationBottomSheet(
+                                  context,
+                                  title,
+                                  body,
+                                  timestamp,
+                                  type,
+                                );
+                              }
+                            } catch (_) {
+                              _showNotificationBottomSheet(
+                                context,
+                                title,
+                                body,
+                                timestamp,
+                                type,
+                              );
+                            }
                           },
                           child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: read ? Colors.grey[100] : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: read ? Colors.grey[50] : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: read
+                                    ? Colors.grey[200]!
+                                    : Colors.deepOrange.withOpacity(0.2),
+                                width: read ? 1 : 2,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 6,
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
@@ -346,6 +369,29 @@ class NotificationPage extends StatelessWidget {
     );
   }
 
+  // --- UI helpers ---
+
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.notifications_off, size: 100, color: Colors.grey.shade300),
+          const SizedBox(height: 24),
+          const Text(
+            "You're all caught up!",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "You have no new notifications at the moment.",
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildShimmerCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -414,5 +460,80 @@ class NotificationPage extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+
+  void _showNotificationBottomSheet(
+    BuildContext context,
+    String title,
+    String body,
+    DateTime? timestamp,
+    String type,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _getIconForType(type),
+                  color: _getTypeColor(type),
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(body, style: const TextStyle(fontSize: 16)),
+            if (timestamp != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                DateFormat('MMM d, y • h:mm a').format(timestamp),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

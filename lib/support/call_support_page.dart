@@ -6,11 +6,18 @@ class CallSupportPage extends StatelessWidget {
   const CallSupportPage({super.key});
 
   void _launchPhoneDialer() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: '9592104944');
+    final Uri phoneUri = Uri(scheme: 'tel', path: '9294563215');
     if (await canLaunchUrl(phoneUri)) {
       await launchUrl(phoneUri);
     } else {
-      Fluttertoast.showToast(msg: "Unable to launch dialer");
+      Fluttertoast.showToast(
+        msg: "⚠️ Unable to launch dialer",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.TOP,
+        backgroundColor: Colors.red.shade600,
+        textColor: Colors.white,
+        fontSize: 14.0,
+      );
     }
   }
 
@@ -54,7 +61,7 @@ class CallSupportPage extends StatelessWidget {
                 onPressed: _launchPhoneDialer,
                 icon: const Icon(Icons.phone, size: 24),
                 label: const Text(
-                  'Call 9592104944',
+                  'Call 9294563215',
                   style: TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(

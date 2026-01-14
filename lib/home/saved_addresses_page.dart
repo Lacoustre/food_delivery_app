@@ -23,17 +23,17 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
   bool _isDefault = false;
   LatLng? _selectedLatLng;
 
-  late final CollectionReference _addrColl = FirebaseFirestore.instance
-      .collection('users')
-      .doc(FirebaseAuth.instance.currentUser!.uid)
-      .collection('addresses');
+  late final CollectionReference<Map<String, dynamic>> _addrColl =
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .collection('addresses');
 
   Future<void> _pickLocationAndFillFields() async {
     final LatLng? picked = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MapPickerPage()),
     );
-
     if (picked == null) return;
 
     try {
@@ -41,9 +41,9 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
         picked.latitude,
         picked.longitude,
       );
+
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
-
         setState(() {
           _selectedLatLng = picked;
           _streetController.text = place.street ?? '';
@@ -52,7 +52,7 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
           _zipController.text = place.postalCode ?? '';
         });
       }
-    } catch (e) {
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to reverse geocode location.")),
       );
@@ -65,10 +65,9 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
       _cityController.text = address.city;
       _stateController.text = address.state;
       _zipController.text = address.zipCode;
-      _selectedLatLng = LatLng(
-        address.latitude ?? 0.0,
-        address.longitude ?? 0.0,
-      );
+      _selectedLatLng = (address.latitude != null && address.longitude != null)
+          ? LatLng(address.latitude!, address.longitude!)
+          : null;
       _isDefault = address.isDefault;
     } else {
       _streetController.clear();
@@ -157,27 +156,37 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
                   onPressed: () async {
                     if (!_formKey.currentState!.validate()) return;
 
-                    final fullAddress =
-                        '${_streetController.text.trim()}, ${_cityController.text.trim()}, ${_stateController.text.trim()} ${_zipController.text.trim()}';
+                    final street = _streetController.text.trim();
+                    final city = _cityController.text.trim();
+                    final state = _stateController.text.trim();
+                    final zip = _zipController.text.trim();
 
-                    final duplicate =
-                        (await _addrColl
-                                .where(
-                                  'street',
-                                  isEqualTo: _streetController.text.trim(),
-                                )
-                                .where(
-                                  'city',
-                                  isEqualTo: _cityController.text.trim(),
-                                )
-                                .get())
-                            .docs;
+                    final fullAddress = '$street, $city, $state $zip';
 
-                    if (duplicate.isNotEmpty && address == null) {
-                      Fluttertoast.showToast(msg: "Address already exists.");
+                    // Duplicate check (fullAddress)
+                    final dupSnap = await _addrColl
+                        .where('fullAddress', isEqualTo: fullAddress)
+                        .limit(1)
+                        .get();
+
+                    final isDuplicate =
+                        dupSnap.docs.isNotEmpty &&
+                        (address == null ||
+                            dupSnap.docs.first.id != address.id);
+
+                    if (isDuplicate) {
+                      Fluttertoast.showToast(
+                        msg: "⚠️ Address already exists",
+                        toastLength: Toast.LENGTH_SHORT,
+                        gravity: ToastGravity.TOP,
+                        backgroundColor: Colors.orange.shade600,
+                        textColor: Colors.white,
+                        fontSize: 14.0,
+                      );
                       return;
                     }
 
+                    // If setting a new default, unset previous ones
                     if (_isDefault) {
                       final snapshot = await _addrColl.get();
                       for (final doc in snapshot.docs) {
@@ -188,26 +197,43 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
                     }
 
                     final data = {
-                      'street': _streetController.text.trim(),
-                      'city': _cityController.text.trim(),
-                      'state': _stateController.text.trim(),
-                      'zipCode': _zipController.text.trim(),
+                      'street': street,
+                      'city': city,
+                      'state': state,
+                      'zipCode': zip,
                       'latitude': _selectedLatLng?.latitude,
                       'longitude': _selectedLatLng?.longitude,
-                      'createdAt': Timestamp.now(),
                       'isDefault': _isDefault,
                       'fullAddress': fullAddress,
+                      // createdAt is added only on create (below)
                     };
 
                     if (address != null) {
                       await _addrColl.doc(address.id).update(data);
-                      Fluttertoast.showToast(msg: "Address updated.");
+                      Fluttertoast.showToast(
+                        msg: "✅ Address updated successfully",
+                        toastLength: Toast.LENGTH_SHORT,
+                        gravity: ToastGravity.TOP,
+                        backgroundColor: Colors.green.shade600,
+                        textColor: Colors.white,
+                        fontSize: 14.0,
+                      );
                     } else {
-                      await _addrColl.add(data);
-                      Fluttertoast.showToast(msg: "Address added.");
+                      await _addrColl.add({
+                        ...data,
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+                      Fluttertoast.showToast(
+                        msg: "✅ Address added successfully",
+                        toastLength: Toast.LENGTH_SHORT,
+                        gravity: ToastGravity.TOP,
+                        backgroundColor: Colors.green.shade600,
+                        textColor: Colors.white,
+                        fontSize: 14.0,
+                      );
                     }
 
-                    Navigator.pop(ctx);
+                    if (mounted) Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.save),
                   label: Text(address == null ? 'Add Address' : 'Save Changes'),
@@ -224,9 +250,16 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
     );
   }
 
-  void _deleteAddress(String id) async {
+  Future<void> _deleteAddress(String id) async {
     await _addrColl.doc(id).delete();
-    Fluttertoast.showToast(msg: "Address deleted.");
+    Fluttertoast.showToast(
+      msg: "🗑️ Address deleted",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.TOP,
+      backgroundColor: Colors.red.shade600,
+      textColor: Colors.white,
+      fontSize: 14.0,
+    );
   }
 
   @override
@@ -236,8 +269,12 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
         title: const Text('Saved Addresses'),
         backgroundColor: Colors.deepOrange,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _addrColl.orderBy('createdAt', descending: true).snapshots(),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        // Default addresses first, then newest
+        stream: _addrColl
+            .orderBy('isDefault', descending: true)
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text('Error loading addresses'));
@@ -261,10 +298,8 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
             itemCount: docs.length,
             separatorBuilder: (_, __) => const Divider(),
             itemBuilder: (context, i) {
-              final addr = Address.fromMap(
-                docs[i].id,
-                docs[i].data()! as Map<String, dynamic>,
-              );
+              final addr = Address.fromMap(docs[i].id, docs[i].data());
+
               return ListTile(
                 leading: const Icon(
                   Icons.location_on,

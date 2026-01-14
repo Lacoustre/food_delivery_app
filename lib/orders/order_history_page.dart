@@ -66,8 +66,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           .orderBy("createdAt", descending: true)
           .limit(_limit);
 
-      if (_selectedStatus != 'All') {
-        query = query.where("deliveryStatus", isEqualTo: _selectedStatus);
+      if (_selectedStatus == 'Completed') {
+        query = query.where("deliveryStatus", whereIn: ["delivered", "picked up", "completed"]);
+      } else if (_selectedStatus == 'Cancelled') {
+        query = query.where("deliveryStatus", isEqualTo: "cancelled");
+      } else if (_selectedStatus == 'Pending') {
+        query = query.where("deliveryStatus", whereIn: ["pending", "confirmed", "preparing"]);
       }
 
       if (_lastDoc != null) {
@@ -197,14 +201,22 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             Text(
               _selectedStatus == 'All'
                   ? 'No orders yet'
-                  : 'No $_selectedStatus orders',
+                  : _selectedStatus == 'Completed'
+                      ? 'No completed orders'
+                      : _selectedStatus == 'Pending'
+                          ? 'No pending orders'
+                          : 'No cancelled orders',
               style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 8),
             Text(
               _selectedStatus == 'All'
                   ? 'Your order history will appear here'
-                  : 'You have no ${_selectedStatus.toLowerCase()} orders',
+                  : _selectedStatus == 'Completed'
+                      ? 'Delivered orders will appear here'
+                      : _selectedStatus == 'Pending'
+                          ? 'Orders being processed will appear here'
+                          : 'Cancelled orders will appear here',
               style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
             ),
             const SizedBox(height: 16),
@@ -223,10 +235,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final statuses = [
       'All',
       'Pending',
-      'Confirmed',
-      'Preparing',
-      'On the Way',
-      'Delivered',
+      'Completed',
       'Cancelled',
     ];
     return SingleChildScrollView(
@@ -293,7 +302,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       return sum + quantity;
     });
 
-    final isRecent = DateTime.now().difference(createdAt).inHours < 24;
+    final isRecent = DateTime.now().difference(createdAt).inMinutes < 10;
     final (statusColor, statusIcon) = _getStatusProperties(deliveryStatus);
 
     return Card(
@@ -413,12 +422,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       case 'pending':
         return (Colors.orange, Icons.schedule);
       case 'confirmed':
+        return (Colors.indigo, Icons.check);
       case 'preparing':
         return (Colors.blue, Icons.restaurant);
+      case 'ready for pickup':
+        return (Colors.purple, Icons.notifications);
       case 'on the way':
       case 'out for delivery':
-        return (Colors.purple, Icons.delivery_dining);
+        return (Colors.orange, Icons.delivery_dining);
       case 'delivered':
+      case 'picked up':
+      case 'completed':
         return (Colors.green, Icons.check_circle);
       case 'cancelled':
         return (Colors.red, Icons.cancel);

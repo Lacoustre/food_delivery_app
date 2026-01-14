@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
@@ -112,6 +113,8 @@ class NotificationDetailPage extends StatelessWidget {
       final status = orderData['status']?.toString().toLowerCase();
 
       // Navigate to order detail
+      // (Make sure OrderDetailPage just needs the map)
+      // ignore: use_build_context_synchronously
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -119,10 +122,10 @@ class NotificationDetailPage extends StatelessWidget {
         ),
       );
 
-      // Show Rate button if delivered
+      // If delivered, show rating dialog
       if (status == 'delivered') {
         Future.delayed(const Duration(milliseconds: 500), () {
-          _showRatingDialog(context, orderData['orderNumber'] ?? orderId);
+          _showRatingDialog(context, orderId!);
         });
       }
     } catch (e) {
@@ -134,8 +137,8 @@ class NotificationDetailPage extends StatelessWidget {
   }
 
   void _showRatingDialog(BuildContext context, String orderId) {
-    double _rating = 0;
-    final TextEditingController _controller = TextEditingController();
+    double rating = 0;
+    final TextEditingController controller = TextEditingController();
 
     showDialog(
       context: context,
@@ -154,11 +157,11 @@ class NotificationDetailPage extends StatelessWidget {
               itemSize: 30,
               itemBuilder: (_, __) =>
                   const Icon(Icons.star, color: Colors.amber),
-              onRatingUpdate: (rating) => _rating = rating,
+              onRatingUpdate: (newRating) => rating = newRating,
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: _controller,
+              controller: controller,
               maxLines: 3,
               decoration: const InputDecoration(
                 hintText: "Leave a comment...",
@@ -176,19 +179,38 @@ class NotificationDetailPage extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
 
-              await FirebaseFirestore.instance
-                  .collection('orders')
-                  .doc(orderId)
-                  .collection('reviews')
-                  .add({
-                    'rating': _rating,
-                    'comment': _controller.text,
-                    'timestamp': Timestamp.now(),
-                  });
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Please log in to submit a review."),
+                  ),
+                );
+                return;
+              }
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Thanks for your feedback!")),
-              );
+              // Write to /orders/{orderId}/reviews/{uid}
+              try {
+                await FirebaseFirestore.instance
+                    .collection('orders')
+                    .doc(orderId)
+                    .collection('reviews')
+                    .doc(user.uid)
+                    .set({
+                      'rating': rating,
+                      'comment': controller.text,
+                      'timestamp': Timestamp.now(),
+                      'userId': user.uid,
+                    });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Thanks for your feedback!")),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Failed to submit review: $e")),
+                );
+              }
             },
             child: const Text("Submit"),
           ),

@@ -43,10 +43,24 @@ class _ComplaintRefundPageState extends State<ComplaintRefundPage> {
             'status': 'Pending',
           });
 
-      Fluttertoast.showToast(msg: "Complaint submitted successfully");
+      Fluttertoast.showToast(
+        msg: "✅ Complaint submitted successfully",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.TOP,
+        backgroundColor: Colors.green.shade600,
+        textColor: Colors.white,
+        fontSize: 14.0,
+      );
       Navigator.pop(context);
     } catch (e) {
-      Fluttertoast.showToast(msg: "Error: ${e.toString()}");
+      Fluttertoast.showToast(
+        msg: "❌ Error: ${e.toString()}",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.TOP,
+        backgroundColor: Colors.red.shade600,
+        textColor: Colors.white,
+        fontSize: 14.0,
+      );
     }
   }
 

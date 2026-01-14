@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "367349792428",
+    "project_id": "africancuisine-b8759",
+    "storage_bucket": "africancuisine-b8759.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367349792428:android:ffd80f91638e26fe706909",
+        "android_client_info": {
+          "package_name": "com.khestra.africanCuisine"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKcW1R2Q-TyXUAssZ_4X93-MVu38vQXz0"
+        },
+        {
+          "current_key": "AIzaSyAYdsmBA5lwQea7ZPoqyUnny8Rvd8jiY6s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367349792428:android:3c5c4545c3939f6c706909",
+        "android_client_info": {
+          "package_name": "com.khestra.african_cuisine"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKcW1R2Q-TyXUAssZ_4X93-MVu38vQXz0"
+        },
+        {
+          "current_key": "AIzaSyAYdsmBA5lwQea7ZPoqyUnny8Rvd8jiY6s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

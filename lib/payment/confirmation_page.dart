@@ -6,7 +6,12 @@ import 'package:vibration/vibration.dart';
 
 class ConfirmationPage extends StatefulWidget {
   final String orderId;
-  const ConfirmationPage({super.key, required this.orderId});
+  final bool isScheduled;
+  const ConfirmationPage({
+    super.key,
+    required this.orderId,
+    this.isScheduled = false,
+  });
 
   @override
   State<ConfirmationPage> createState() => _ConfirmationPageState();
@@ -24,8 +29,10 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
   }
 
   void _listenToOrderUpdates() {
+    final collection = widget.isScheduled ? 'scheduled_orders' : 'orders';
+
     _orderSubscription = FirebaseFirestore.instance
-        .collection('orders')
+        .collection(collection)
         .doc(widget.orderId)
         .snapshots()
         .listen((snapshot) {
@@ -39,10 +46,12 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
             if (previousStatus != null && previousStatus != newStatus) {
               // Flutter toast
               Fluttertoast.showToast(
-                msg: "Order status updated: ${_capitalize(newStatus)}",
+                msg: "🔄 Order status: ${_capitalize(newStatus)}",
                 toastLength: Toast.LENGTH_LONG,
+                gravity: ToastGravity.TOP,
                 backgroundColor: Colors.deepOrange,
                 textColor: Colors.white,
+                fontSize: 14.0,
               );
 
               // Vibration (if supported)
@@ -91,8 +100,13 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
   }
 
   Widget _buildConfirmationContent(bool isDark) {
-    final status = (_orderData?['status'] ?? 'received').toString();
-    final eta = _orderData?['eta']?.toString() ?? 'Being prepared';
+    final status =
+        (_orderData?['status'] ??
+                (widget.isScheduled ? 'scheduled' : 'received'))
+            .toString();
+    final eta = widget.isScheduled
+        ? 'Scheduled for ${_formatScheduledTime()}'
+        : (_orderData?['eta']?.toString() ?? 'Being prepared');
     final note = (_orderData?['note'] ?? '').toString();
     final orderNumber = _orderData?['orderNumber']?.toString() ?? '';
 
@@ -107,9 +121,11 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
             color: Colors.green,
           ),
           const SizedBox(height: 24),
-          const Text(
-            'Thank you for your order!',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          Text(
+            widget.isScheduled
+                ? 'Order Scheduled Successfully!'
+                : 'Thank you for your order!',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
@@ -122,7 +138,7 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Estimated Ready Time: $eta',
+            widget.isScheduled ? eta : 'Estimated Ready Time: $eta',
             style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 8),
@@ -183,7 +199,7 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
           icon: const Icon(Icons.support_agent),
           label: const Text('Contact Restaurant'),
           onPressed: () {
-            Navigator.pushNamed(context, '/callSupport'); // ✅ updated route
+            Navigator.pushNamed(context, '/callSupport'); // updated route
           },
           style: _buttonStyle(isDark, background: Colors.black),
         ),
@@ -200,20 +216,38 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
     );
   }
 
+  String _formatScheduledTime() {
+    if (_orderData?['scheduledTime'] != null) {
+      final scheduledTime = (_orderData!['scheduledTime'] as Timestamp)
+          .toDate();
+      return '${scheduledTime.day}/${scheduledTime.month}/${scheduledTime.year} at ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}';
+    }
+    return 'Soon';
+  }
+
   static double _getProgressValue(String status) {
     switch (status.toLowerCase()) {
-      case 'received':
+      case 'scheduled':
         return 0.1;
+      case 'pending':
+      case 'received':
+        return 0.2;
+      case 'confirmed':
+        return 0.35;
       case 'preparing':
-        return 0.3;
+        return 0.55;
       case 'ready':
-        return 0.6;
+      case 'ready for pickup':
+        return 0.75;
+      case 'on the way':
       case 'out for delivery':
-        return 0.8;
+        return 0.9;
       case 'delivered':
+      case 'picked up':
+      case 'completed':
         return 1.0;
       default:
-        return 0.1;
+        return 0.2;
     }
   }
 

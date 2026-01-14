@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:intl/intl.dart';
 
 class RatePastOrdersPage extends StatelessWidget {
   const RatePastOrdersPage({super.key});
@@ -9,18 +10,17 @@ class RatePastOrdersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
       return const Scaffold(
         body: Center(child: Text("Please log in to view your orders.")),
       );
     }
 
-    final ordersRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
+    // Top-level orders, owned by the user, completed flow, and not yet rated
+    final query = FirebaseFirestore.instance
         .collection('orders')
-        .where('status', isEqualTo: 'completed')
+        .where('userId', isEqualTo: user.uid)
+        .where('status', whereIn: ['delivered', 'picked up', 'completed'])
         .where('rated', isEqualTo: false);
 
     return Scaffold(
@@ -29,18 +29,16 @@ class RatePastOrdersPage extends StatelessWidget {
         backgroundColor: Colors.deepOrange,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ordersRef.snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+        stream: query.snapshots(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          if (snapshot.hasError) {
-            debugPrint("Firestore error: ${snapshot.error}");
+          if (snap.hasError) {
             return const Center(child: Text("Error loading orders."));
           }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          final docs = snap.data?.docs ?? [];
+          if (docs.isEmpty) {
             return const Center(
               child: Text(
                 'No completed orders to rate at the moment.',
@@ -50,37 +48,60 @@ class RatePastOrdersPage extends StatelessWidget {
             );
           }
 
-          final docs = snapshot.data!.docs;
+          // Client-side sort by createdAt desc (avoids composite index)
+          docs.sort((a, b) {
+            final ta =
+                (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            final tb =
+                (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            return tb.compareTo(ta);
+          });
 
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
             separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, index) {
-              try {
-                final order = docs[index];
-                final orderId = order.id;
-                final mealName = order['mealName']?.toString() ?? 'Meal';
-                return ListTile(
-                  leading: const Icon(Icons.fastfood, color: Colors.deepOrange),
-                  title: Text(mealName),
-                  subtitle: Text('Order ID: $orderId'),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepOrange,
-                    ),
-                    onPressed: () =>
-                        _showRatingDialog(context, user.uid, orderId, order),
-                    child: const Text('Rate'),
+            itemBuilder: (context, i) {
+              final d = docs[i];
+              final orderId = d.id;
+              final orderNumber = d['orderNumber']?.toString() ?? orderId;
+              final createdAt = (d['createdAt'] as Timestamp?)?.toDate();
+              final items =
+                  (d['items'] as List?)?.cast<Map<String, dynamic>>() ??
+                  const [];
+              final itemsLabel = _itemsLabel(items);
+              final total = (d['pricing']?['total'] as num?)?.toDouble();
+
+              return ListTile(
+                leading: const Icon(
+                  Icons.receipt_long,
+                  color: Colors.deepOrange,
+                ),
+                title: Text('Order #$orderNumber'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (createdAt != null)
+                      Text(DateFormat('MMM d, y • h:mm a').format(createdAt)),
+                    if (itemsLabel.isNotEmpty) Text(itemsLabel),
+                    if (total != null)
+                      Text(
+                        'Total: ${NumberFormat.simpleCurrency().format(total)}',
+                      ),
+                  ],
+                ),
+                trailing: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange,
                   ),
-                );
-              } catch (e) {
-                return ListTile(
-                  leading: const Icon(Icons.error, color: Colors.red),
-                  title: const Text("Error loading item"),
-                  subtitle: Text(e.toString()),
-                );
-              }
+                  onPressed: () => _showRatingDialog(
+                    context,
+                    orderId,
+                    d.data() as Map<String, dynamic>,
+                  ),
+                  child: const Text('Rate'),
+                ),
+              );
             },
           );
         },
@@ -88,120 +109,141 @@ class RatePastOrdersPage extends StatelessWidget {
     );
   }
 
+  static String _itemsLabel(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) return '';
+    final names = items
+        .map((e) => (e['name'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (names.isEmpty) return '';
+    if (names.length == 1) return names.first;
+    final first = names.take(2).join(', ');
+    final more = names.length - 2;
+    return more > 0 ? '$first +$more more' : first;
+  }
+
   void _showRatingDialog(
     BuildContext context,
-    String userId,
-    String orderId,
-    DocumentSnapshot order,
+    String orderDocId,
+    Map<String, dynamic> order,
   ) {
-    double rating = 3.0;
-    final TextEditingController reviewController = TextEditingController();
-    bool isSubmitting = false;
+    double rating = 4.0;
+    final controller = TextEditingController();
+    bool busy = false;
 
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Rate Your Order'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RatingBar.builder(
-                    initialRating: rating,
-                    minRating: 1,
-                    allowHalfRating: true,
-                    itemCount: 5,
-                    itemBuilder: (context, _) =>
-                        const Icon(Icons.star, color: Colors.amber),
-                    onRatingUpdate: (val) {
-                      setStateDialog(() => rating = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: reviewController,
-                    decoration: const InputDecoration(
-                      labelText: 'Leave a comment (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Rate Your Order'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RatingBar.builder(
+                initialRating: rating,
+                minRating: 1,
+                allowHalfRating: true,
+                itemCount: 5,
+                itemBuilder: (_, __) =>
+                    const Icon(Icons.star, color: Colors.amber),
+                onRatingUpdate: (r) => rating = r,
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Leave a comment (optional)',
+                  border: OutlineInputBorder(),
                 ),
-                ElevatedButton(
-                  onPressed: isSubmitting
-                      ? null
-                      : () async {
-                          final trimmedReview = reviewController.text.trim();
-                          setStateDialog(() => isSubmitting = true);
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+              ),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (rating <= 0) return;
+                      setState(() => busy = true);
+                      try {
+                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        if (uid == null) throw 'Not signed in';
 
-                          try {
-                            final mealName =
-                                order['mealName']?.toString() ?? 'Meal';
+                        // Update order doc (top-level /orders/{orderDocId})
+                        await FirebaseFirestore.instance
+                            .collection('orders')
+                            .doc(orderDocId)
+                            .update({
+                              'rated': true,
+                              'rating': rating,
+                              'review': controller.text.trim(),
+                              'ratedAt': FieldValue.serverTimestamp(),
+                            });
 
-                            // Update the user's order
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(userId)
-                                .collection('orders')
-                                .doc(orderId)
-                                .update({
-                                  'rated': true,
-                                  'rating': rating,
-                                  'review': trimmedReview,
-                                });
+                        // Save to global reviews
+                        final items =
+                            (order['items'] as List?)
+                                ?.cast<Map<String, dynamic>>() ??
+                            const [];
+                        await FirebaseFirestore.instance
+                            .collection('reviews')
+                            .add({
+                              'userId': uid,
+                              'orderId': orderDocId,
+                              'orderNumber': order['orderNumber'],
+                              'items': items
+                                  .map(
+                                    (e) => {
+                                      'name': e['name'],
+                                      'id': e['id'],
+                                      'price': e['price'],
+                                    },
+                                  )
+                                  .toList(),
+                              'rating': rating,
+                              'review': controller.text.trim(),
+                              'timestamp': FieldValue.serverTimestamp(),
+                            });
 
-                            // Save to global reviews collection
-                            await FirebaseFirestore.instance
-                                .collection('reviews')
-                                .add({
-                                  'userId': userId,
-                                  'orderId': orderId,
-                                  'mealName': mealName,
-                                  'rating': rating,
-                                  'review': trimmedReview,
-                                  'timestamp': FieldValue.serverTimestamp(),
-                                });
-
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Thanks for your feedback!"),
-                              ),
-                            );
-                          } catch (e) {
-                            setStateDialog(() => isSubmitting = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Error: $e")),
-                            );
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
-                  ),
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Submit'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Thanks for your feedback!'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => busy = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    },
+              child: busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

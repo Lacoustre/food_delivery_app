@@ -25,7 +25,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast.success("Login successful!", {
-        position: "top-center",
+        position: "top-right",
         autoClose: 2000,
       });
       setTimeout(() => navigate("/"), 1000);
@@ -48,7 +48,7 @@ export default function LoginPage() {
         msg = messageMap[code as keyof typeof messageMap] || "Login failed.";
       }
       toast.error(msg, {
-        position: "top-center",
+        position: "top-right",
         autoClose: 3000,
       });
     } finally {
@@ -59,7 +59,7 @@ export default function LoginPage() {
   const handleResetPassword = async () => {
     if (!email) {
       toast.error("Please enter your email first.", {
-        position: "top-center",
+        position: "top-right",
         autoClose: 3000,
       });
       return;
@@ -67,13 +67,13 @@ export default function LoginPage() {
     try {
       await sendPasswordResetEmail(auth, email);
       toast.success("Password reset link sent!", {
-        position: "top-center",
+        position: "top-right",
         autoClose: 3000,
       });
       setShowReset(false);
     } catch {
       toast.error("Reset failed. Please try again.", {
-        position: "top-center",
+        position: "top-right",
         autoClose: 3000,
       });
     }

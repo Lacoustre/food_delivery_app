@@ -2,110 +2,102 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CADisableMinimumFrameDurationOnPhone</key>
-  <true/>
-  <key>CFBundleDevelopmentRegion</key>
-  <string>$(DEVELOPMENT_LANGUAGE)</string>
-  <key>CFBundleDisplayName</key>
-  <string>African Cuisine</string>
-  <key>CFBundleDocumentTypes</key>
-  <array>
-    <dict>
-      <key>CFBundleTypeName</key>
-      <string>MKDirectionsRequest</string>
-      <key>LSItemContentTypes</key>
-      <array>
-        <string>com.apple.maps.directionsrequest</string>
-      </array>
-    </dict>
-  </array>
-  <key>CFBundleExecutable</key>
-  <string>$(EXECUTABLE_NAME)</string>
-  <key>CFBundleIdentifier</key>
-  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-  <key>CFBundleInfoDictionaryVersion</key>
-  <string>6.0</string>
-  <key>CFBundleName</key>
-  <string>african_cuisine</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>CFBundleShortVersionString</key>
-  <string>$(FLUTTER_BUILD_NAME)</string>
-  <key>CFBundleSignature</key>
-  <string>????</string>
-  <key>CFBundleVersion</key>
-  <string>$(FLUTTER_BUILD_NUMBER)</string>
-
-  <!-- ✅ GOOGLE MAPS + PLACES API KEY -->
-  <key>GMSApiKey</key>
-  <string>AIzaSyCcv1PK7WonTsFHcaGw8T2Jw3J2Ob8DKFQ</string>
-
-  <!-- ✅ Required for Google Places Autocomplete (Networking) -->
-  <key>NSAppTransportSecurity</key>
-  <dict>
-    <key>NSAllowsArbitraryLoads</key>
-    <true/>
-  </dict>
-
-  <!-- ✅ Required Permissions -->
-  <key>LSRequiresIPhoneOS</key>
-  <true/>
-
-  <key>MKDirectionsApplicationSupportedModes</key>
-  <array>
-    <string>MKDirectionsModeCar</string>
-    <string>MKDirectionsModePedestrian</string>
-    <string>MKDirectionsModeRideShare</string>
-  </array>
-
-  <!-- ✅ LOCATION PERMISSIONS -->
-  <key>NSLocationWhenInUseUsageDescription</key>
-  <string>This app uses your location to show nearby African meals and delivery options.</string>
-  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>We need your location for real-time order tracking and pickups.</string>
-  <key>NSLocationAlwaysUsageDescription</key>
-  <string>We use your location for delivery and tracking even when the app is in the background.</string>
-
-  <!-- ✅ Apple Pay & Media -->
-  <key>NSAppleMusicUsageDescription</key>
-  <string>We use Apple Pay to securely process your meal orders.</string>
-
-  <!-- ✅ Camera & Photos -->
-  <key>NSCameraUsageDescription</key>
-  <string>This app needs access to your camera to take a profile picture.</string>
-  <key>NSPhotoLibraryUsageDescription</key>
-  <string>This app needs access to your photo library to update your profile picture.</string>
-
-  <!-- ✅ Background Modes -->
-  <key>UIBackgroundModes</key>
-  <array>
-    <string>location</string>
-    <string>remote-notification</string>
-    <string>fetch</string>
-  </array>
-
-  <key>UIApplicationSupportsIndirectInputEvents</key>
-  <true/>
-  <key>UILaunchStoryboardName</key>
-  <string>LaunchScreen</string>
-  <key>UIMainStoryboardFile</key>
-  <string>Main</string>
-  <key>UISupportedInterfaceOrientations</key>
-  <array>
-    <string>UIInterfaceOrientationPortrait</string>
-    <string>UIInterfaceOrientationLandscapeLeft</string>
-    <string>UIInterfaceOrientationLandscapeRight</string>
-  </array>
-  <key>UISupportedInterfaceOrientations~ipad</key>
-  <array>
-    <string>UIInterfaceOrientationPortrait</string>
-    <string>UIInterfaceOrientationPortraitUpsideDown</string>
-    <string>UIInterfaceOrientationLandscapeLeft</string>
-    <string>UIInterfaceOrientationLandscapeRight</string>
-  </array>
-
-  <!-- ✅ Flutter WebViews & Maps -->
-  <key>io.flutter.embedded_views_preview</key>
-  <true/>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>African Cuisine</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>MKDirectionsRequest</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apple.maps.directionsrequest</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>african_cuisine</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.khestra.africanCuisine</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-367349792428-ios-8c90537864d380b0706909</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GMSApiKey</key>
+	<string>AIzaSyCcv1PK7WonTsFHcaGw8T2Jw3J2Ob8DKFQ</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>MKDirectionsApplicationSupportedModes</key>
+	<array>
+		<string>MKDirectionsModeCar</string>
+		<string>MKDirectionsModePedestrian</string>
+		<string>MKDirectionsModeRideShare</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>We use Apple Pay to securely process your meal orders.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera to take a profile picture.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location for real-time order tracking and pickups.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>We use your location for delivery and tracking even when the app is in the background.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses your location to show nearby African meals and delivery options.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to update your profile picture.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
 </dict>
 </plist>

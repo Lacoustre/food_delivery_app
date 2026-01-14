@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
-import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon } from "lucide-react";
+import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, MoreHorizontal, TrendingUp, DollarSign } from "lucide-react";
 
 interface Meal {
   id: string;
@@ -28,18 +28,42 @@ interface Meal {
   imageUrl?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  available?: boolean;
+  category?: string;
 }
 
 
 
+const CATEGORIES = [
+  'Main Dishes',
+  'Side Dishes', 
+  'Pastries',
+  'Drinks'
+];
+
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
+  if (imageUrl.startsWith('http')) return imageUrl;
+  if (imageUrl.startsWith('assets/')) {
+    return `/${imageUrl}`;
+  }
+  return imageUrl;
+};
+
 export default function Meals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState<"all" | "available" | "unavailable">("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [selectedMeals, setSelectedMeals] = useState<string[]>([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [mealAnalytics, setMealAnalytics] = useState<any[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [restaurantOpen, setRestaurantOpen] = useState(true);
-  const [newMeal, setNewMeal] = useState({ name: "", description: "", price: "" });
+  const [newMeal, setNewMeal] = useState({ name: "", description: "", price: "", category: "Main Dishes" });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -55,6 +79,55 @@ export default function Meals() {
     }
   }, [restaurantDoc]);
 
+  // Load meal analytics
+  useEffect(() => {
+    loadMealAnalytics();
+  }, []);
+
+  const loadMealAnalytics = async () => {
+    try {
+      const ordersSnapshot = await collection(db, "orders").get();
+      const mealStats = new Map();
+      
+      ordersSnapshot.docs.forEach(doc => {
+        const order = doc.data();
+        if (order.items && Array.isArray(order.items)) {
+          order.items.forEach((item: any) => {
+            const mealName = item.name;
+            const quantity = item.quantity || 1;
+            const price = item.price || 0;
+            const revenue = quantity * price;
+            
+            if (mealStats.has(mealName)) {
+              const existing = mealStats.get(mealName);
+              mealStats.set(mealName, {
+                ...existing,
+                totalOrders: existing.totalOrders + quantity,
+                totalRevenue: existing.totalRevenue + revenue
+              });
+            } else {
+              mealStats.set(mealName, {
+                name: mealName,
+                totalOrders: quantity,
+                totalRevenue: revenue
+              });
+            }
+          });
+        }
+      });
+      
+      const analyticsArray = Array.from(mealStats.values())
+        .sort((a, b) => b.totalOrders - a.totalOrders)
+        .slice(0, 10);
+      
+      setMealAnalytics(analyticsArray);
+    } catch (err) {
+      console.error('Failed to load analytics:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
   const mealsQuery = query(
     collection(db, "meals"),
     orderBy("createdAt", "desc")
@@ -68,14 +141,78 @@ export default function Meals() {
       ...doc.data(),
     })) as Meal[] ?? [];
 
+  // Auto-categorize existing meals on component mount
+  useEffect(() => {
+    const updateMealCategories = async () => {
+      if (meals.length === 0) return;
+      
+      const updates = [];
+      for (const meal of meals) {
+        if (!meal.category) {
+          const name = meal.name.toLowerCase();
+          let category = 'Main Dishes'; // default
+          
+          if (name.includes('sprite') || name.includes('coke') || name.includes('fanta') || 
+              name.includes('water') || name.includes('juice') || name.includes('malt') || 
+              name.includes('sobolo') || name.includes('drink')) {
+            category = 'Drinks';
+          } else if (name.includes('shito') || name.includes('side')) {
+            category = 'Side Dishes';
+          } else if (name.includes('pastry') || name.includes('bread') || name.includes('cake')) {
+            category = 'Pastries';
+          } else if (name.includes('appetizer') || name.includes('starter')) {
+            category = 'Appetizers';
+          } else if (name.includes('dessert') || name.includes('sweet')) {
+            category = 'Desserts';
+          }
+          
+          if (category !== 'Main Dishes') {
+            updates.push({
+              id: meal.id,
+              category
+            });
+          }
+        }
+      }
+      
+      // Update meals with categories
+      if (updates.length > 0) {
+        try {
+          const promises = updates.map(update => 
+            updateDoc(doc(db, "meals", update.id), { 
+              category: update.category,
+              updatedAt: Timestamp.now()
+            })
+          );
+          await Promise.all(promises);
+          console.log(`Updated ${updates.length} meals with categories`);
+        } catch (err) {
+          console.error('Failed to update meal categories:', err);
+        }
+      }
+    };
+    
+    updateMealCategories();
+  }, [meals.length]);
+
   const filteredMeals = meals.filter((meal) => {
     const matchesSearch = meal.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          meal.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || 
                          (statusFilter === "active" && meal.active) ||
                          (statusFilter === "inactive" && !meal.active);
-    return matchesSearch && matchesStatus;
+    const matchesAvailability = availabilityFilter === "all" || 
+                               (availabilityFilter === "available" && (meal.available !== false)) ||
+                               (availabilityFilter === "unavailable" && meal.available === false);
+    const matchesCategory = categoryFilter === "all" || meal.category === categoryFilter;
+    return matchesSearch && matchesStatus && matchesAvailability && matchesCategory;
   });
+
+  // Summary calculations
+  const totalMeals = meals.length;
+  const availableMeals = meals.filter(m => m.available !== false && m.active).length;
+  const unavailableMeals = meals.filter(m => m.available === false || !m.active).length;
+  const avgPrice = meals.length > 0 ? meals.reduce((sum, m) => sum + m.price, 0) / meals.length : 0;
 
   const exportMealsToPDF = () => {
     const exportable = filteredMeals.filter((meal) => meal.active);
@@ -153,12 +290,14 @@ export default function Meals() {
         price: parseFloat(newMeal.price),
         imageUrl,
         active: true,
+        available: true,
+        category: newMeal.category,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
       
       toast.success("Meal added successfully");
-      setNewMeal({ name: "", description: "", price: "" });
+      setNewMeal({ name: "", description: "", price: "", category: "Main Dishes" });
       setSelectedImage(null);
       setImagePreview(null);
       setShowAddModal(false);
@@ -186,6 +325,7 @@ export default function Meals() {
         description: editingMeal.description,
         price: editingMeal.price,
         imageUrl,
+        category: editingMeal.category || "Main Dishes",
         updatedAt: Timestamp.now(),
       });
       
@@ -213,6 +353,83 @@ export default function Meals() {
     }
   };
 
+  const toggleAvailability = async (mealId: string, currentAvailability: boolean) => {
+    try {
+      const mealRef = doc(db, "meals", mealId);
+      await updateDoc(mealRef, {
+        available: !currentAvailability,
+        updatedAt: Timestamp.now(),
+      });
+      toast.success(`Meal marked as ${!currentAvailability ? "available" : "unavailable"}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update meal availability");
+    }
+  };
+
+  const handleBulkAction = async (action: string) => {
+    if (selectedMeals.length === 0) {
+      toast.error("Please select meals first");
+      return;
+    }
+
+    try {
+      const promises = selectedMeals.map(mealId => {
+        const mealRef = doc(db, "meals", mealId);
+        switch (action) {
+          case 'available':
+            return updateDoc(mealRef, { available: true, updatedAt: Timestamp.now() });
+          case 'unavailable':
+            return updateDoc(mealRef, { available: false, updatedAt: Timestamp.now() });
+          case 'active':
+            return updateDoc(mealRef, { active: true, updatedAt: Timestamp.now() });
+          case 'inactive':
+            return updateDoc(mealRef, { active: false, updatedAt: Timestamp.now() });
+          case 'delete':
+            return deleteDoc(doc(db, "meals", mealId));
+          default:
+            return Promise.resolve();
+        }
+      });
+      
+      await Promise.all(promises);
+      toast.success(`Bulk action completed for ${selectedMeals.length} meals`);
+      setSelectedMeals([]);
+      setShowBulkActions(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to perform bulk action");
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedMeals.length === filteredMeals.length) {
+      setSelectedMeals([]);
+    } else {
+      setSelectedMeals(filteredMeals.map(m => m.id));
+    }
+  };
+
+  const duplicateMeal = async (meal: Meal) => {
+    try {
+      await addDoc(collection(db, "meals"), {
+        name: `${meal.name} (Copy)`,
+        description: meal.description,
+        price: meal.price,
+        imageUrl: meal.imageUrl || "",
+        category: meal.category || "Main Dishes",
+        active: false,
+        available: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success("Meal duplicated successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to duplicate meal");
+    }
+  };
+
   const toggleRestaurantStatus = async () => {
     try {
       await setDoc(doc(db, "settings", "restaurant"), {
@@ -233,6 +450,111 @@ export default function Meals() {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Menu Management</h1>
         <p className="text-gray-600">Manage your restaurant's menu items and pricing.</p>
       </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Meals</p>
+              <p className="text-2xl font-bold text-gray-900">{totalMeals}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Plus className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Available</p>
+              <p className="text-2xl font-bold text-green-600">{availableMeals}</p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Unavailable</p>
+              <p className="text-2xl font-bold text-red-600">{unavailableMeals}</p>
+            </div>
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Avg Price</p>
+              <p className="text-2xl font-bold text-gray-900">${avgPrice.toFixed(2)}</p>
+            </div>
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <span className="text-yellow-600 font-bold text-lg">$</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Section */}
+      {mealAnalytics.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Meal Analytics</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Most Ordered */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+                Most Ordered Meals
+              </h3>
+              <div className="space-y-2">
+                {mealAnalytics.slice(0, 5).map((meal, index) => (
+                  <div key={meal.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">
+                        {index + 1}
+                      </span>
+                      <span className="font-medium text-gray-900">{meal.name}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">{meal.totalOrders} orders</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Top Revenue */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-600" />
+                Top Revenue Meals
+              </h3>
+              <div className="space-y-2">
+                {mealAnalytics
+                  .sort((a, b) => b.totalRevenue - a.totalRevenue)
+                  .slice(0, 5)
+                  .map((meal, index) => (
+                    <div key={meal.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-bold">
+                          {index + 1}
+                        </span>
+                        <span className="font-medium text-gray-900">{meal.name}</span>
+                      </div>
+                      <span className="text-sm font-medium text-gray-600">${meal.totalRevenue.toFixed(2)}</span>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -259,6 +581,33 @@ export default function Meals() {
                 <option value="all">All Items</option>
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <CheckCircle className="text-gray-400 w-5 h-5" />
+              <select
+                value={availabilityFilter}
+                onChange={(e) => setAvailabilityFilter(e.target.value as "all" | "available" | "unavailable")}
+                className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <option value="all">All Availability</option>
+                <option value="available">Available</option>
+                <option value="unavailable">Unavailable</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Filter className="text-gray-400 w-5 h-5" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <option value="all">All Categories</option>
+                {CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -291,6 +640,61 @@ export default function Meals() {
         </div>
       </div>
 
+      {/* Bulk Actions */}
+      {selectedMeals.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-blue-900">
+                {selectedMeals.length} meal(s) selected
+              </span>
+              <button
+                onClick={() => setSelectedMeals([])}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Clear selection
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleBulkAction('available')}
+                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+              >
+                Mark Available
+              </button>
+              <button
+                onClick={() => handleBulkAction('unavailable')}
+                className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+              >
+                Mark Unavailable
+              </button>
+              <button
+                onClick={() => handleBulkAction('active')}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+              >
+                Activate
+              </button>
+              <button
+                onClick={() => handleBulkAction('inactive')}
+                className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Deactivate
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`Delete ${selectedMeals.length} selected meals?`)) {
+                    handleBulkAction('delete');
+                  }
+                }}
+                className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Results Summary */}
       <div className="mb-4">
         <p className="text-sm text-gray-600">
@@ -316,10 +720,20 @@ export default function Meals() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedMeals.length === filteredMeals.length && filteredMeals.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Availability</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -329,20 +743,45 @@ export default function Meals() {
                 {filteredMeals.map((meal) => (
                   <tr key={meal.id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {meal.imageUrl ? (
-                        <img 
-                          src={meal.imageUrl} 
-                          alt={meal.name}
-                          className="w-12 h-12 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                          <ImageIcon className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
+                      <input
+                        type="checkbox"
+                        checked={selectedMeals.includes(meal.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedMeals([...selectedMeals, meal.id]);
+                          } else {
+                            setSelectedMeals(selectedMeals.filter(id => id !== meal.id));
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const imgUrl = getImageUrl(meal.imageUrl);
+                        return imgUrl ? (
+                          <img 
+                            src={imgUrl}
+                            alt={meal.name}
+                            className="w-12 h-12 rounded-lg object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                      <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center" style={{display: getImageUrl(meal.imageUrl) ? 'none' : 'flex'}}>
+                        <ImageIcon className="w-6 h-6 text-gray-400" />
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{meal.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {meal.category || 'Main Dishes'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900 max-w-xs truncate" title={meal.description}>
@@ -351,6 +790,23 @@ export default function Meals() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">${meal.price.toFixed(2)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => toggleAvailability(meal.id, meal.available !== false)}
+                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                          meal.available !== false
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-red-100 text-red-800 hover:bg-red-200'
+                        }`}
+                      >
+                        {meal.available !== false ? (
+                          <CheckCircle className="w-4 h-4" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        {meal.available !== false ? 'Available' : 'Unavailable'}
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <label className="inline-flex items-center cursor-pointer">
@@ -374,23 +830,32 @@ export default function Meals() {
                         : "—"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button 
-                        onClick={() => {
-                          setEditingMeal(meal);
-                          setShowEditModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-800 mr-3 transition-colors duration-150 inline-flex items-center gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteMeal(meal.id)}
-                        className="text-red-600 hover:text-red-800 transition-colors duration-150 inline-flex items-center gap-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => {
+                            setEditingMeal(meal);
+                            setShowEditModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 transition-colors duration-150 inline-flex items-center gap-1"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => duplicateMeal(meal)}
+                          className="text-green-600 hover:text-green-800 transition-colors duration-150 inline-flex items-center gap-1"
+                        >
+                          <Copy className="w-4 h-4" />
+                          Duplicate
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteMeal(meal.id)}
+                          className="text-red-600 hover:text-red-800 transition-colors duration-150 inline-flex items-center gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -468,6 +933,18 @@ export default function Meals() {
                   placeholder="0.00"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select
+                  value={newMeal.category}
+                  onChange={(e) => setNewMeal({...newMeal, category: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             
             <div className="flex justify-end gap-3 mt-8">
@@ -527,13 +1004,16 @@ export default function Meals() {
                     <Upload className="w-4 h-4" />
                     Change Image
                   </label>
-                  {(imagePreview || editingMeal.imageUrl) && (
-                    <img 
-                      src={imagePreview || editingMeal.imageUrl} 
-                      alt="Preview" 
-                      className="w-16 h-16 rounded-lg object-cover" 
-                    />
-                  )}
+                  {(() => {
+                    const imgUrl = getImageUrl(imagePreview || editingMeal.imageUrl);
+                    return imgUrl ? (
+                      <img src={imgUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border flex items-center justify-center bg-gray-100">
+                        <ImageIcon className="w-6 h-6 text-gray-400" />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <div>
@@ -563,6 +1043,18 @@ export default function Meals() {
                   onChange={(e) => setEditingMeal({...editingMeal, price: parseFloat(e.target.value) || 0})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select
+                  value={editingMeal.category || "Main Dishes"}
+                  onChange={(e) => setEditingMeal({...editingMeal, category: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
             </div>
             

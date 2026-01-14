@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
+import 'package:african_cuisine/services/push_notification_service.dart';
 import 'package:african_cuisine/logins/login_page.dart';
 import 'package:african_cuisine/home/saved_addresses_page.dart';
 import 'package:african_cuisine/support/rate_orders_page.dart';
@@ -12,8 +13,11 @@ import 'package:african_cuisine/support/complaint_refund_page.dart';
 import 'package:african_cuisine/support/live_chat_support_page.dart';
 import 'package:african_cuisine/support/call_support_page.dart';
 import 'package:african_cuisine/orders/order_history_page.dart';
+import 'package:african_cuisine/orders/scheduled_orders_page.dart';
 import 'package:african_cuisine/phone_number_update.dart';
+import 'package:african_cuisine/logins/link_phone_page.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -49,15 +53,44 @@ class _ProfilePageState extends State<ProfilePage> {
     if (user == null) return;
 
     try {
-      final storageRef = FirebaseStorage.instance.ref().child(
+      // Check both old and new storage paths
+      final oldStorageRef = FirebaseStorage.instance.ref().child(
         'profile_pictures/${user.uid}.jpg',
       );
+      final newStorageRef = FirebaseStorage.instance.ref().child(
+        'users/${user.uid}/profile_picture.jpg',
+      );
 
-      // Try to get download URL - if it exists, user has custom image
-      await storageRef.getDownloadURL();
-      setState(() {
-        _hasCustomImage = true;
-      });
+      try {
+        // Try new path first
+        await newStorageRef.getDownloadURL();
+        setState(() {
+          _hasCustomImage = true;
+        });
+        return;
+      } catch (e) {
+        // Try old path
+        try {
+          await oldStorageRef.getDownloadURL();
+          setState(() {
+            _hasCustomImage = true;
+          });
+          return;
+        } catch (e) {
+          // No custom image found
+        }
+      }
+
+      // Check if user has photoURL set
+      if (user.photoURL != null && user.photoURL!.isNotEmpty) {
+        setState(() {
+          _hasCustomImage = true;
+        });
+      } else {
+        setState(() {
+          _hasCustomImage = false;
+        });
+      }
     } catch (e) {
       // Image doesn't exist in storage
       setState(() {
@@ -66,8 +99,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Clear any broken photoURL from Firebase Auth
       if (user.photoURL != null) {
-        await user.updatePhotoURL(null);
-        await user.reload();
+        try {
+          await user.updatePhotoURL(null);
+          await user.reload();
+        } catch (updateError) {
+          print('Failed to clear broken photoURL: $updateError');
+        }
       }
     }
   }
@@ -115,22 +152,79 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _uploadAndSetProfileImage(File imageFile) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to upload profile picture'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isUploading = true;
     });
 
     try {
+      // Ensure user is authenticated and get fresh token
+      await user.reload();
+      final idToken = await user.getIdToken(true);
+      
+      if (idToken == null) {
+        throw Exception('Authentication token not available');
+      }
+
+      // Check if user is properly authenticated
+      if (!user.emailVerified && user.providerData.isEmpty) {
+        throw FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'unauthenticated',
+          message: 'User not properly authenticated',
+        );
+      }
+
       final storageRef = FirebaseStorage.instance.ref().child(
-        'profile_pictures/${user.uid}.jpg',
+        'users/${user.uid}/profile_picture.jpg',
       );
 
-      final uploadTask = storageRef.putFile(imageFile);
+      // Add metadata for better organization
+      final metadata = SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {
+          'userId': user.uid,
+          'uploadedAt': DateTime.now().toIso8601String(),
+        },
+      );
+
+      final uploadTask = storageRef.putFile(imageFile, metadata);
+      
+      // Monitor upload progress
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        debugPrint('Upload progress: ${(progress * 100).toStringAsFixed(1)}%');
+      });
+
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
+      // Update user profile with new photo URL
       await user.updatePhotoURL(downloadUrl);
+      
+      // Also save to Firestore for backup
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+              'photoURL': downloadUrl,
+              'profileUpdatedAt': FieldValue.serverTimestamp(),
+            });
+      } catch (firestoreError) {
+        // Continue even if Firestore update fails
+        debugPrint('Firestore update failed: $firestoreError');
+      }
+
       await user.reload();
 
       setState(() {
@@ -143,7 +237,59 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Profile picture updated successfully!'),
+            content: Text('✅ Profile picture updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on FirebaseException catch (e) {
+      setState(() {
+        _isUploading = false;
+      });
+
+      String errorMessage = 'Upload failed';
+      
+      switch (e.code) {
+        case 'storage/unauthorized':
+        case 'unauthenticated':
+          errorMessage = 'Please sign out and sign back in to upload images.';
+          // Force re-authentication
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          }
+          return;
+        case 'storage/canceled':
+          errorMessage = 'Upload was cancelled';
+          break;
+        case 'storage/unknown':
+          errorMessage = 'An unknown error occurred during upload';
+          break;
+        case 'storage/object-not-found':
+          errorMessage = 'File not found during upload';
+          break;
+        case 'storage/bucket-not-found':
+          errorMessage = 'Storage bucket not found';
+          break;
+        case 'storage/project-not-found':
+          errorMessage = 'Project not found';
+          break;
+        case 'storage/quota-exceeded':
+          errorMessage = 'Storage quota exceeded';
+          break;
+        case 'storage/retry-limit-exceeded':
+          errorMessage = 'Upload retry limit exceeded. Please try again.';
+          break;
+        default:
+          errorMessage = 'Upload failed: ${e.message}';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -161,7 +307,10 @@ class _ProfilePageState extends State<ProfilePage> {
         // Actual upload failure
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Upload failed: ${e.toString()}')),
+            SnackBar(
+              content: Text('Upload failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
@@ -198,20 +347,43 @@ class _ProfilePageState extends State<ProfilePage> {
     if (shouldDelete != true) return;
 
     try {
-      // Delete from Firebase Storage
-      final storageRef = FirebaseStorage.instance.ref().child(
+      // Try to delete from both storage paths
+      final oldStorageRef = FirebaseStorage.instance.ref().child(
         'profile_pictures/${user.uid}.jpg',
       );
+      final newStorageRef = FirebaseStorage.instance.ref().child(
+        'users/${user.uid}/profile_picture.jpg',
+      );
 
+      // Try to delete from both locations
       try {
-        await storageRef.delete();
-      } catch (storageError) {
-        // Continue even if storage deletion fails
-        print('Storage deletion failed: $storageError');
+        await newStorageRef.delete();
+      } catch (e) {
+        print('New storage path deletion failed: $e');
+      }
+      
+      try {
+        await oldStorageRef.delete();
+      } catch (e) {
+        print('Old storage path deletion failed: $e');
       }
 
       // Clear the photoURL from Firebase Auth
       await user.updatePhotoURL(null);
+      
+      // Also remove from Firestore
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+              'photoURL': FieldValue.delete(),
+              'profileUpdatedAt': FieldValue.serverTimestamp(),
+            });
+      } catch (firestoreError) {
+        print('Firestore update failed: $firestoreError');
+      }
+      
       await user.reload();
 
       setState(() {
@@ -222,12 +394,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Profile picture removed. Using default image.'),
+          content: Text('✅ Profile picture removed. Using default image.'),
+          backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove image: ${e.toString()}')),
+        SnackBar(
+          content: Text('Failed to remove image: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -740,9 +916,10 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildProfileOption(
               icon: Icons.calendar_today,
               title: "Scheduled Orders",
-              onTap: () => ScaffoldMessenger.of(
+              onTap: () => Navigator.push(
                 context,
-              ).showSnackBar(const SnackBar(content: Text('Coming Soon'))),
+                MaterialPageRoute(builder: (_) => const ScheduledOrdersPage()),
+              ),
             ),
 
             _buildSectionHeader('Help & Support'),
@@ -788,23 +965,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 MaterialPageRoute(builder: (_) => const OrderHistoryPage()),
               ),
             ),
+
             _buildSectionHeader('Account Settings'),
-            ListTile(
-              leading: const Icon(
-                Icons.phone_android,
-                color: Colors.deepOrange,
-              ),
-              title: const Text('Update Phone Number'),
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PhoneNumberUpdatePage(),
-                  ),
-                );
-              },
-            ),
+
+            _buildPhoneNumberSection(),
 
             _buildProfileOption(
               icon: Icons.email,
@@ -903,6 +1067,82 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+
+
+
+  Widget _buildPhoneNumberSection() {
+    final user = FirebaseAuth.instance.currentUser;
+    
+    return FutureBuilder<DocumentSnapshot>(
+      future: user != null 
+          ? FirebaseFirestore.instance.collection('users').doc(user.uid).get()
+          : null,
+      builder: (context, snapshot) {
+        String? phoneNumber;
+        bool isLinked = false;
+        
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final userData = snapshot.data!.data() as Map<String, dynamic>;
+          phoneNumber = userData['phone'] as String?;
+          isLinked = phoneNumber != null && phoneNumber.isNotEmpty;
+        }
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: Icon(
+              isLinked ? Icons.phone_android : Icons.phone_android_outlined,
+              color: isLinked ? Colors.green : Colors.deepOrange,
+            ),
+            title: Text(isLinked ? 'Phone Number' : 'Add Phone Number'),
+            subtitle: isLinked 
+                ? Text(phoneNumber!) 
+                : const Text('Link your phone number for better security'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isLinked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Linked',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: () {
+              if (isLinked) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PhoneNumberUpdatePage(),
+                  ),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LinkPhonePage(),
+                  ),
+                );
+              }
+            },
+          ),
+        );
+      },
     );
   }
 

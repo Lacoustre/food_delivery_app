@@ -3,21 +3,21 @@ import {
   collection,
   query,
   orderBy,
-  where,
   updateDoc,
   doc,
+  where,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import Loader from "../components/Loader";
 import moment from "moment";
 import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
-
+import { User, Truck } from "lucide-react";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const statusFilters = ["all", "received", "confirmed", "preparing", "ready for pickup", "picked up", "on the way", "delivered", "cancelled", "completed"];
+const statusFilters = ["all", "pending", "confirmed", "preparing", "ready for pickup", "on the way", "delivered", "picked up", "completed", "cancelled"];
 
 type OrderItem = {
   name?: string;
@@ -45,6 +45,29 @@ type Order = {
   orderType?: string;
   deliveryMethod?: string;
   switchedToPickup?: boolean;
+  driverId?: string;
+  driverName?: string;
+  delivery?: {
+    option?: string;
+    fee?: number;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      coordinates?: {
+        latitude: number;
+        longitude: number;
+      };
+    };
+  };
+  payment?: {
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    method?: string;
+    status?: string;
+  };
   pricing?: {
     total?: number;
     subtotal?: number;
@@ -53,7 +76,8 @@ type Order = {
     tip?: number;
   };
   total?: number;
-  status: string;
+  status?: string;
+  deliveryStatus?: string;
   createdAt?: { seconds: number; nanoseconds: number };
   items?: OrderItem[];
   cartItems?: OrderItem[];
@@ -65,10 +89,18 @@ export default function Orders() {
   const [previousStatusMap, setPreviousStatusMap] = useState<{ [key: string]: string }>({});
   const [selectedMonth, setSelectedMonth] = useState(moment().format("YYYY-MM"));
   const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
+  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [selectedOrderForDriver, setSelectedOrderForDriver] = useState<Order | null>(null);
+
+  // Get available drivers
+  const driversQuery = query(
+    collection(db, "drivers"),
+    where("approvalStatus", "==", "approved")
+  );
+  const [driversSnapshot] = useCollection(driversQuery);
 
   const ordersQuery = query(
     collection(db, "orders"),
-    ...(filter !== "all" ? [where("status", "==", filter)] : []),
     orderBy("createdAt", "desc")
   );
 
@@ -77,11 +109,24 @@ export default function Orders() {
   // Get users for name lookup
   const [usersSnapshot] = useCollection(query(collection(db, "users")));
 
-  const orders: Order[] | undefined = snapshot?.docs.map((doc) => ({
+  const allOrders: Order[] | undefined = snapshot?.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
   })) as Order[] | undefined;
   
+  // Client-side filtering
+  const orders = allOrders?.filter(order => {
+    // Status filter
+    if (filter !== "all") {
+      const orderStatus = order.deliveryStatus || order.status || 'pending';
+      if (orderStatus !== filter) return false;
+    }
+    
+    return true;
+  });
+  
+
+
   // Build user name lookup map
   useEffect(() => {
     if (usersSnapshot?.docs) {
@@ -96,22 +141,86 @@ export default function Orders() {
   
   // Function to get customer name
   const getCustomerName = (order: Order) => {
-    return order.customerName || 
-           order.name || 
-           order.customer || 
-           (order.userId ? userNames[order.userId] : null) ||
-           'Unknown Customer';
+    // First try to get from payment object (most reliable)
+    if (order.payment?.customerName) {
+      return order.payment.customerName;
+    }
+    
+    // Then try other order fields
+    if (order.customerName) return order.customerName;
+    if (order.name) return order.name;
+    if (order.customer) return order.customer;
+    
+    // Try to get from user lookup
+    if (order.userId && userNames[order.userId]) {
+      return userNames[order.userId];
+    }
+    
+    // Try to get customer email from payment
+    if (order.payment?.customerEmail) {
+      return order.payment.customerEmail.split('@')[0];
+    }
+    
+    return 'Unknown Customer';
   };
+
+  const handleAssignDriver = async (orderId: string, driverId: string, driverName: string) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      await updateDoc(orderRef, {
+        driverId,
+        driverName,
+        driverStatus: "assigned",
+        assignedAt: new Date(),
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      // The Cloud Function will automatically send notification to driver
+      toast.success(`Order assigned to ${driverName}`);
+      setShowDriverModal(false);
+      setSelectedOrderForDriver(null);
+    } catch {
+      toast.error("Failed to assign driver");
+    }
+  };
+
+
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       const orderRef = doc(db, "orders", orderId);
-      const prevStatus = orders?.find((o) => o.id === orderId)?.status ?? "";
+      const order = orders?.find((o) => o.id === orderId);
+      const prevStatus = order?.deliveryStatus ?? order?.status ?? "";
       setPreviousStatusMap((prev) => ({ ...prev, [orderId]: prevStatus }));
-      await updateDoc(orderRef, { status: newStatus });
-      toast.success("Order status updated", {
+      
+      // Auto-complete delivered/picked up orders
+      const finalStatus = (newStatus === "delivered" || newStatus === "picked up") ? "completed" : newStatus;
+      
+      await updateDoc(orderRef, { 
+        deliveryStatus: finalStatus,
+        status: finalStatus, // Also update status field for consistency
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      // Show appropriate message based on the status change
+      const statusMessages = {
+        confirmed: "Order confirmed successfully. Customer will be notified.",
+        preparing: "Order marked as preparing. Customer will be notified.",
+        "ready for pickup": "Order ready for pickup. Customer will be notified.",
+        "on the way": "Order is on the way. Customer will be notified.",
+        delivered: "Order marked as delivered and completed. Customer will be notified.",
+        "picked up": "Order marked as picked up and completed. Customer will be notified.",
+        completed: "Order completed successfully.",
+        cancelled: "Order cancelled. Customer will be notified."
+      };
+      
+      const message = statusMessages[finalStatus as keyof typeof statusMessages] || `Order status updated to ${finalStatus}. Customer will be notified.`;
+      
+      toast.success(message, {
         position: "top-center",
-        autoClose: 2000,
+        autoClose: 3000,
       });
     } catch {
       toast.error("Failed to update status", {
@@ -126,7 +235,7 @@ export default function Orders() {
       const prevStatus = previousStatusMap[orderId];
       if (prevStatus) {
         const orderRef = doc(db, "orders", orderId);
-        await updateDoc(orderRef, { status: prevStatus });
+        await updateDoc(orderRef, { deliveryStatus: prevStatus });
         toast.success("Undo successful", {
           position: "top-center",
           autoClose: 2000,
@@ -145,7 +254,7 @@ export default function Orders() {
     const filteredOrders = orders?.filter((order) => {
       if (!order.createdAt || typeof order.createdAt.seconds !== "number") return false;
       const orderDate = moment(order.createdAt.seconds * 1000);
-      const isCompleted = order.status === "delivered" || order.status === "picked up" || order.status === "completed";
+      const isCompleted = order.deliveryStatus === "completed";
       return orderDate.format("YYYY-MM") === selectedMonth && isCompleted;
     });
 
@@ -168,20 +277,20 @@ export default function Orders() {
     docPdf.text(`Generated on: ${moment().format("MMMM D, YYYY [at] h:mm A")}`, 14, 55);
     docPdf.text(`Total Orders: ${filteredOrders?.length || 0}`, 14, 62);
     
-    const totalRevenue = filteredOrders?.reduce((sum, order) => sum + (order.pricing?.total ?? order.total ?? 0), 0) || 0;
+    const totalRevenue = (filteredOrders || []).reduce((sum, order) => sum + (order.pricing?.total ?? order.total ?? 0), 0);
     docPdf.text(`Total Revenue: $${totalRevenue.toFixed(2)}`, 14, 69);
 
     autoTable(docPdf, {
       startY: 80,
-      head: [["#", "Order ID", "Customer", "Type", "Status", "Total ($)", "Date"]],
-      body: filteredOrders?.map((order, idx) => {
-        const isPickup = order.orderType === 'pickup' || order.deliveryMethod === 'pickup' || order.switchedToPickup || (!order.orderType && !order.deliveryMethod);
+      head: [["#", "Order ID", "Customer", "Delivery Type", "Status", "Total ($)", "Date"]],
+      body: (filteredOrders || []).map((order, idx) => {
+        const isPickup = order.orderType === 'pickup' || order.deliveryMethod === 'pickup' || order.switchedToPickup || (order.delivery?.option?.toLowerCase() === 'pickup') || (!order.orderType && !order.deliveryMethod && !order.delivery?.option);
         return [
           idx + 1,
           order.orderId || order.orderNumber || order.id.substring(0, 8),
           getCustomerName(order),
           isPickup ? "Pickup" : "Delivery",
-          order.status.charAt(0).toUpperCase() + order.status.slice(1),
+          (order.deliveryStatus ? order.deliveryStatus.charAt(0).toUpperCase() + order.deliveryStatus.slice(1) : 'Unknown'),
           (order.pricing?.total ?? order.total ?? 0).toFixed(2),
           order.createdAt?.seconds
             ? moment(order.createdAt.seconds * 1000).format("MMM D, YYYY")
@@ -268,15 +377,15 @@ export default function Orders() {
         {statusFilters.map((status) => {
           const statusColors = {
             all: filter === status ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50",
-            received: filter === status ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-blue-50",
+            pending: filter === status ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-blue-50",
             confirmed: filter === status ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-indigo-50",
             preparing: filter === status ? "bg-yellow-600 text-white" : "bg-white text-gray-700 hover:bg-yellow-50",
-            "ready for pickup": filter === status ? "bg-purple-600 text-white" : "bg-white text-gray-700 hover:bg-purple-50",
-            "picked up": filter === status ? "bg-cyan-600 text-white" : "bg-white text-gray-700 hover:bg-cyan-50",
             "on the way": filter === status ? "bg-orange-600 text-white" : "bg-white text-gray-700 hover:bg-orange-50",
             delivered: filter === status ? "bg-green-600 text-white" : "bg-white text-gray-700 hover:bg-green-50",
-            cancelled: filter === status ? "bg-red-600 text-white" : "bg-white text-gray-700 hover:bg-red-50",
+            "ready for pickup": filter === status ? "bg-purple-600 text-white" : "bg-white text-gray-700 hover:bg-purple-50",
+            "picked up": filter === status ? "bg-cyan-600 text-white" : "bg-white text-gray-700 hover:bg-cyan-50",
             completed: filter === status ? "bg-emerald-600 text-white" : "bg-white text-gray-700 hover:bg-emerald-50",
+            cancelled: filter === status ? "bg-red-600 text-white" : "bg-white text-gray-700 hover:bg-red-50",
           };
           
           return (
@@ -321,22 +430,22 @@ export default function Orders() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {(orders ?? []).map((order) => {
-                  // Default to pickup if unclear, or if customer is too far for delivery
+                  // Check delivery type from multiple fields
                   const isPickup = order.orderType === 'pickup' || 
                                    order.deliveryMethod === 'pickup' || 
                                    order.switchedToPickup || 
-                                   (!order.orderType && !order.deliveryMethod);
+                                   (order.delivery?.option?.toLowerCase() === 'pickup') ||
+                                   (!order.orderType && !order.deliveryMethod && !order.delivery?.option);
                   const statusColors = {
-                    received: "bg-blue-100 text-blue-800",
                     pending: "bg-blue-100 text-blue-800",
                     confirmed: "bg-indigo-100 text-indigo-800",
                     preparing: "bg-yellow-100 text-yellow-800",
                     "ready for pickup": "bg-purple-100 text-purple-800",
-                    "picked up": "bg-cyan-100 text-cyan-800",
                     "on the way": "bg-orange-100 text-orange-800",
                     delivered: "bg-green-100 text-green-800",
-                    cancelled: "bg-red-100 text-red-800",
+                    "picked up": "bg-cyan-100 text-cyan-800",
                     completed: "bg-emerald-100 text-emerald-800",
+                    cancelled: "bg-red-100 text-red-800",
                   };
                   
                   return (
@@ -360,36 +469,53 @@ export default function Orders() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={order.status}
+                          value={order.deliveryStatus || order.status || 'pending'}
                           onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          className={`text-sm font-medium px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${statusColors[order.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"} ${order.status === 'received' ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
+                          className={`text-sm font-medium px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${statusColors[(order.deliveryStatus || order.status || 'pending') as keyof typeof statusColors] || "bg-gray-100 text-gray-800"}`}
                         >
                           {(() => {
                             // Use the same logic for status dropdown
                             const isPickup = order.orderType === 'pickup' || 
                                              order.deliveryMethod === 'pickup' || 
                                              order.switchedToPickup || 
-                                             (!order.orderType && !order.deliveryMethod);
-                            const pickupStatuses = ["confirmed", "preparing", "ready for pickup", "picked up", "completed", "cancelled"];
-                            const deliveryStatuses = ["confirmed", "preparing", "on the way", "delivered", "completed", "cancelled"];
+                                             (order.delivery?.option?.toLowerCase() === 'pickup') ||
+                                             (!order.orderType && !order.deliveryMethod && !order.delivery?.option);
+
                             
-                            // If order is still 'received', only allow confirming it
-                            if (order.status === 'received') {
+                            const currentStatus = order.deliveryStatus || order.status || 'pending';
+                            
+                            // If order is still 'pending', only allow confirming it
+                            if (currentStatus === 'pending') {
                               return (
                                 <>
-                                  <option key="received" value="received">📥 Needs Confirmation</option>
+                                  <option key="pending" value="pending">📥 Needs Confirmation</option>
                                   <option key="confirmed" value="confirmed">✅ Confirm Order</option>
                                   <option key="cancelled" value="cancelled">❌ Cancel</option>
                                 </>
                               );
                             }
+                            
+                            // Show all possible statuses based on order type
+                            const pickupStatuses = ["pending", "confirmed", "preparing", "ready for pickup", "picked up", "completed", "cancelled"];
+                            const deliveryStatuses = ["pending", "confirmed", "preparing", "on the way", "delivered", "completed", "cancelled"];
                             const statuses = isPickup ? pickupStatuses : deliveryStatuses;
                             
-                            return statuses.map((status) => (
-                              <option key={status} value={status}>
-                                {status.charAt(0).toUpperCase() + status.slice(1)}
-                              </option>
-                            ));
+                            return statuses.map((status) => {
+                              const icons = {
+                                confirmed: '✅ ',
+                                preparing: '👨‍🍳 ',
+                                'ready for pickup': '🔔 ',
+                                'on the way': '🚚 ',
+                                delivered: '📦 ',
+                                'picked up': '✅ ',
+                                cancelled: '❌ '
+                              };
+                              return (
+                                <option key={status} value={status}>
+                                  {icons[status as keyof typeof icons] || ''}{status.charAt(0).toUpperCase() + status.slice(1)}
+                                </option>
+                              );
+                            });
                           })()}
                         </select>
                       </td>
@@ -405,6 +531,24 @@ export default function Orders() {
                         >
                           View
                         </button>
+                        {!order.driverId && (order.deliveryStatus === 'confirmed' || order.deliveryStatus === 'preparing') && !isPickup && (
+                          <button
+                            onClick={() => {
+                              setSelectedOrderForDriver(order);
+                              setShowDriverModal(true);
+                            }}
+                            className="text-green-600 hover:text-green-800 transition-colors duration-150 flex items-center gap-1"
+                          >
+                            <Truck className="w-4 h-4" />
+                            Assign Driver
+                          </button>
+                        )}
+                        {order.driverId && (
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {order.driverName || 'Driver Assigned'}
+                          </span>
+                        )}
                         {previousStatusMap[order.id] && (
                           <button
                             onClick={() => handleUndoStatus(order.id)}
@@ -461,19 +605,18 @@ export default function Orders() {
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${(
                     {
-                      received: 'bg-blue-100 text-blue-800',
                       pending: 'bg-blue-100 text-blue-800',
                       confirmed: 'bg-indigo-100 text-indigo-800',
                       preparing: 'bg-yellow-100 text-yellow-800',
                       'ready for pickup': 'bg-purple-100 text-purple-800',
-                      'picked up': 'bg-cyan-100 text-cyan-800',
                       'on the way': 'bg-orange-100 text-orange-800',
                       delivered: 'bg-green-100 text-green-800',
-                      cancelled: 'bg-red-100 text-red-800',
+                      'picked up': 'bg-cyan-100 text-cyan-800',
                       completed: 'bg-emerald-100 text-emerald-800',
-                    }[selectedOrder.status] || 'bg-gray-100 text-gray-800'
+                      cancelled: 'bg-red-100 text-red-800',
+                    }[(selectedOrder.deliveryStatus || 'pending')] || 'bg-gray-100 text-gray-800'
                   )}`}>
-                    {selectedOrder.status === 'received' ? 'Needs Confirmation' : selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                    {(selectedOrder.deliveryStatus || 'pending') === 'pending' ? 'Needs Confirmation' : (selectedOrder.deliveryStatus || 'pending') === 'cancelled' ? '❌ Cancelled' : (selectedOrder.deliveryStatus || 'pending') === 'completed' ? '✅ Completed' : (selectedOrder.deliveryStatus || 'pending').charAt(0).toUpperCase() + (selectedOrder.deliveryStatus || 'pending').slice(1)}
                   </span>
                 </div>
               </div>
@@ -575,6 +718,87 @@ export default function Orders() {
                 className="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 font-medium transition-colors duration-200"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Assignment Modal */}
+      {showDriverModal && selectedOrderForDriver && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border border-gray-200 m-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Assign Driver</h2>
+              <button
+                onClick={() => {
+                  setShowDriverModal(false);
+                  setSelectedOrderForDriver(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Order: {selectedOrderForDriver.orderId || selectedOrderForDriver.id}</p>
+              <p className="text-sm text-gray-600">Customer: {getCustomerName(selectedOrderForDriver)}</p>
+            </div>
+            
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-gray-700">Available Drivers:</h3>
+              {driversSnapshot?.docs.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">No available drivers found</p>
+              ) : (
+                driversSnapshot?.docs.map((driverDoc) => {
+                  const driver = driverDoc.data();
+                  const isOnline = driver.isActive;
+                  return (
+                    <button
+                      key={driverDoc.id}
+                      onClick={() => handleAssignDriver(
+                        selectedOrderForDriver.id,
+                        driverDoc.id,
+                        driver.name || driver.email || 'Unknown Driver'
+                      )}
+                      disabled={!isOnline}
+                      className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                        isOnline
+                          ? 'border-green-200 bg-green-50 hover:bg-green-100 text-green-900'
+                          : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{driver.name || driver.email || 'Unknown Driver'}</p>
+                          <p className="text-xs text-gray-500">{driver.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            isOnline ? 'bg-green-500' : 'bg-gray-400'
+                          }`} />
+                          <span className="text-xs">{isOnline ? 'Online' : 'Offline'}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowDriverModal(false);
+                  setSelectedOrderForDriver(null);
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 font-medium transition-colors duration-200"
+              >
+                Cancel
               </button>
             </div>
           </div>
