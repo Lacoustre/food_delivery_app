@@ -43,3 +43,23 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# API Keys and Secrets
+.env
+.env.local
+.env.*.local
+**/google-services.json
+**/GoogleService-Info.plist
+**/*google-services*.json
+**/*GoogleService-Info*.plist
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Environment variables
+cuisine-webapp/.env
+cuisine-webapp/.env.local
+admin-panel/.env
+admin-panel/.env.local
