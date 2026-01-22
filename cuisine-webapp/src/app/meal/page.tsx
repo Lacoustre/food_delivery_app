@@ -25,6 +25,18 @@ interface Meal {
   available: boolean
 }
 
+interface CartItem {
+  id: string
+  name: string
+  price: number
+  quantity: number
+  imageUrl: string
+  category: string
+  extras: Extra[]
+  instructions: string
+  extrasTotal: number
+}
+
 export default function MealDetailPage() {
   const [meal, setMeal] = useState<Meal | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<Record<string, Extra>>({})
@@ -37,6 +49,20 @@ export default function MealDetailPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  
+  // Function to get image URL with proper Firebase Storage handling
+  const getImageUrl = (meal: Meal) => {
+    // If it's a Firebase Storage URL, use it directly with domain fix
+    if (meal.imageUrl && meal.imageUrl.startsWith('https://firebasestorage.googleapis.com')) {
+      return meal.imageUrl.replace('.firebasestorage.app', '.appspot.com').replace(/&amp;/g, '&')
+    }
+    // If it's a local asset path, use it
+    if (meal.imageUrl && meal.imageUrl.startsWith('/assets/')) {
+      return meal.imageUrl
+    }
+    // Fallback to logo
+    return '/assets/images/logo.png'
+  }
   
   // Function to decode HTML entities in URLs
   const decodeImageUrl = (url: string) => {
@@ -176,7 +202,7 @@ export default function MealDetailPage() {
         name: meal.name,
         price: meal.price,
         quantity,
-        imageUrl: meal.imageUrl,
+        imageUrl: getImageUrl(meal), // Use proper URL handling
         category: meal.category,
         extras: Object.values(selectedExtras),
         instructions,
@@ -187,7 +213,7 @@ export default function MealDetailPage() {
       const existingCart = JSON.parse(localStorage.getItem('cart') || '[]')
       
       // Check if same item with same extras exists
-      const existingIndex = existingCart.findIndex((item: any) => 
+      const existingIndex = existingCart.findIndex((item: CartItem) => 
         item.id === cartItem.id && 
         JSON.stringify(item.extras) === JSON.stringify(cartItem.extras) &&
         item.instructions === cartItem.instructions
@@ -260,24 +286,13 @@ export default function MealDetailPage() {
           {/* Image */}
           <div className="relative aspect-square rounded-xl overflow-hidden shadow-lg">
             <img
-              src={decodeImageUrl(meal.imageUrl)}
+              src={getImageUrl(meal)}
               alt={meal.name}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // Try the local asset as fallback
-                const mealNameMap: Record<string, string> = {
-                  'jollof rice': 'jollof',
-                  'waakye': 'waakye',
-                  'fried rice': 'fried_rice',
-                  'fried yam': 'fried_yam'
-                }
-                const localName = mealNameMap[meal.name.toLowerCase()] || meal.name.toLowerCase().replace(/\s+/g, '_')
-                const localImagePath = `/assets/images/${localName}.png`
-                e.currentTarget.src = localImagePath
-                
-                // If local also fails, use logo
-                e.currentTarget.onerror = () => {
-                  e.currentTarget.src = '/assets/images/logo.png'
+                const target = e.currentTarget as HTMLImageElement
+                if (target) {
+                  target.src = '/assets/images/logo.png'
                 }
               }}
             />

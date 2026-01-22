@@ -65,3 +65,4 @@ cuisine-webapp/.env
 cuisine-webapp/.env.local
 admin-panel/.env
 admin-panel/.env.local
+functions/mail.env

@@ -6,19 +6,23 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, MapPin, Clock, Store, Navigation } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
+import { getDownloadURL, ref } from 'firebase/storage'
+import { storage } from '@/lib/firebase'
 
 interface CartItem {
   id: string
   name: string
   price: number
   quantity: number
-  imageUrl: string
+  imageUrl?: string
+  imagePath?: string
   category: string
   description?: string
 }
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery')
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
@@ -48,6 +52,29 @@ export default function CartPage() {
       return extendedTierBase + (distance - midTierMaxDistance) * extendedTierRatePerMile // Extended tier
     }
   }
+
+  // Load image URLs for cart items
+  useEffect(() => {
+    const loadImageUrls = async () => {
+      const urls: Record<string, string> = {}
+      for (const item of cartItems) {
+        if (item.imagePath && !urls[item.id]) {
+          try {
+            const url = await getDownloadURL(ref(storage, item.imagePath))
+            urls[item.id] = url
+          } catch (error) {
+            console.error('Failed to load image for', item.name, error)
+            urls[item.id] = '/assets/images/logo.png'
+          }
+        }
+      }
+      setImageUrls(prev => ({ ...prev, ...urls }))
+    }
+    
+    if (cartItems.length > 0) {
+      loadImageUrls()
+    }
+  }, [cartItems])
 
   useEffect(() => {
     if (!user) {
@@ -326,12 +353,13 @@ export default function CartPage() {
                     <div key={item.id} className="bg-white/80 rounded-2xl p-6 shadow-lg border border-orange-100 hover:shadow-xl transition-all">
                       <div className="flex gap-6">
                         <div className="relative w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-md">
-                          <Image
-                            src={item.imageUrl}
+                          <img
+                            src={item.imageUrl?.replace(/&amp;/g, '&') || '/assets/images/logo.png'}
                             alt={item.name}
-                            fill
-                            className="object-cover"
-                            unoptimized
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = '/assets/images/logo.png'
+                            }}
                           />
                         </div>
                         

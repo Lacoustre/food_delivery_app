@@ -50,7 +50,24 @@ export default function AfricanCuisineWebsite() {
 
   // Function to get image URL from database with local fallback
   const getImageUrl = (meal: Meal) => {
-    return meal.imageUrl || '/assets/images/logo.png'
+    if (!meal.imageUrl) {
+      return '/assets/images/logo.png'
+    }
+    
+    // If it's a Firebase Storage URL, use it directly
+    if (meal.imageUrl.startsWith('https://firebasestorage.googleapis.com')) {
+      return meal.imageUrl.replace(/&amp;/g, '&')
+    }
+    // If it's a local asset path, use it
+    if (meal.imageUrl.startsWith('/assets/')) {
+      return meal.imageUrl
+    }
+    // If it's just a filename, assume it's a local asset
+    if (!meal.imageUrl.startsWith('http')) {
+      return `/assets/images/${meal.imageUrl}`
+    }
+    // Fallback to logo
+    return '/assets/images/logo.png'
   }
 
   const heroImages = [
@@ -383,8 +400,8 @@ export default function AfricanCuisineWebsite() {
                         signOut()
                       }}
                       disabled={signingOut}
-                      className={`p-2 hover:text-red-600 transition-colors disabled:opacity-70 ${
-                        scrolled ? 'text-gray-600' : 'text-white'
+                      className={`p-2 transition-all duration-300 disabled:opacity-70 transform hover:scale-110 ${
+                        scrolled ? 'text-gray-600 hover:text-red-600' : 'text-white hover:text-red-400'
                       }`}
                       title="Sign Out"
                     >
@@ -765,6 +782,12 @@ export default function AfricanCuisineWebsite() {
                                 fill
                                 className="object-cover group-hover:scale-105 transition-transform duration-300"
                                 unoptimized
+                                onError={(e) => {
+                                  const target = e.currentTarget as HTMLImageElement
+                                  if (target) {
+                                    target.src = '/assets/images/logo.png'
+                                  }
+                                }}
                               />
                               {meal.available === false && (
                                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -801,23 +824,18 @@ export default function AfricanCuisineWebsite() {
                                 <button
                                   onClick={async (e) => {
                                     e.stopPropagation()
-                                    await addToCart(meal)
+                                    const mealData = encodeURIComponent(JSON.stringify(meal))
+                                    window.location.href = `/meal?meal=${mealData}`
                                   }}
-                                  disabled={meal.available === false || !restaurantStatus.isOpen || addingToCart === meal.id}
+                                  disabled={meal.available === false || !restaurantStatus.isOpen}
                                   className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all ${
                                     meal.available !== false && restaurantStatus.isOpen
-                                      ? user 
-                                        ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                        : 'bg-gray-400 text-white hover:bg-gray-500'
+                                      ? 'bg-orange-500 text-white hover:bg-orange-600'
                                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                   } disabled:opacity-70`}
                                 >
-                                  {addingToCart === meal.id ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
-                                  ) : (
-                                    <Plus className="w-4 h-4" />
-                                  )}
-                                  {addingToCart === meal.id ? 'Adding...' : (!restaurantStatus.isOpen ? 'Closed' : user ? 'Add' : 'Login')}
+                                  <Plus className="w-4 h-4" />
+                                  {!restaurantStatus.isOpen ? 'Closed' : 'Add'}
                                 </button>
                               </div>
                             </div>

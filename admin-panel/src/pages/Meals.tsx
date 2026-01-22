@@ -9,9 +9,10 @@ import {
   addDoc,
   deleteDoc,
   setDoc,
+  getDocs,
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "../firebase";
+import { db, storage } from "../firebase";
 import moment from "moment";
 import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
@@ -44,9 +45,7 @@ const CATEGORIES = [
 const getImageUrl = (imageUrl) => {
   if (!imageUrl) return null;
   if (imageUrl.startsWith('http')) return imageUrl;
-  if (imageUrl.startsWith('assets/')) {
-    return `/${imageUrl}`;
-  }
+  if (imageUrl.startsWith('assets/')) return `/${imageUrl}`;
   return imageUrl;
 };
 
@@ -67,7 +66,6 @@ export default function Meals() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const storage = getStorage();
   
   // Restaurant status query - using same approach as Dashboard
   const [restaurantDoc] = useDocumentData(doc(db, "settings", "restaurant"));
@@ -86,7 +84,7 @@ export default function Meals() {
 
   const loadMealAnalytics = async () => {
     try {
-      const ordersSnapshot = await collection(db, "orders").get();
+      const ordersSnapshot = await getDocs(collection(db, "orders"));
       const mealStats = new Map();
       
       ordersSnapshot.docs.forEach(doc => {
@@ -266,9 +264,15 @@ export default function Meals() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    const imageRef = ref(storage, `meals/${Date.now()}_${file.name}`);
-    await uploadBytes(imageRef, file);
-    return await getDownloadURL(imageRef);
+    try {
+      const imageRef = ref(storage, `meals/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(imageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      return url;
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw new Error("Failed to upload image");
+    }
   };
 
   const handleAddMeal = async () => {
@@ -757,22 +761,18 @@ export default function Meals() {
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {(() => {
-                        const imgUrl = getImageUrl(meal.imageUrl);
-                        return imgUrl ? (
+                      <div className="w-12 h-12 rounded-lg overflow-hidden">
+                        {meal.imageUrl ? (
                           <img 
-                            src={imgUrl}
+                            src={meal.imageUrl.replace(/&amp;/g, '&')}
                             alt={meal.name}
-                            className="w-12 h-12 rounded-lg object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
+                            className="w-full h-full object-cover"
                           />
-                        ) : null;
-                      })()}
-                      <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center" style={{display: getImageUrl(meal.imageUrl) ? 'none' : 'flex'}}>
-                        <ImageIcon className="w-6 h-6 text-gray-400" />
+                        ) : (
+                          <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1004,16 +1004,13 @@ export default function Meals() {
                     <Upload className="w-4 h-4" />
                     Change Image
                   </label>
-                  {(() => {
-                    const imgUrl = getImageUrl(imagePreview || editingMeal.imageUrl);
-                    return imgUrl ? (
-                      <img src={imgUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg border flex items-center justify-center bg-gray-100">
-                        <ImageIcon className="w-6 h-6 text-gray-400" />
-                      </div>
-                    );
-                  })()}
+                  {editingMeal.imageUrl || imagePreview ? (
+                    <img src={imagePreview || editingMeal.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border flex items-center justify-center bg-gray-100">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div>

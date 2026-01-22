@@ -128,6 +128,19 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing, orderData }: {
 }
 
 function CheckoutContent() {
+  // Function to decode HTML entities in URLs
+  const decodeImageUrl = (url: string) => {
+    if (!url) return '/assets/images/logo.png'
+    // Decode HTML entities - handle double encoding
+    let decoded = url
+      .replace(/&amp;amp;/g, '&')  // Handle double encoding first
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+    return decoded
+  }
+
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -836,12 +849,13 @@ function CheckoutContent() {
                 {cartItems.map((item) => (
                   <div key={item.id} className="flex gap-3">
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
-                      <Image
-                        src={item.imageUrl}
+                      <img
+                        src={item.imageUrl?.replace(/&amp;/g, '&') || '/assets/images/logo.png'}
                         alt={item.name}
-                        fill
-                        className="object-cover"
-                        unoptimized
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = '/assets/images/logo.png'
+                        }}
                       />
                     </div>
                     <div className="flex-1">

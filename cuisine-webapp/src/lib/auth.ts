@@ -33,6 +33,32 @@ export const authService = {
     }
     
     await setDoc(doc(db, 'users', user.uid), userProfile)
+    
+    // Send welcome email
+    try {
+      console.log('Attempting to send welcome email to:', email)
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'welcome',
+          welcomeData: {
+            customerEmail: email,
+            customerName: name
+          }
+        })
+      })
+      
+      const result = await response.json()
+      if (response.ok) {
+        console.log('Welcome email sent successfully to:', email)
+      } else {
+        console.error('Welcome email API error:', result)
+      }
+    } catch (error) {
+      console.error('Failed to send welcome email:', error)
+    }
+    
     return userProfile
   },
 
