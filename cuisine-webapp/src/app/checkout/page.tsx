@@ -247,9 +247,14 @@ function CheckoutContent() {
 
   useEffect(() => {
     if (total > 0) {
-      createPaymentIntent(total).then(({ clientSecret }) => {
-        setClientSecret(clientSecret)
-      })
+      createPaymentIntent(total)
+        .then(({ clientSecret }) => {
+          setClientSecret(clientSecret)
+        })
+        .catch((error) => {
+          console.error('Payment intent error:', error)
+          alert('Unable to initialize payment. Please try again or use cash payment.')
+        })
     }
   }, [total])
 

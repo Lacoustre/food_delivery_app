@@ -443,9 +443,6 @@ export default function CartPage() {
                   onClick={() => {
                     localStorage.setItem('orderType', orderType)
                     localStorage.setItem('calculatedDistance', calculatedDistance.toString())
-                    if (orderType === 'delivery' && userLocation) {
-                      localStorage.setItem('deliveryAddress', 'Auto-detected location')
-                    }
                     router.push('/checkout')
                   }}
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg mb-4"
