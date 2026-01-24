@@ -111,6 +111,10 @@ class _MainFoodPageState extends State<MainFoodPage> {
             final data = doc.data();
             var imageUrl = data['imageUrl'] ?? 'assets/images/logo.png';
             imageUrl = imageUrl.replaceAll('&amp;', '&');
+            // Remove leading slash from asset paths
+            if (imageUrl.startsWith('/assets/')) {
+              imageUrl = imageUrl.substring(1);
+            }
             final available = data['available'] ?? true;
             return {
               'id': doc.id,
@@ -175,6 +179,10 @@ class _MainFoodPageState extends State<MainFoodPage> {
               final data = doc.data();
               var imageUrl = data['imageUrl'] ?? 'assets/images/logo.png';
               imageUrl = imageUrl.replaceAll('&amp;', '&');
+              // Remove leading slash from asset paths
+              if (imageUrl.startsWith('/assets/')) {
+                imageUrl = imageUrl.substring(1);
+              }
               return {
                 'id': doc.id,
                 'name': data['name'] ?? 'Unknown',

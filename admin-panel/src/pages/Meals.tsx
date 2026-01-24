@@ -265,7 +265,8 @@ export default function Meals() {
 
   const uploadImage = async (file: File): Promise<string> => {
     try {
-      const imageRef = ref(storage, `meals/${Date.now()}_${file.name}`);
+      const sanitizedName = file.name.replace(/[\r\n\t]/g, '').trim();
+      const imageRef = ref(storage, `meals/${Date.now()}_${sanitizedName}`);
       const snapshot = await uploadBytes(imageRef, file);
       const url = await getDownloadURL(snapshot.ref);
       return url;
