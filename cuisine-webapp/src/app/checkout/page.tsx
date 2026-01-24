@@ -204,6 +204,12 @@ function CheckoutContent() {
         phone: userProfile?.phone || ''
       }
     }))
+    
+    // Auto-detect location if delivery and no saved address
+    if (savedOrderType === 'delivery' && !savedDeliveryAddress) {
+      detectLocation()
+    }
+    
     setLoading(false)
   }, [user, userProfile, router])
 
