@@ -16,8 +16,6 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		E004C66D2DFC7DAE001263A5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AF46F78798097409AA31ABF7 /* GoogleService-Info.plist */; };
-		E0385D182DF6C0C000E231D5 /* Flutter.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E0385D172DF6C0C000E231D5 /* Flutter.xcframework */; };
-		E0385D192DF6C0C000E231D5 /* Flutter.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E0385D172DF6C0C000E231D5 /* Flutter.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E7BD8854BC336244D8FCE2C3 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E9CBC0014FF8AD319C3A4EE /* Pods_Runner.framework */; };
 /* End PBXBuildFile section */
 
@@ -38,7 +36,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				E0385D192DF6C0C000E231D5 /* Flutter.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -70,7 +67,6 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AF46F78798097409AA31ABF7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Runner/GoogleService-Info.plist"; sourceTree = "<group>"; };
-		E0385D172DF6C0C000E231D5 /* Flutter.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:S8QB4VV633:FLUTTER.IO LLC"; lastKnownFileType = wrapper.xcframework; name = Flutter.xcframework; path = ../../../development/flutter/bin/cache/artifacts/engine/ios/Flutter.xcframework; sourceTree = "<group>"; };
 		E05BBBD52E0D1001007226BF /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -87,7 +83,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E0385D182DF6C0C000E231D5 /* Flutter.xcframework in Frameworks */,
 				E7BD8854BC336244D8FCE2C3 /* Pods_Runner.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -111,7 +106,6 @@
 		2AD4DCCFB5D3304CC82358AB /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				E0385D172DF6C0C000E231D5 /* Flutter.xcframework */,
 				6E9CBC0014FF8AD319C3A4EE /* Pods_Runner.framework */,
 				91E3323C8E581EF4AE5496FD /* Pods_RunnerTests.framework */,
 			);
@@ -318,7 +312,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export FLUTTER_ROOT=/Users/khestra/flutter\nexport FLUTTER_APPLICATION_PATH=/Users/khestra/Desktop/african_cuisine\nexport FLUTTER_TARGET=lib/main.dart\nexport FLUTTER_BUILD_DIR=build\nexport FLUTTER_BUILD_MODE=debug\nexport STATE_PATH=$FLUTTER_APPLICATION_PATH/.dart_tool/flutter_build\n\"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\n\n";
+			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\n";
 		};
 		462ED4CE415B0F7C5A218B02 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -389,7 +383,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export FLUTTER_ROOT=/Users/khestra/flutter\nexport FLUTTER_APPLICATION_PATH=/Users/khestra/Desktop/african_cuisine\nexport FLUTTER_TARGET=lib/main.dart\nexport FLUTTER_BUILD_DIR=build\nexport FLUTTER_BUILD_MODE=debug\n\"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build\n\n";
+			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

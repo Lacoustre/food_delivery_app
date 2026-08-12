@@ -45,13 +45,20 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🎯 Stripe Setup
-  Stripe.publishableKey = EnvConfig.stripePublishableKey;
-  Stripe.merchantIdentifier = EnvConfig.stripeMerchantId;
-  await Stripe.instance.applySettings();
-
   // 🔥 Firebase Init
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // 🎯 Stripe Setup — guarded so a failure here (e.g. running on a platform
+  // flutter_stripe doesn't natively support, like macOS/web) can never block
+  // app launch. Without this, an unhandled exception here aborts main()
+  // before runApp() is reached, producing a blank/black screen.
+  try {
+    Stripe.publishableKey = EnvConfig.stripePublishableKey;
+    Stripe.merchantIdentifier = EnvConfig.stripeMerchantId;
+    await Stripe.instance.applySettings();
+  } catch (e) {
+    debugPrint('Stripe initialization skipped/failed: $e');
+  }
 
   // ⏯️ Launch App
   runApp(
