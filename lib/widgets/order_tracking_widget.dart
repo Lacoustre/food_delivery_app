@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/order_tracking_service.dart';
 
 class OrderTrackingWidget extends StatelessWidget {
@@ -14,21 +13,24 @@ class OrderTrackingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
+    return StreamBuilder<List<Map<String, dynamic>>>(
       stream: OrderTrackingService.trackOrder(orderId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final orderData = snapshot.data!.data() as Map<String, dynamic>?;
-        if (orderData == null) {
+        final rows = snapshot.data!;
+        if (rows.isEmpty) {
           return const Center(child: Text('Order not found'));
         }
+        final orderData = rows.first;
 
-        final status = orderData['deliveryStatus'] ?? 'pending';
-        final driverId = orderData['driverId'];
-        final driverName = orderData['driverName'];
+        final status = orderData['status'] ?? 'pending';
+        final driverName = orderData['driver_name'] as String?;
+        // driver_id (a FK) is unused for display — the driver system isn't
+        // migrated yet, so admin-panel assigns drivers by name only.
+        final driverId = driverName;
 
         return Card(
           margin: const EdgeInsets.all(16),

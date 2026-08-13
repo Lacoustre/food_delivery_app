@@ -1,19 +1,64 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow authenticated users to upload meal images
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    // Mirrors firestore.rules' isAdmin() — checks the same admins
+    // collection in Firestore from within Storage rules.
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    // Blocks disguised-as-image uploads (e.g. an SVG with an embedded
+    // <script>, or an HTML file renamed to .jpg) from ever being stored —
+    // client-side `accept="image/*"` on a file input is a UI hint only and
+    // is trivially bypassed, so this has to be enforced here instead.
+    function isImageUnder5MB() {
+      return request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ── Meal images — public read, admin-only write ─────────────────────
     match /meals/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to upload profile images
-    match /profile_images/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Allow public read access to all images
-    match /{allPaths=**} {
       allow read: if true;
+      allow write: if isAdmin() && isImageUnder5MB();
+    }
+
+    // ── Profile pictures (legacy path: profile_pictures/{uid}.jpg) ──────
+    match /profile_pictures/{fileName} {
+      allow read: if true;
+      // fileName is "{uid}.jpg" — only that uid may write/delete it.
+      allow write: if isSignedIn() &&
+        fileName.split('.')[0] == request.auth.uid && isImageUnder5MB();
+      allow delete: if isSignedIn() && fileName.split('.')[0] == request.auth.uid;
+    }
+
+    // ── Profile pictures (mobile app path: users/{uid}/profile_picture.jpg) ─
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId && isImageUnder5MB();
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── Profile photos (webapp path: profile-photos/{uid}/{filename}) ───
+    match /profile-photos/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId && isImageUnder5MB();
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── Delivery photos — drivers upload, scoped to their own uid path ──
+    match /delivery_photos/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isImageUnder5MB();
+    }
+
+    // Deny everything else by default (no public catch-all write).
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
     }
   }
 }

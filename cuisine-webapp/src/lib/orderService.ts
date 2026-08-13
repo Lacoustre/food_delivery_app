@@ -1,6 +1,7 @@
 import { collection, addDoc, onSnapshot, query, where, orderBy, doc, onSnapshot as onDocSnapshot } from 'firebase/firestore'
 import { db } from './firebase'
 import { notificationService } from './notificationService'
+import { getAuthHeaders } from './authHeaders'
 
 export interface Order {
   id?: string
@@ -78,7 +79,7 @@ export const orderService = {
     // Send push notification
     await fetch('/api/notifications/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
         type: 'status_update',
         orderId: order.id,
@@ -106,7 +107,7 @@ export const orderService = {
 
       await fetch('/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({
           type: 'status_update',
           orderData: {
@@ -137,7 +138,7 @@ export const orderService = {
       // Send email confirmation
       await fetch('/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({
           type: 'confirmation',
           orderData: {
@@ -160,7 +161,7 @@ export const orderService = {
       // Also send push notification
       await fetch('/api/notifications/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({
           type: 'order_confirmation',
           email: order.customerInfo.email,

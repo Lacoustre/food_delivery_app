@@ -1,14 +1,57 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:intl/intl.dart';
+import 'package:african_cuisine/services/order_adapter.dart';
 
-class ScheduledOrdersPage extends StatelessWidget {
+class ScheduledOrdersPage extends StatefulWidget {
   const ScheduledOrdersPage({super.key});
 
   @override
+  State<ScheduledOrdersPage> createState() => _ScheduledOrdersPageState();
+}
+
+class _ScheduledOrdersPageState extends State<ScheduledOrdersPage> {
+  List<Map<String, dynamic>>? _orders;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchScheduledOrders();
+  }
+
+  Future<void> _fetchScheduledOrders() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      setState(() => _orders = []);
+      return;
+    }
+
+    try {
+      // Scheduled orders live in the same `orders` table (scheduled_for
+      // set), not a separate collection — matches the create-order Edge
+      // Function's write side.
+      final rows = await Supabase.instance.client
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('user_id', userId)
+          .not('scheduled_for', 'is', null)
+          .order('scheduled_for', ascending: true);
+
+      if (!mounted) return;
+      setState(() {
+        _orders = rows.map(orderRowToLegacyMap).toList();
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -18,145 +61,113 @@ class ScheduledOrdersPage extends StatelessWidget {
       ),
       body: user == null
           ? const Center(child: Text('Please log in to view scheduled orders'))
-          : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('scheduled_orders')
-                  .where('userId', isEqualTo: user.uid)
-                  .orderBy('scheduledTime', descending: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.schedule, size: 80, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Scheduled Orders',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'You can schedule orders for future delivery\nwhen placing an order.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final orders = snapshot.data?.docs ?? [];
-
-                if (orders.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.schedule, size: 80, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Scheduled Orders',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'You can schedule orders for future delivery\nwhen placing an order.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: orders.length,
-                  itemBuilder: (context, index) {
-                    final order = orders[index].data() as Map<String, dynamic>;
-                    final scheduledTime = (order['scheduledTime'] as Timestamp)
-                        .toDate();
-                    final isUpcoming = scheduledTime.isAfter(DateTime.now());
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isUpcoming
-                              ? Colors.green
-                              : Colors.grey,
-                          child: Icon(
-                            isUpcoming ? Icons.schedule : Icons.history,
-                            color: Colors.white,
-                          ),
-                        ),
-                        title: Text(
-                          'Order #${orders[index].id.substring(0, 8)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Scheduled: ${DateFormat('MMM d, yyyy h:mm a').format(scheduledTime)}',
-                            ),
-                            Text(
-                              'Total: \$${(order['total'] ?? 0).toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.deepOrange,
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: isUpcoming
-                            ? PopupMenuButton(
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'cancel',
-                                    child: Text('Cancel Order'),
-                                  ),
-                                ],
-                                onSelected: (value) {
-                                  if (value == 'cancel') {
-                                    _cancelScheduledOrder(
-                                      context,
-                                      orders[index].id,
-                                    );
-                                  }
-                                },
-                              )
-                            : const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              ),
-                        onTap: () => _showOrderDetails(context, order),
-                      ),
-                    );
-                  },
-                );
-              },
+          : RefreshIndicator(
+              onRefresh: _fetchScheduledOrders,
+              child: _buildBody(),
             ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_error != null) {
+      return _buildEmptyState();
+    }
+
+    if (_orders == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_orders!.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _orders!.length,
+      itemBuilder: (context, index) {
+        final order = _orders![index];
+        final scheduledTimeRaw = order['scheduledTime'] as String?;
+        final scheduledTime = scheduledTimeRaw != null
+            ? DateTime.parse(scheduledTimeRaw)
+            : DateTime.now();
+        final isUpcoming = scheduledTime.isAfter(DateTime.now());
+        final pricing = order['pricing'] as Map<String, dynamic>;
+        final total = (pricing['total'] ?? 0.0) as num;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: isUpcoming ? Colors.green : Colors.grey,
+              child: Icon(
+                isUpcoming ? Icons.schedule : Icons.history,
+                color: Colors.white,
+              ),
+            ),
+            title: Text(
+              'Order #${order['orderNumber'] ?? (order['id'] as String).substring(0, 8)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Scheduled: ${DateFormat('MMM d, yyyy h:mm a').format(scheduledTime)}',
+                ),
+                Text(
+                  'Total: \$${total.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.deepOrange,
+                  ),
+                ),
+              ],
+            ),
+            trailing: isUpcoming
+                ? PopupMenuButton(
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'cancel',
+                        child: Text('Cancel Order'),
+                      ),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'cancel') {
+                        _cancelScheduledOrder(context, order['id'] as String);
+                      }
+                    },
+                  )
+                : const Icon(Icons.check_circle, color: Colors.green),
+            onTap: () => _showOrderDetails(context, order),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.schedule, size: 80, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'No Scheduled Orders',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You can schedule orders for future delivery\nwhen placing an order.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -187,15 +198,24 @@ class ScheduledOrdersPage extends StatelessWidget {
 
     if (shouldCancel == true) {
       try {
-        await FirebaseFirestore.instance
-            .collection('scheduled_orders')
-            .doc(orderId)
-            .delete();
+        await Supabase.instance.client
+            .from('orders')
+            .update({
+              'status': 'cancelled',
+              'cancelled_at': DateTime.now().toIso8601String(),
+              'cancelled_by': 'customer',
+              'cancellation_reason': 'Customer cancelled scheduled order',
+            })
+            .eq('id', orderId);
 
+        await _fetchScheduledOrders();
+
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Scheduled order cancelled')),
         );
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error cancelling order: $e')));
@@ -204,6 +224,14 @@ class ScheduledOrdersPage extends StatelessWidget {
   }
 
   void _showOrderDetails(BuildContext context, Map<String, dynamic> order) {
+    final scheduledTimeRaw = order['scheduledTime'] as String?;
+    final scheduledTime = scheduledTimeRaw != null
+        ? DateTime.parse(scheduledTimeRaw)
+        : DateTime.now();
+    final pricing = order['pricing'] as Map<String, dynamic>;
+    final total = (pricing['total'] ?? 0.0) as num;
+    final items = order['items'] as List<dynamic>;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -214,22 +242,22 @@ class ScheduledOrdersPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Scheduled Time: ${DateFormat('MMM d, yyyy h:mm a').format((order['scheduledTime'] as Timestamp).toDate())}',
+                'Scheduled Time: ${DateFormat('MMM d, yyyy h:mm a').format(scheduledTime)}',
               ),
               const SizedBox(height: 8),
-              Text('Total: \$${(order['total'] ?? 0).toStringAsFixed(2)}'),
+              Text('Total: \$${total.toStringAsFixed(2)}'),
               const SizedBox(height: 8),
-              if (order['items'] != null) ...[
+              if (items.isNotEmpty) ...[
                 const Text(
                   'Items:',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                ...((order['items'] as List).map(
+                ...items.map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(left: 16, top: 4),
                     child: Text('• ${item['name']} x${item['quantity']}'),
                   ),
-                )),
+                ),
               ],
             ],
           ),

@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { emailService, type OrderEmailData } from '@/lib/emailService'
+import { verifyAuth } from '@/lib/verifyAuth'
 
 export async function POST(request: NextRequest) {
   try {
+    const decodedToken = await verifyAuth(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { type, orderData, welcomeData }: { 
-      type: 'confirmation' | 'status_update' | 'welcome', 
+    const { type, orderData, welcomeData }: {
+      type: 'confirmation' | 'status_update' | 'welcome',
       orderData?: OrderEmailData,
       welcomeData?: { customerEmail: string, customerName: string }
     } = body
@@ -19,7 +25,13 @@ export async function POST(request: NextRequest) {
       if (!orderData) {
         return NextResponse.json({ error: 'Missing order data' }, { status: 400 })
       }
-      
+      // Only allow sending order emails addressed to the caller's own
+      // verified email — prevents an authenticated-but-malicious caller
+      // from using this endpoint to send arbitrary mail to other people.
+      if (orderData.customerEmail !== decodedToken.email) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
       if (type === 'confirmation') {
         result = await emailService.sendOrderConfirmation(orderData)
       } else {
@@ -29,7 +41,10 @@ export async function POST(request: NextRequest) {
       if (!welcomeData) {
         return NextResponse.json({ error: 'Missing welcome data' }, { status: 400 })
       }
-      
+      if (welcomeData.customerEmail !== decodedToken.email) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
       result = await emailService.sendWelcomeEmail(welcomeData.customerEmail, welcomeData.customerName)
     } else {
       return NextResponse.json({ error: 'Invalid email type' }, { status: 400 })

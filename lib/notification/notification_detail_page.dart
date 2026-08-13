@@ -1,9 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:african_cuisine/orders/order_detail_page.dart';
+import 'package:african_cuisine/services/order_adapter.dart';
 
 class NotificationDetailPage extends StatelessWidget {
   final String title;
@@ -95,21 +95,22 @@ class NotificationDetailPage extends StatelessWidget {
     );
 
     try {
-      final orderSnapshot = await FirebaseFirestore.instance
-          .collection('orders')
-          .doc(orderId)
-          .get();
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('id', orderId as String)
+          .maybeSingle();
 
       Navigator.pop(context);
 
-      if (!orderSnapshot.exists || orderSnapshot.data() == null) {
+      if (row == null) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('❌ Order not found')));
         return;
       }
 
-      final orderData = orderSnapshot.data() as Map<String, dynamic>;
+      final orderData = orderRowToLegacyMap(row);
       final status = orderData['status']?.toString().toLowerCase();
 
       // Navigate to order detail
@@ -179,7 +180,7 @@ class NotificationDetailPage extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
 
-              final user = FirebaseAuth.instance.currentUser;
+              final user = Supabase.instance.client.auth.currentUser;
               if (user == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -189,19 +190,16 @@ class NotificationDetailPage extends StatelessWidget {
                 return;
               }
 
-              // Write to /orders/{orderId}/reviews/{uid}
+              // Same order_reviews table order_detail_page.dart uses —
+              // this used to write to a separate orders/{id}/reviews
+              // subcollection, a pre-existing duplicate storage path.
               try {
-                await FirebaseFirestore.instance
-                    .collection('orders')
-                    .doc(orderId)
-                    .collection('reviews')
-                    .doc(user.uid)
-                    .set({
-                      'rating': rating,
-                      'comment': controller.text,
-                      'timestamp': Timestamp.now(),
-                      'userId': user.uid,
-                    });
+                await Supabase.instance.client.from('order_reviews').upsert({
+                  'order_id': orderId,
+                  'rating': rating,
+                  'comment': controller.text,
+                  'user_id': user.id,
+                }, onConflict: 'order_id,user_id');
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Thanks for your feedback!")),

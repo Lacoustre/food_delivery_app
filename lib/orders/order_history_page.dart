@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:intl/intl.dart';
 import 'package:african_cuisine/orders/order_detail_page.dart';
+import 'package:african_cuisine/services/order_adapter.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
 class OrderHistoryPage extends StatefulWidget {
@@ -13,13 +14,13 @@ class OrderHistoryPage extends StatefulWidget {
 }
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
-  final List<DocumentSnapshot> _orders = [];
+  final List<Map<String, dynamic>> _orders = [];
   final int _limit = 10;
   bool _isLoading = false;
   bool _hasMore = true;
   bool _isFilterLoading = false;
   double _totalSpent = 0.0;
-  DocumentSnapshot? _lastDoc;
+  String? _lastCreatedAt;
   String _selectedStatus = 'All';
   final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
 
@@ -42,7 +43,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Future<void> _fetchOrders({bool refresh = false}) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null || _isLoading) return;
 
     if (!refresh && !_hasMore) return;
@@ -57,41 +58,40 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         _orders.clear();
         _totalSpent = 0.0;
         _hasMore = true;
-        _lastDoc = null;
+        _lastCreatedAt = null;
       }
 
-      Query query = FirebaseFirestore.instance
-          .collection("orders")
-          .where("userId", isEqualTo: userId)
-          .orderBy("createdAt", descending: true)
-          .limit(_limit);
+      var query = Supabase.instance.client
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('user_id', userId);
 
       if (_selectedStatus == 'Completed') {
-        query = query.where("deliveryStatus", whereIn: ["delivered", "picked up", "completed"]);
+        query = query.inFilter('status', ['delivered', 'picked up', 'completed']);
       } else if (_selectedStatus == 'Cancelled') {
-        query = query.where("deliveryStatus", isEqualTo: "cancelled");
+        query = query.eq('status', 'cancelled');
       } else if (_selectedStatus == 'Pending') {
-        query = query.where("deliveryStatus", whereIn: ["pending", "confirmed", "preparing"]);
+        query = query.inFilter('status', ['pending', 'confirmed', 'preparing']);
       }
 
-      if (_lastDoc != null) {
-        query = query.startAfterDocument(_lastDoc!);
+      if (_lastCreatedAt != null) {
+        query = query.lt('created_at', _lastCreatedAt!);
       }
 
-      final snapshot = await query.get();
+      final rows = await query.order('created_at', ascending: false).limit(_limit);
 
-      if (snapshot.docs.isNotEmpty) {
-        _lastDoc = snapshot.docs.last;
-        _orders.addAll(snapshot.docs);
+      if (rows.isNotEmpty) {
+        _lastCreatedAt = rows.last['created_at'] as String;
+        final mapped = rows.map(orderRowToLegacyMap).toList();
+        _orders.addAll(mapped);
 
-        for (var doc in snapshot.docs) {
-          final data = doc.data() as Map<String, dynamic>;
+        for (final data in mapped) {
           final pricing = data['pricing'] as Map<String, dynamic>?;
           final amount = (pricing?['total'] ?? 0.0) as num;
           _totalSpent += amount.toDouble();
         }
 
-        if (snapshot.docs.length < _limit) {
+        if (rows.length < _limit) {
           _hasMore = false;
         }
       } else {
@@ -110,7 +110,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Future<void> _onRefresh() async {
-    _lastDoc = null;
+    _lastCreatedAt = null;
     _hasMore = true;
     await _fetchOrders(refresh: true);
     try {
@@ -159,8 +159,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 itemCount: _orders.length + 1,
                 itemBuilder: (context, index) {
                   if (index < _orders.length) {
-                    final data = _orders[index].data() as Map<String, dynamic>;
-                    return _buildOrderCard(context, data, _orders[index].id);
+                    final data = _orders[index];
+                    return _buildOrderCard(context, data, data['id'] as String);
                   } else if (_hasMore && _orders.isNotEmpty) {
                     return _buildLoadMoreButton();
                   } else {

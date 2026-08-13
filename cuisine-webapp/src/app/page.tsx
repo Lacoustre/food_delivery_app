@@ -814,12 +814,6 @@ export default function AfricanCuisineWebsite() {
                               <div className="flex items-center justify-between">
                                 <div>
                                   <span className="text-2xl font-bold text-orange-600">${meal.price?.toFixed(2)}</span>
-                                  {meal.preparationTime && (
-                                    <div className="flex items-center mt-1">
-                                      <Clock className="w-3 h-3 mr-1 text-gray-400" />
-                                      <span className="text-xs text-gray-500">{meal.preparationTime} min</span>
-                                    </div>
-                                  )}
                                 </div>
                                 <button
                                   onClick={async (e) => {

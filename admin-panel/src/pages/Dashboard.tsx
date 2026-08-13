@@ -21,31 +21,32 @@ import {
   limit,
   doc,
 } from "firebase/firestore";
-import { useCollectionData, useDocumentData, useCollection } from "react-firebase-hooks/firestore";
+import { useCollectionData, useDocumentData } from "react-firebase-hooks/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { db, auth } from "../firebase";
+import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
+
+interface OrderItemRow {
+  name: string | null;
+  quantity: number;
+  unit_price: number;
+}
+
+interface ProfileRow {
+  name: string | null;
+  email: string | null;
+}
 
 interface Order {
   id: string;
   status: string;
-  createdAt?: { seconds: number };
-  updatedAt?: { seconds: number };
-  confirmedTime?: { seconds: number };
-  preparingTime?: { seconds: number };
-  readyTime?: { seconds: number };
-  pickedUpTime?: { seconds: number };
-  deliveredTime?: { seconds: number };
-  pricing?: { total?: number };
-  total?: number;
-  orderType?: string;
-  deliveryMethod?: string;
-  switchedToPickup?: boolean;
-  customerName?: string;
-  name?: string;
-  customer?: string;
-  userId?: string;
+  created_at: string;
+  total: number;
+  order_type: "delivery" | "pickup" | null;
+  order_items: OrderItemRow[];
+  profiles: ProfileRow | ProfileRow[] | null;
 }
 
 interface User {
@@ -63,24 +64,41 @@ interface Review {
 
 export default function Dashboard() {
   const [, userLoading, userError] = useAuthState(auth);
-  const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
   const [showAllOrders, setShowAllOrders] = useState(false);
-  
 
-  
-  const allOrdersQuery = query(
-    collection(db, "orders"),
-    orderBy("createdAt", "desc")
-  );
-  const [allOrders, allOrdersLoading, allOrdersError] = useCollectionData(allOrdersQuery);
-  
-  const [usersSnapshot, , usersSnapshotError] = useCollection(query(collection(db, "users")));
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<Error | null>(null);
 
-  const ordersQuery = query(
-    collection(db, "orders"),
-    where("status", "==", "received")
-  );
-  const [orders, ordersLoading, ordersError] = useCollectionData(ordersQuery);
+  useEffect(() => {
+    const fetchOrders = async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, status, created_at, total, order_type, order_items(name, quantity, unit_price), profiles!user_id(name, email)")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setOrdersError(new Error(error.message));
+      } else {
+        setOrdersError(null);
+        setAllOrders(data as Order[]);
+      }
+      setOrdersLoading(false);
+    };
+
+    fetchOrders();
+
+    const channel = supabase
+      .channel("dashboard-orders-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const mealsQuery = query(collection(db, "meals"), where("active", "==", true));
   const [meals, mealsLoading, mealsError] = useCollectionData(mealsQuery);
@@ -97,37 +115,32 @@ export default function Dashboard() {
 
   const [restaurantDoc, restaurantLoading, restaurantError] =
     useDocumentData(doc(db, "settings", "restaurant"));
-  
+
   const isRestaurantOpen = restaurantDoc?.isOpen ?? true;
-  
-  useEffect(() => {
-    if (usersSnapshot?.docs) {
-      const nameMap: { [key: string]: string } = {};
-      usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        nameMap[doc.id] = userData.name || userData.displayName || userData.email || 'Unknown Customer';
-      });
-      setUserNames(nameMap);
-    }
-  }, [usersSnapshot]);
-  
-  const getCustomerName = (order: { customerName?: string; name?: string; customer?: string; userId?: string }) => {
-    return order.customerName || 
-           order.name || 
-           order.customer || 
-           (order.userId ? userNames[order.userId] : null) ||
-           'Unknown Customer';
+
+  const getCustomer = (order: Order): ProfileRow | null => {
+    if (!order.profiles) return null;
+    return Array.isArray(order.profiles) ? order.profiles[0] ?? null : order.profiles;
   };
 
-  const completedOrders = (allOrders as Order[] || []).filter(
+  const getCustomerName = (order: Order) => {
+    const customer = getCustomer(order);
+    if (customer?.name) return customer.name;
+    if (customer?.email) return customer.email.split("@")[0];
+    return "Unknown Customer";
+  };
+
+  const pendingOrders = allOrders.filter((order) => order.status === "pending");
+
+  const completedOrders = allOrders.filter(
     (order: Order) =>
       order.status === "delivered" || order.status === "picked up" || order.status === "completed"
   );
 
   const getFilteredOrders = (period: string) => {
     return completedOrders.filter((order: Order) => {
-      if (!order.createdAt?.seconds) return false;
-      const orderDate = moment(order.createdAt.seconds * 1000);
+      if (!order.created_at) return false;
+      const orderDate = moment(order.created_at);
       switch (period) {
         case "today":
           return orderDate.isSame(moment(), "day");
@@ -147,33 +160,15 @@ export default function Dashboard() {
   const weekOrders = getFilteredOrders("week");
   const monthOrders = getFilteredOrders("month");
   const yesterdayOrders = completedOrders.filter((order: Order) => {
-    if (!order.createdAt?.seconds) return false;
-    return moment(order.createdAt.seconds * 1000).isSame(
-      moment().subtract(1, "day"),
-      "day"
-    );
+    if (!order.created_at) return false;
+    return moment(order.created_at).isSame(moment().subtract(1, "day"), "day");
   });
 
-  const todayRevenue = todayOrders.reduce(
-    (sum: number, order: Order) => sum + (order.pricing?.total || order.total || 0),
-    0
-  );
-  const weeklyRevenue = weekOrders.reduce(
-    (sum: number, order: Order) => sum + (order.pricing?.total || order.total || 0),
-    0
-  );
-  const monthlyRevenue = monthOrders.reduce(
-    (sum: number, order: Order) => sum + (order.pricing?.total || order.total || 0),
-    0
-  );
-  const yesterdayRevenue = yesterdayOrders.reduce(
-    (sum: number, order: Order) => sum + (order.pricing?.total || order.total || 0),
-    0
-  );
-  const totalRevenue = completedOrders.reduce(
-    (sum: number, order: Order) => sum + (order.pricing?.total || order.total || 0),
-    0
-  );
+  const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
+  const weeklyRevenue = weekOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
+  const monthlyRevenue = monthOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
+  const yesterdayRevenue = yesterdayOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
+  const totalRevenue = completedOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
 
   const revenueGrowth =
     yesterdayRevenue > 0
@@ -190,34 +185,28 @@ export default function Dashboard() {
 
   // Responsive order count based on screen size and show more state
   const getOrderCount = useCallback(() => {
-    if (showAllOrders) return (allOrders as Order[] || []).length;
+    if (showAllOrders) return allOrders.length;
     return window.innerWidth >= 1024 ? 8 : window.innerWidth >= 768 ? 6 : 4;
   }, [showAllOrders, allOrders]);
-  
+
   const [orderCount, setOrderCount] = useState(getOrderCount());
-  
+
   useEffect(() => {
     const handleResize = () => {
       if (!showAllOrders) {
         setOrderCount(getOrderCount());
       }
     };
-    
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [showAllOrders, getOrderCount]);
-  
-  const recentOrders = (allOrders as Order[] || []).slice(0, orderCount);
-  const hasMoreOrders = (allOrders as Order[] || []).length > orderCount;
 
-  const isLoading =
-    userLoading ||
-    ordersLoading ||
-    mealsLoading ||
-    usersLoading ||
-    allOrdersLoading ||
-    restaurantLoading;
-  const error = userError || ordersError || mealsError || usersError || restaurantError || allOrdersError || usersSnapshotError;
+  const recentOrders = allOrders.slice(0, orderCount);
+  const hasMoreOrders = allOrders.length > orderCount;
+
+  const isLoading = userLoading || ordersLoading || mealsLoading || usersLoading || restaurantLoading;
+  const error = userError || ordersError || mealsError || usersError || restaurantError;
 
   if (isLoading) {
     return (
@@ -275,10 +264,10 @@ export default function Dashboard() {
           <StatCard
             title="Orders to Confirm"
             icon={<ShoppingBag className="text-blue-600" />}
-            value={orders?.length || 0}
-            link="/orders?filter=received"
+            value={pendingOrders.length}
+            link="/orders?filter=pending"
             color="blue"
-            change={`${orders?.length || 0} awaiting confirmation`}
+            change={`${pendingOrders.length} awaiting confirmation`}
           />
           <StatCard
             title="Active Meals"
@@ -375,11 +364,11 @@ export default function Dashboard() {
                 // Calculate meal analytics from orders
                 const mealStats = new Map();
                 completedOrders.forEach((order: Order) => {
-                  if (order.items && Array.isArray(order.items)) {
-                    order.items.forEach((item: any) => {
+                  if (order.order_items && Array.isArray(order.order_items)) {
+                    order.order_items.forEach((item: OrderItemRow) => {
                       const mealName = item.name;
                       const quantity = item.quantity || 1;
-                      const revenue = quantity * (item.price || 0);
+                      const revenue = quantity * (item.unit_price || 0);
                       
                       if (mealStats.has(mealName)) {
                         const existing = mealStats.get(mealName);
@@ -440,7 +429,7 @@ export default function Dashboard() {
             </div>
             <div className="space-y-4">
               {recentOrders.length > 0 ? recentOrders.map((order: Order, index: number) => {
-                const isPickup = order.orderType === 'pickup' || order.deliveryMethod === 'pickup' || order.switchedToPickup || (!order.orderType && !order.deliveryMethod);
+                const isPickup = order.order_type === 'pickup';
                 const statusColors = {
                   received: "bg-blue-100 text-blue-800",
                   pending: "bg-blue-100 text-blue-800",
@@ -469,43 +458,16 @@ export default function Dashboard() {
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                           statusColors[order.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
                         }`}>
-                          {order.status === 'received' ? 'Needs Confirmation' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          {order.status === 'pending' ? 'Needs Confirmation' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                         </span>
                         <span className="text-sm text-gray-500">
-                          {(() => {
-                            const getStatusTime = () => {
-                              switch (order.status) {
-                                case 'confirmed':
-                                  return order.confirmedTime?.seconds || order.updatedAt?.seconds;
-                                case 'preparing':
-                                  return order.preparingTime?.seconds || order.updatedAt?.seconds;
-                                case 'ready':
-                                case 'ready for pickup':
-                                  return order.readyTime?.seconds || order.updatedAt?.seconds;
-                                case 'picked up':
-                                  return order.pickedUpTime?.seconds || order.updatedAt?.seconds;
-                                case 'on the way':
-                                  return order.updatedAt?.seconds;
-                                case 'delivered':
-                                  return order.deliveredTime?.seconds || order.updatedAt?.seconds;
-                                case 'cancelled':
-                                case 'completed':
-                                  return order.updatedAt?.seconds;
-                                default:
-                                  return order.createdAt?.seconds;
-                              }
-                            };
-                            const statusTime = getStatusTime();
-                            return statusTime 
-                              ? moment(statusTime * 1000).fromNow()
-                              : 'Unknown time';
-                          })()}
+                          {order.created_at ? moment(order.created_at).fromNow() : 'Unknown time'}
                         </span>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-gray-900">
-                        ${(order.pricing?.total || order.total || 0).toFixed(2)}
+                        ${(order.total || 0).toFixed(2)}
                       </div>
                     </div>
                   </div>

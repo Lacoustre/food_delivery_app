@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'sign_up_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -72,17 +72,19 @@ class _LoginPageState extends State<LoginPage>
         );
       }
 
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get(const GetOptions(source: Source.serverAndCache));
+      // 🟢 Supabase migration: mirror the session so Supabase-backed
+      // features have a signed-in user too. Best-effort — a Supabase
+      // hiccup should never block login on the still-Firebase-backed app.
+      try {
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      } catch (e) {
+        debugPrint('Supabase login mirror failed: $e');
+      }
 
       if (!mounted) return;
-
-      if (!snap.exists) {
-        Navigator.pushReplacementNamed(context, '/auth');
-        return;
-      }
 
       Navigator.pushReplacementNamed(context, '/auth');
     } on FirebaseAuthException catch (e) {

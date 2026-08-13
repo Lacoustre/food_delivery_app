@@ -4,7 +4,7 @@ import 'package:african_cuisine/orders/order_number_generator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
@@ -148,6 +148,7 @@ class OrderData {
   final String updatedAt;
   final String? orderType;
   final String? deliveryMethod;
+  final double distanceMiles;
 
   const OrderData({
     required this.orderNumber,
@@ -162,6 +163,7 @@ class OrderData {
     required this.updatedAt,
     this.orderType,
     this.deliveryMethod,
+    this.distanceMiles = 0,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -177,6 +179,7 @@ class OrderData {
       'eta': null,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'distanceMiles': distanceMiles,
       if (orderType != null) 'orderType': orderType,
       if (deliveryMethod != null) 'deliveryMethod': deliveryMethod,
     };
@@ -185,77 +188,59 @@ class OrderData {
 
 // ===== SERVICES =====
 class PaymentService {
-  static final FirebaseFunctions _functions = FirebaseFunctions.instance;
-  // ignore: unused_field
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   static Future<Map<String, dynamic>> createPaymentIntent({
-    required double amount,
+    required List<Map<String, dynamic>> items,
+    required String orderType,
+    required double distanceMiles,
+    required double tipAmount,
     required String orderId,
     required String customerName,
     required String itemsDescription,
   }) async {
     debugPrint('🚀 PaymentService.createPaymentIntent called');
-    debugPrint('   Amount: \$${amount.toStringAsFixed(2)}');
     debugPrint('   Order ID: $orderId');
     debugPrint('   Customer: $customerName');
 
     try {
-      // Authentication check
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('❌ No authenticated user found');
+      // Authentication check — the Edge Function verifies the caller's
+      // Supabase session, not Firebase's, since that's what it runs on.
+      final supabaseUser = Supabase.instance.client.auth.currentUser;
+      if (supabaseUser == null) {
+        debugPrint('❌ No authenticated Supabase user found');
         throw const PaymentException(
           'User not authenticated',
           code: 'unauthenticated',
         );
       }
 
-      debugPrint('✅ User authenticated: ${user.uid}');
-      debugPrint('   Email: ${user.email}');
-      debugPrint('   Display Name: ${user.displayName}');
-
-      // Token refresh
-      try {
-        final token = await user.getIdToken(true);
-        debugPrint('✅ Token refreshed, length: ${token!.length}');
-      } catch (tokenError) {
-        debugPrint('❌ Token refresh failed: $tokenError');
-        throw PaymentException(
-          'Authentication token refresh failed',
-          code: 'unauthenticated',
-          originalError: tokenError,
-        );
-      }
-
-      // Prepare function call
-      final callable = FirebaseFunctions.instanceFor(
-        region: "us-central1",
-      ).httpsCallable('createPaymentIntent');
+      debugPrint('✅ Supabase user authenticated: ${supabaseUser.id}');
+      debugPrint('   Email: ${supabaseUser.email}');
 
       final requestData = {
-        'amount': amount, // Send as dollars
+        'items': items,
+        'orderType': orderType,
+        'distanceMiles': distanceMiles,
+        'tipAmount': tipAmount,
         'orderId': orderId.trim(),
         'customerName':
             (customerName.isNotEmpty
                     ? customerName
-                    : user.displayName ?? user.email ?? 'Customer')
+                    : supabaseUser.email ?? 'Customer')
                 .trim(),
         'currency': PaymentConstants.defaultCurrency.toLowerCase(),
       };
 
-      debugPrint('📤 Calling Cloud Function with data:');
+      debugPrint('📤 Calling create-payment-intent Edge Function with data:');
       debugPrint('   ${requestData.toString()}');
 
-      // Make the call with timeout
-      final response = await callable
-          .call(requestData)
+      final response = await Supabase.instance.client.functions
+          .invoke('create-payment-intent', body: requestData)
           .timeout(
             const Duration(
               seconds: PaymentConstants.paymentIntentTimeoutSeconds,
             ),
             onTimeout: () {
-              debugPrint('⏰ Cloud Function call timed out');
+              debugPrint('⏰ Edge Function call timed out');
               throw const PaymentException(
                 'Payment request timed out',
                 code: 'deadline-exceeded',
@@ -263,9 +248,8 @@ class PaymentService {
             },
           );
 
-      debugPrint('📦 Cloud Function response received');
-      debugPrint('   Response type: ${response.runtimeType}');
-      debugPrint('   Response data type: ${response.data.runtimeType}');
+      debugPrint('📦 Edge Function response received');
+      debugPrint('   Status: ${response.status}');
 
       final data = response.data;
       if (data == null) {
@@ -283,6 +267,9 @@ class PaymentService {
       }
 
       final responseMap = data as Map<String, dynamic>;
+      if (responseMap['error'] != null) {
+        throw PaymentException(responseMap['error'].toString());
+      }
       final clientSecret = responseMap['client_secret'];
 
       if (clientSecret == null || clientSecret.toString().isEmpty) {
@@ -299,28 +286,30 @@ class PaymentService {
       return {
         'client_secret': clientSecret.toString(),
         'orderId': orderId,
-        'amount': amount,
+        // Server-validated totals — this is what was actually charged.
+        'subtotal': (responseMap['subtotal'] as num?)?.toDouble() ?? 0.0,
+        'deliveryFee': (responseMap['deliveryFee'] as num?)?.toDouble() ?? 0.0,
+        'tax': (responseMap['tax'] as num?)?.toDouble() ?? 0.0,
+        'tip': (responseMap['tip'] as num?)?.toDouble() ?? 0.0,
+        'total': (responseMap['total'] as num?)?.toDouble() ?? 0.0,
+        'items': responseMap['items'],
       };
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Firebase Functions Exception:');
-      debugPrint('   Code: ${e.code}');
-      debugPrint('   Message: ${e.message}');
+    } on FunctionException catch (e) {
+      debugPrint('❌ Supabase Function Exception:');
+      debugPrint('   Status: ${e.status}');
       debugPrint('   Details: ${e.details}');
 
-      // Log additional details if available
-      if (e.details != null) {
-        debugPrint('   Details type: ${e.details.runtimeType}');
-        if (e.details is Map) {
-          final details = e.details as Map;
-          for (final entry in details.entries) {
-            debugPrint('     ${entry.key}: ${entry.value}');
-          }
-        }
+      String message = 'Payment request failed';
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        message = details['error'].toString();
+      } else if (details != null) {
+        message = details.toString();
       }
 
       throw PaymentException(
-        _getFirebaseFunctionErrorMessage(e),
-        code: e.code,
+        message,
+        code: e.status.toString(),
         originalError: e,
       );
     } on PaymentException {
@@ -339,96 +328,75 @@ class PaymentService {
     }
   }
 
-  static String _getFirebaseFunctionErrorMessage(FirebaseFunctionsException e) {
-    debugPrint('🔍 Processing Firebase Function error: ${e.code}');
-
-    switch (e.code) {
-      case 'invalid-argument':
-        return 'Invalid payment details: ${e.message ?? "Please check your information"}';
-      case 'permission-denied':
-        return 'Payment authorization failed. Please try again.';
-      case 'deadline-exceeded':
-        return 'Payment request timed out. Please try again.';
-      case 'unavailable':
-        return 'Payment service is temporarily unavailable. Please try again later.';
-      case 'unauthenticated':
-        return 'Please sign in to complete your payment.';
-      case 'internal':
-        // Try to extract more specific error from details
-        if (e.details != null && e.details is Map) {
-          final details = e.details as Map;
-          if (details.containsKey('stripeError')) {
-            return 'Payment error: ${e.message ?? "Card processing failed"}';
-          }
-        }
-        return 'Payment service error: ${e.message ?? "Please try again"}';
-      case 'not-found':
-        return 'Payment service configuration error. Please contact support.';
-      case 'already-exists':
-        return 'Duplicate payment request. Please try with a new order.';
-      case 'resource-exhausted':
-        return 'Service quota exceeded. Please contact support or try again later.';
-      case 'failed-precondition':
-        return 'Payment cannot be processed at this time.';
-      case 'aborted':
-        return 'Payment was interrupted. Please try again.';
-      case 'out-of-range':
-        return 'Payment amount is out of acceptable range.';
-      case 'unimplemented':
-        return 'Payment method not supported.';
-      case 'data-loss':
-        return 'Payment data error. Please try again.';
-      default:
-        debugPrint('⚠️ Unknown Firebase Function error code: ${e.code}');
-        return e.message ?? 'Payment service error occurred. Please try again.';
-    }
-  }
-
-  // Rest of your existing saveOrder method...
-  static Future<void> saveOrder(OrderData orderData) async {
+  // Saves the order via the create-order Edge Function, which re-validates
+  // items/pricing server-side rather than trusting orderData wholesale.
+  // Also used for scheduled orders (pass scheduledFor).
+  static Future<Map<String, dynamic>> saveOrder(
+    OrderData orderData, {
+    String? scheduledFor,
+  }) async {
     debugPrint('💾 Saving order: ${orderData.orderNumber}');
 
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        debugPrint('❌ No authenticated user for order save');
+      final supabaseUser = Supabase.instance.client.auth.currentUser;
+      if (supabaseUser == null) {
+        debugPrint('❌ No authenticated Supabase user for order save');
         throw const PaymentException(
           'User not authenticated',
           code: 'unauthenticated',
         );
       }
 
-      if (orderData.userId != currentUser.uid) {
-        debugPrint('❌ User ID mismatch in order save');
-        debugPrint('   Order userId: ${orderData.userId}');
-        debugPrint('   Auth UID: ${currentUser.uid}');
-        throw const PaymentException('User ID mismatch');
-      }
+      final deliveryAddressField = orderData.delivery['address'];
+      final deliveryAddress = deliveryAddressField is Map
+          ? deliveryAddressField['address'] as String?
+          : deliveryAddressField as String?;
 
-      // Refresh token before calling function
-      await currentUser.getIdToken(true);
-      debugPrint('✅ Token refreshed for order save');
+      final requestData = {
+        'items': orderData.items
+            .map((item) => {
+                  'id': item['id'],
+                  'name': item['name'],
+                  'quantity': item['quantity'],
+                  'notes': item['instructions'],
+                })
+            .toList(),
+        'orderType': orderData.orderType ?? 'pickup',
+        'distanceMiles': orderData.distanceMiles,
+        'tipAmount': orderData.pricing.tip,
+        'deliveryAddress': deliveryAddress,
+        'paymentMethod': 'card',
+        if (scheduledFor != null) 'scheduledFor': scheduledFor,
+      };
 
-      final callable = FirebaseFunctions.instanceFor(
-        region: "us-central1",
-      ).httpsCallable('createOrder');
-      final response = await callable.call(orderData.toFirestore());
-
-      debugPrint('✅ Order saved successfully: ${response.data}');
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Error saving order via Cloud Function:');
-      debugPrint('   Code: ${e.code}');
-      debugPrint('   Message: ${e.message}');
-
-      if (e.code == 'unauthenticated') {
-        await FirebaseAuth.instance.signOut();
-      }
-
-      throw PaymentException(
-        _getFirebaseFunctionErrorMessage(e),
-        code: e.code,
-        originalError: e,
+      final response = await Supabase.instance.client.functions.invoke(
+        'create-order',
+        body: requestData,
       );
+
+      final data = response.data;
+      if (data is Map && data['error'] != null) {
+        throw PaymentException(data['error'].toString());
+      }
+
+      debugPrint('✅ Order saved successfully: $data');
+      return data as Map<String, dynamic>;
+    } on FunctionException catch (e) {
+      debugPrint('❌ Error saving order via Edge Function:');
+      debugPrint('   Status: ${e.status}');
+      debugPrint('   Details: ${e.details}');
+
+      String message = 'Failed to save order';
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        message = details['error'].toString();
+      } else if (details != null) {
+        message = details.toString();
+      }
+
+      throw PaymentException(message, code: e.status.toString(), originalError: e);
+    } on PaymentException {
+      rethrow;
     } catch (e) {
       debugPrint('❌ Unexpected error saving order: $e');
       throw PaymentException('Unexpected error saving order', originalError: e);
@@ -745,6 +713,10 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     debugPrint('   Email Verified: ${user.emailVerified}');
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final deliveryProvider = Provider.of<DeliveryFeeProvider>(
+      context,
+      listen: false,
+    );
     final orderId = OrderNumberGenerator.generate();
 
     debugPrint('🛒 Cart details:');
@@ -752,10 +724,18 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     debugPrint('   Order ID: $orderId');
 
     try {
-      // Create payment intent
+      // Create payment intent — the server recomputes the real total from
+      // authoritative meal prices; it never trusts a client-supplied amount.
       debugPrint('💳 === CREATING PAYMENT INTENT ===');
       final paymentIntent = await PaymentService.createPaymentIntent(
-        amount: totals.total,
+        items: cartProvider.items
+            .map((item) => {'id': item.id, 'name': item.name, 'quantity': item.quantity})
+            .toList(),
+        orderType: deliveryProvider.deliveryOption == DeliveryOption.delivery
+            ? 'delivery'
+            : 'pickup',
+        distanceMiles: deliveryProvider.deliveryDistance,
+        tipAmount: totals.tip,
         orderId: orderId,
         customerName: user.displayName ?? user.email ?? 'Customer',
         itemsDescription: cartProvider.items
@@ -770,7 +750,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       debugPrint(
         '   Client secret length: ${paymentIntent['client_secret']?.length ?? 0}',
       );
-      debugPrint('   Amount: ${paymentIntent['amount']}');
+      debugPrint('   Total: ${paymentIntent['total']}');
 
       // Initialize payment sheet
       debugPrint('📱 === INITIALIZING PAYMENT SHEET ===');
@@ -782,9 +762,23 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       await Stripe.instance.presentPaymentSheet();
       debugPrint('✅ Payment sheet completed successfully');
 
-      // Save order
+      // Save order — built from the server-validated totals/items returned
+      // above, not the raw client-computed ones, so what gets fulfilled
+      // always matches what was actually charged.
       debugPrint('💾 === SAVING ORDER ===');
-      final orderData = await _createOrderData(user.uid, orderId, totals);
+      final validatedTotals = PaymentTotals(
+        subtotal: paymentIntent['subtotal'] as double,
+        tax: paymentIntent['tax'] as double,
+        tip: paymentIntent['tip'] as double,
+        deliveryFee: paymentIntent['deliveryFee'] as double,
+        total: paymentIntent['total'] as double,
+      );
+      final orderData = await _createOrderData(
+        user.uid,
+        orderId,
+        validatedTotals,
+        validatedItems: paymentIntent['items'] as List<dynamic>?,
+      );
       await PaymentService.saveOrder(orderData);
       debugPrint('✅ Order saved successfully');
 
@@ -844,8 +838,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   Future<OrderData> _createOrderData(
     String userId,
     String orderId,
-    PaymentTotals totals,
-  ) async {
+    PaymentTotals totals, {
+    List<dynamic>? validatedItems,
+  }) async {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final deliveryProvider = Provider.of<DeliveryFeeProvider>(
       context,
@@ -858,19 +853,28 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
             'Customer');
 
-    final items = cartProvider.items
-        .map(
-          (item) => {
-            'name': item.name,
-            'price': item.price,
-            'quantity': item.quantity,
-            'image': item.image,
-            'category': item.category,
-            'extras': item.extras,
-            'instructions': item.instructions,
-          },
-        )
-        .toList();
+    // Merge server-validated id/name/price (authoritative) with the
+    // client's display-only fields (image/category/extras/instructions),
+    // matched by position — the same order sent to createPaymentIntent.
+    final cartItems = cartProvider.items;
+    final items = List.generate(cartItems.length, (i) {
+      final item = cartItems[i];
+      final validated = validatedItems != null && i < validatedItems.length
+          ? validatedItems[i] as Map<String, dynamic>
+          : null;
+      return {
+        'id': validated?['id'] ?? item.id,
+        'name': validated?['name'] ?? item.name,
+        'price': validated != null
+            ? (validated['price'] as num).toDouble()
+            : item.price,
+        'quantity': item.quantity,
+        'image': item.image,
+        'category': item.category,
+        'extras': item.extras,
+        'instructions': item.instructions,
+      };
+    });
 
     Map<String, dynamic>? deliveryAddress;
     if (deliveryProvider.deliveryOption == DeliveryOption.delivery) {
@@ -897,6 +901,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       },
       orderType: deliveryProvider.deliveryOption.displayName.toLowerCase(),
       deliveryMethod: deliveryProvider.deliveryOption.displayName.toLowerCase(),
+      distanceMiles: deliveryProvider.deliveryDistance,
       payment: {
         'method': _selectedPaymentMethod!.displayName,
         'methodId': _selectedPaymentMethod!.id,
@@ -1682,13 +1687,25 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     }
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final deliveryProvider = Provider.of<DeliveryFeeProvider>(
+      context,
+      listen: false,
+    );
     final orderId = OrderNumberGenerator.generate();
 
     try {
-      // Create payment intent for scheduled order
+      // Create payment intent for scheduled order — server recomputes the
+      // real total from authoritative meal prices, same as regular orders.
       debugPrint('💳 Creating payment intent for scheduled order');
       final paymentIntent = await PaymentService.createPaymentIntent(
-        amount: totals.total,
+        items: cartProvider.items
+            .map((item) => {'id': item.id, 'name': item.name, 'quantity': item.quantity})
+            .toList(),
+        orderType: deliveryProvider.deliveryOption == DeliveryOption.delivery
+            ? 'delivery'
+            : 'pickup',
+        distanceMiles: deliveryProvider.deliveryDistance,
+        tipAmount: totals.tip,
         orderId: orderId,
         customerName: user.displayName ?? user.email ?? 'Customer',
         itemsDescription: cartProvider.items
@@ -1702,8 +1719,21 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
 
       debugPrint('✅ Payment completed for scheduled order');
 
-      // Save as scheduled order instead of regular order
-      await _saveScheduledOrderWithPayment(user.uid, orderId, totals);
+      // Save as scheduled order — built from the server-validated
+      // totals/items, not the raw client-computed ones.
+      final validatedTotals = PaymentTotals(
+        subtotal: paymentIntent['subtotal'] as double,
+        tax: paymentIntent['tax'] as double,
+        tip: paymentIntent['tip'] as double,
+        deliveryFee: paymentIntent['deliveryFee'] as double,
+        total: paymentIntent['total'] as double,
+      );
+      await _saveScheduledOrderWithPayment(
+        user.uid,
+        orderId,
+        validatedTotals,
+        validatedItems: paymentIntent['items'] as List<dynamic>?,
+      );
 
       cartProvider.clearCart();
       setState(() => _paymentState = PaymentState.completed);
@@ -1729,8 +1759,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   Future<void> _saveScheduledOrderWithPayment(
     String userId,
     String orderId,
-    PaymentTotals totals,
-  ) async {
+    PaymentTotals totals, {
+    List<dynamic>? validatedItems,
+  }) async {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final deliveryProvider = Provider.of<DeliveryFeeProvider>(
       context,
@@ -1738,19 +1769,25 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     );
     final nowIso = DateTime.now().toIso8601String();
 
-    final items = cartProvider.items
-        .map(
-          (item) => {
-            'name': item.name,
-            'price': item.price,
-            'quantity': item.quantity,
-            'image': item.image,
-            'category': item.category,
-            'extras': item.extras,
-            'instructions': item.instructions,
-          },
-        )
-        .toList();
+    final cartItems = cartProvider.items;
+    final items = List.generate(cartItems.length, (i) {
+      final item = cartItems[i];
+      final validated = validatedItems != null && i < validatedItems.length
+          ? validatedItems[i] as Map<String, dynamic>
+          : null;
+      return {
+        'id': validated?['id'] ?? item.id,
+        'name': validated?['name'] ?? item.name,
+        'price': validated != null
+            ? (validated['price'] as num).toDouble()
+            : item.price,
+        'quantity': item.quantity,
+        'image': item.image,
+        'category': item.category,
+        'extras': item.extras,
+        'instructions': item.instructions,
+      };
+    });
 
     Map<String, dynamic>? deliveryAddress;
     if (deliveryProvider.deliveryOption == DeliveryOption.delivery) {
@@ -1769,45 +1806,45 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
             'Customer');
 
-    final scheduledOrderData = {
-      'orderNumber': orderId,
-      'userId': userId,
-      'customerName': customerName,
-      'customerEmail': user.email ?? '',
-      'items': items,
-      'pricing': totals.toMap(),
-      'delivery': {
+    final orderData = OrderData(
+      orderNumber: orderId,
+      userId: userId,
+      items: items,
+      pricing: totals,
+      delivery: {
         'option': deliveryProvider.deliveryOption.displayName,
         'fee': deliveryProvider.deliveryOption == DeliveryOption.delivery
             ? deliveryProvider.deliveryFee
             : 0.0,
         'address': deliveryAddress,
       },
-      'orderType': deliveryProvider.deliveryOption.displayName.toLowerCase(),
-      'deliveryMethod': deliveryProvider.deliveryOption.displayName
-          .toLowerCase(),
-      'payment': {
+      orderType: deliveryProvider.deliveryOption.displayName.toLowerCase(),
+      deliveryMethod: deliveryProvider.deliveryOption.displayName.toLowerCase(),
+      distanceMiles: deliveryProvider.deliveryDistance,
+      payment: {
         'method': _selectedPaymentMethod!.displayName,
         'methodId': _selectedPaymentMethod!.id,
         'status': 'completed',
         'processedAt': nowIso,
+        'customerName': customerName,
+        'customerEmail': user.email ?? '',
       },
-      'scheduledTime': _scheduledTime!.toIso8601String(),
-      'status': 'scheduled',
-      'statusHistory': {'scheduled': nowIso},
-      'createdAt': nowIso,
-      'updatedAt': nowIso,
-    };
+      status: 'scheduled',
+      statusHistory: {'scheduled': nowIso},
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    );
 
-    // Use Cloud Function for secure scheduled order creation
+    // Same create-order Edge Function as regular orders, just with
+    // scheduledFor set — re-validates items/pricing server-side either way.
     try {
-      final callable = FirebaseFunctions.instanceFor(
-        region: "us-central1",
-      ).httpsCallable('createScheduledOrder');
-      await callable.call(scheduledOrderData);
-      debugPrint('✅ Scheduled order saved successfully via Cloud Function');
+      await PaymentService.saveOrder(
+        orderData,
+        scheduledFor: _scheduledTime!.toIso8601String(),
+      );
+      debugPrint('✅ Scheduled order saved successfully');
     } catch (e) {
-      debugPrint('❌ Failed to save scheduled order via Cloud Function: $e');
+      debugPrint('❌ Failed to save scheduled order: $e');
       throw PaymentException(
         'Failed to save scheduled order',
         originalError: e,

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
@@ -1018,6 +1019,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   if (shouldSignOut == true) {
                     await FirebaseAuth.instance.signOut();
+                    try {
+                      await Supabase.instance.client.auth.signOut();
+                    } catch (e) {
+                      debugPrint('Supabase sign-out mirror failed: $e');
+                    }
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const LoginPage()),
                       (_) => false,

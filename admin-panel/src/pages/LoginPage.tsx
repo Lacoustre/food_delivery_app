@@ -1,10 +1,6 @@
 import { useState } from "react";
-import {
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { auth } from "../firebase";
+import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import { toast } from "react-toastify";
 import { Eye, EyeOff } from "lucide-react";
@@ -23,30 +19,41 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+
+      // Any Supabase user can authenticate — only role === 'admin' may
+      // actually use this dashboard. Checked here (not just in
+      // ProtectedRoute) so a non-admin gets a clear message immediately
+      // instead of a silent redirect after landing on "/".
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profile?.role !== "admin") {
+        await supabase.auth.signOut();
+        toast.error("This account does not have admin access.", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        return;
+      }
+
       toast.success("Login successful!", {
         position: "top-right",
         autoClose: 2000,
       });
       setTimeout(() => navigate("/"), 1000);
     } catch (error) {
-      const messageMap = {
-        "auth/invalid-email": "Invalid email address.",
-        "auth/user-disabled": "Account disabled.",
-        "auth/user-not-found": "User not found.",
-        "auth/wrong-password": "Incorrect password.",
-        "auth/invalid-credential": "Incorrect email or password.",
-      };
-      let msg = "Something went wrong.";
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        typeof error.code === "string"
-      ) {
-        const code = error.code;
-        msg = messageMap[code as keyof typeof messageMap] || "Login failed.";
-      }
+      const msg =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "Login failed.";
       toast.error(msg, {
         position: "top-right",
         autoClose: 3000,
@@ -65,7 +72,8 @@ export default function LoginPage() {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
       toast.success("Password reset link sent!", {
         position: "top-right",
         autoClose: 3000,

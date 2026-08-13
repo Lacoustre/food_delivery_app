@@ -1,15 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter/material.dart';
 import 'package:african_cuisine/support/rate_orders_page.dart';
 
 class ReviewNotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Check for orders that need review notifications
   static Future<void> checkForReviewNotifications(BuildContext context) async {
-    final user = _auth.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     try {
@@ -17,32 +16,34 @@ class ReviewNotificationService {
       final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
       final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
 
-      final ordersQuery = await _firestore
-          .collection('orders')
-          .where('userId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'delivered')
-          .get();
+      final orders = await Supabase.instance.client
+          .from('orders')
+          .select('id, updated_at')
+          .eq('user_id', user.id)
+          .eq('status', 'delivered');
 
-      final unratedOrders = <QueryDocumentSnapshot>[];
+      final unratedOrders = <Map<String, dynamic>>[];
 
-      for (final orderDoc in ordersQuery.docs) {
-        final data = orderDoc.data() as Map<String, dynamic>;
-        final deliveredTime = (data['deliveredTime'] as Timestamp?)?.toDate();
-        
-        // Skip if no delivery time or outside our date range
-        if (deliveredTime == null || 
-            deliveredTime.isBefore(sevenDaysAgo) || 
+      for (final order in orders) {
+        // No separate "delivered at" timestamp column — updated_at is the
+        // closest equivalent (it's bumped whenever status changes).
+        final deliveredTime = order['updated_at'] != null
+            ? DateTime.parse(order['updated_at'] as String)
+            : null;
+
+        if (deliveredTime == null ||
+            deliveredTime.isBefore(sevenDaysAgo) ||
             deliveredTime.isAfter(oneDayAgo)) continue;
-        
-        // Check if this order has been reviewed
-        final reviewQuery = await _firestore
-            .collection('order_reviews')
-            .where('orderId', isEqualTo: orderDoc.id)
-            .where('userId', isEqualTo: user.uid)
-            .get();
 
-        if (reviewQuery.docs.isEmpty) {
-          unratedOrders.add(orderDoc);
+        final review = await Supabase.instance.client
+            .from('order_reviews')
+            .select('id')
+            .eq('order_id', order['id'])
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (review == null) {
+          unratedOrders.add(order);
         }
       }
 

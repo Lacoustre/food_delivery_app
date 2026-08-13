@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
@@ -47,6 +48,13 @@ Future<void> main() async {
 
   // 🔥 Firebase Init
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // 🟢 Supabase Init — coexists with Firebase during the migration; auth,
+  // orders, meals etc. are moving over table-by-table, not all at once.
+  await Supabase.initialize(
+    url: EnvConfig.supabaseUrl,
+    publishableKey: EnvConfig.supabaseAnonKey,
+  );
 
   // 🎯 Stripe Setup — guarded so a failure here (e.g. running on a platform
   // flutter_stripe doesn't natively support, like macOS/web) can never block

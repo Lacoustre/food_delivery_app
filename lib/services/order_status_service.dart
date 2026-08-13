@@ -1,31 +1,33 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter/foundation.dart';
 import 'package:african_cuisine/services/email_service.dart';
 import 'package:african_cuisine/services/push_notification_service.dart';
 import 'package:african_cuisine/services/review_notification_service.dart';
+import 'package:african_cuisine/services/order_adapter.dart';
 
 class OrderStatusService {
   static final OrderStatusService _instance = OrderStatusService._internal();
   factory OrderStatusService() => _instance;
   OrderStatusService._internal();
 
-  StreamSubscription<QuerySnapshot>? _ordersSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _ordersSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
   final Set<String> _processedOrders = {};
 
   void startListening() {
     // Listen to auth state changes and restart listener accordingly
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      stopListening(); // Stop any existing listener
-      
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      _stopOrdersListener(); // Stop any existing listener
+
+      final user = state.session?.user;
       if (user == null) return;
-      
+
       try {
-        _ordersSubscription = FirebaseFirestore.instance
-            .collection('orders')
-            .where('userId', isEqualTo: user.uid)
-            .snapshots()
+        _ordersSubscription = Supabase.instance.client
+            .from('orders')
+            .stream(primaryKey: ['id'])
+            .eq('user_id', user.id)
             .listen(
               _handleOrderStatusChange,
               onError: (error) {
@@ -39,27 +41,29 @@ class OrderStatusService {
   }
 
   void stopListening() {
+    _authSubscription?.cancel();
+    _stopOrdersListener();
+  }
+
+  void _stopOrdersListener() {
     _ordersSubscription?.cancel();
     _processedOrders.clear();
   }
 
-  void _handleOrderStatusChange(QuerySnapshot snapshot) {
-    for (final change in snapshot.docChanges) {
-      if (change.type == DocumentChangeType.modified || 
-          change.type == DocumentChangeType.added) {
-        final orderData = change.doc.data() as Map<String, dynamic>;
-        final orderId = orderData['orderNumber'] as String;
-        final status = (orderData['status'] ?? orderData['deliveryStatus'] ?? '').toString().toLowerCase();
-        final userId = orderData['userId'] as String;
-        
-        // Create unique key for order+status to avoid duplicate notifications
-        final notificationKey = '${orderId}_$status';
-        
-        // Only process each order status change once
-        if (!_processedOrders.contains(notificationKey)) {
-          _processedOrders.add(notificationKey);
-          _sendStatusNotification(orderData, status, userId, orderId);
-        }
+  void _handleOrderStatusChange(List<Map<String, dynamic>> rows) {
+    for (final row in rows) {
+      final orderData = orderRowToLegacyMap(row);
+      final orderId = (orderData['orderNumber'] ?? orderData['id']).toString();
+      final status = (orderData['status'] ?? '').toString().toLowerCase();
+      final userId = orderData['userId'] as String;
+
+      // Create unique key for order+status to avoid duplicate notifications
+      final notificationKey = '${orderId}_$status';
+
+      // Only process each order status change once
+      if (!_processedOrders.contains(notificationKey)) {
+        _processedOrders.add(notificationKey);
+        _sendStatusNotification(orderData, status, userId, orderId);
       }
     }
   }

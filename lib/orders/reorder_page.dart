@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 
@@ -25,30 +25,34 @@ class _ReorderPageState extends State<ReorderPage> {
 
   Future<void> _handleReorder() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('orders')
-          .doc(widget.orderId)
-          .get();
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('id', widget.orderId)
+          .maybeSingle();
 
-      if (!doc.exists) {
+      if (row == null) {
         throw Exception('Original order not found.');
       }
 
-      final data = doc.data();
-      final cartItems = List<Map<String, dynamic>>.from(data?['items'] ?? []);
+      final cartItems = List<Map<String, dynamic>>.from(row['order_items'] ?? []);
 
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       cartProvider.clearCart();
 
       for (var item in cartItems) {
         cartProvider.addToCart({
+          'id': item['meal_id'],
           'name': item['name'],
-          'price': item['price'],
-          'image': item['image'],
-          'category': item['category'],
+          'price': item['unit_price'],
+          // Reordering doesn't have the meal's current image/category on
+          // hand (order_items only stores what was actually charged) —
+          // the cart UI falls back to a placeholder for these.
+          'image': null,
+          'category': null,
           'quantity': item['quantity'],
-          'extras': item['extras'],
-          'instructions': item['instructions'],
+          'extras': const [],
+          'instructions': item['notes'] ?? '',
           'reordered': true, // Used to highlight in cart
         });
       }

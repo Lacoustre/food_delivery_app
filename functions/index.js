@@ -4,7 +4,8 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const sgMail = require("@sendgrid/mail");
-const stripe = require("stripe"); 
+const stripe = require("stripe");
+const { createClient } = require("@supabase/supabase-js");
 
 admin.initializeApp();
 const messaging = admin.messaging();
@@ -19,9 +20,89 @@ const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
 const FROM_EMAIL = defineSecret("FROM_EMAIL");
 const GOOGLE_ROUTES_API_KEY = defineSecret("GOOGLE_ROUTES_API_KEY");
+const SUPABASE_SERVICE_ROLE_KEY = defineSecret("SUPABASE_SERVICE_ROLE_KEY");
 
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
+// Supabase is the authoritative source for meal prices/availability — the
+// anon key is fine here since meals are public-read (RLS enforces that).
+const SUPABASE_URL = "https://peimbksjyjcxmurwwmnn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlaW1ia3NqeWpjeG11cnd3bW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0OTkxNDgsImV4cCI6MjEwMjA3NTE0OH0.UE2yZ04qKvjyz15W259FiG4KFw-wNK8SOAD50ywiMeE";
+const supabasePublic = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Mobile's own tax rate (Connecticut) — kept as-is; note this differs from
+// the webapp's 7.35%, a pre-existing cross-app inconsistency, not something
+// fixed here since it's a business/pricing question, not a security one.
+const TAX_RATE = 0.0635;
+
+function calculateDeliveryFee(distanceMiles) {
+  const baseFee = 3.99;
+  const baseTierMaxDistance = 3.0;
+  const midTierMaxDistance = 10.0;
+  const midTierRatePerMile = 0.5;
+  const extendedTierBase = 7.49;
+  const extendedTierRatePerMile = 0.75;
+
+  if (distanceMiles <= baseTierMaxDistance) return baseFee;
+  if (distanceMiles <= midTierMaxDistance) {
+    return baseFee + (distanceMiles - baseTierMaxDistance) * midTierRatePerMile;
+  }
+  return extendedTierBase + (distanceMiles - midTierMaxDistance) * extendedTierRatePerMile;
+}
+
+// Never trust client-supplied item prices — look up each item's authoritative
+// price from Supabase (by id when available, falling back to name for carts
+// persisted before this fix added id tracking) and recompute server-side.
+async function computeValidatedTotals({ items, orderType, distanceMiles }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new HttpsError("invalid-argument", "Cart is empty");
+  }
+  if (orderType !== "delivery" && orderType !== "pickup") {
+    throw new HttpsError("invalid-argument", "Invalid order type");
+  }
+
+  let subtotal = 0;
+  const validatedItems = [];
+
+  for (const item of items) {
+    if (!item || (!item.id && !item.name) || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+      throw new HttpsError("invalid-argument", "Invalid cart item");
+    }
+
+    let meal = null;
+    if (item.id) {
+      const { data } = await supabasePublic
+        .from("meals")
+        .select("id, name, price, active, available")
+        .eq("id", item.id)
+        .single();
+      meal = data || null;
+    }
+    if (!meal && item.name) {
+      const { data } = await supabasePublic
+        .from("meals")
+        .select("id, name, price, active, available")
+        .eq("name", item.name)
+        .single();
+      meal = data || null;
+    }
+    if (!meal) {
+      throw new HttpsError("invalid-argument", `Meal not found: ${item.id || item.name}`);
+    }
+    if (!meal.active || !meal.available) {
+      throw new HttpsError("invalid-argument", `Meal unavailable: ${meal.name}`);
+    }
+
+    subtotal += meal.price * item.quantity;
+    validatedItems.push({ id: meal.id, name: meal.name, price: meal.price, quantity: item.quantity });
+  }
+
+  const deliveryFee = orderType === "delivery" ? calculateDeliveryFee(distanceMiles || 0) : 0;
+  const tax = subtotal * TAX_RATE;
+
+  return { subtotal, deliveryFee, tax, validatedItems };
+}
 
 
 // --- FCM Token Management ---
@@ -99,21 +180,25 @@ exports.createPaymentIntent = onCall(
         throw new HttpsError("unauthenticated", "User must be authenticated");
       }
 
-      const { amount, orderId, customerName, currency = "usd" } = request.data;
+      const {
+        items,
+        orderType,
+        distanceMiles = 0,
+        tipAmount = 0,
+        orderId,
+        customerName,
+        currency = "usd",
+      } = request.data;
 
       logger.log("Request data", {
-        amount,
-        amountType: typeof amount,
+        itemCount: Array.isArray(items) ? items.length : 0,
+        orderType,
+        distanceMiles,
+        tipAmount,
         orderId,
         customerName,
         currency,
-        hasAllFields: !!(amount && orderId && customerName),
       });
-
-      if (typeof amount !== "number" || amount <= 0 || isNaN(amount)) {
-        logger.error("Invalid amount", { amount, type: typeof amount });
-        throw new HttpsError("invalid-argument", `Invalid amount: ${amount}`);
-      }
 
       if (!orderId || typeof orderId !== "string") {
         logger.error("Invalid orderId", { orderId, type: typeof orderId });
@@ -125,6 +210,16 @@ exports.createPaymentIntent = onCall(
         throw new HttpsError("invalid-argument", "Invalid customerName");
       }
 
+      // Never trust a client-supplied amount — recompute it from
+      // authoritative meal prices, same validation createOrder also runs.
+      const safeTip = typeof tipAmount === "number" && tipAmount >= 0 ? tipAmount : 0;
+      const { subtotal, deliveryFee, tax, validatedItems } = await computeValidatedTotals({
+        items,
+        orderType,
+        distanceMiles,
+      });
+      const total = subtotal + deliveryFee + tax + safeTip;
+
       logger.log("🔧 Initializing Stripe client");
       const stripeClient = stripe(stripeSecretKey);
 
@@ -133,15 +228,18 @@ exports.createPaymentIntent = onCall(
         throw new HttpsError("internal", "Stripe initialization failed");
       }
 
-      const amountInCents = Math.round(amount * 100);
+      const amountInCents = Math.round(total * 100);
       logger.log("Amount processing", {
-        originalAmount: amount,
+        subtotal,
+        deliveryFee,
+        tax,
+        tip: safeTip,
+        total,
         amountInCents,
-        isValidAmount: amountInCents >= 50,
       });
 
       if (amountInCents < 50) {
-        throw new HttpsError("invalid-argument", `Minimum amount is $0.50, got $${amount}`);
+        throw new HttpsError("invalid-argument", `Minimum amount is $0.50, got $${total}`);
       }
 
       logger.log("Creating Stripe PaymentIntent");
@@ -180,6 +278,12 @@ exports.createPaymentIntent = onCall(
         currency: paymentIntent.currency,
         status: paymentIntent.status,
         orderId: orderId,
+        subtotal,
+        deliveryFee,
+        tax,
+        tip: safeTip,
+        total,
+        items: validatedItems,
       };
 
       logger.log("Returning response", {
@@ -202,7 +306,6 @@ exports.createPaymentIntent = onCall(
         stripeErrorType: error?.type?.toString?.() ?? 'none',
         stripeErrorCode: error?.code?.toString?.() ?? 'none',
         requestData: {
-          amount: request.data?.amount,
           orderId: request.data?.orderId,
           customerName: request.data?.customerName,
         },
@@ -332,11 +435,12 @@ exports.createOrder = onCall(
     memory: "1GiB",
     maxInstances: 100,
     concurrency: 80,
+    secrets: [SUPABASE_SERVICE_ROLE_KEY],
   },
   async (request) => {
     const { data } = request;
-    
-    logger.info("🚀 Creating order", { 
+
+    logger.info("🚀 Creating order", {
       orderNumber: data?.orderNumber,
       userId: data?.userId,
       authUid: request.auth?.uid,
@@ -345,14 +449,14 @@ exports.createOrder = onCall(
       hasDelivery: !!data?.delivery,
       hasPayment: !!data?.payment
     });
-    
+
     if (!request.auth) {
       logger.error("Unauthenticated request");
       throw new HttpsError("unauthenticated", "User must be authenticated");
     }
 
     if (!data.orderNumber || !data.userId || !data.items || !data.pricing || !data.delivery || !data.payment || !data.status) {
-      logger.error("Missing required fields", { 
+      logger.error("Missing required fields", {
         orderNumber: !!data.orderNumber,
         userId: !!data.userId,
         items: !!data.items,
@@ -369,6 +473,30 @@ exports.createOrder = onCall(
       throw new HttpsError("permission-denied", "User ID does not match authenticated user");
     }
 
+    // Never trust data.items/data.pricing from the client — re-derive both
+    // from authoritative meal prices, same validation createPaymentIntent
+    // already ran. This is what actually gets fulfilled, so it has to match
+    // what was actually charged, not whatever the client claims.
+    const orderType = data.orderType === "delivery" ? "delivery" : "pickup";
+    const distanceMiles = typeof data.distanceMiles === "number" ? data.distanceMiles : 0;
+    const { subtotal, deliveryFee, tax, validatedItems } = await computeValidatedTotals({
+      items: data.items,
+      orderType,
+      distanceMiles,
+    });
+    const tip = typeof data.pricing?.tip === "number" && data.pricing.tip >= 0 ? data.pricing.tip : 0;
+    const total = subtotal + deliveryFee + tax + tip;
+    const validatedPricing = { subtotal, tax, tip, deliveryFee: deliveryFee, total };
+
+    // Keep display-only client fields (image, extras, instructions) but
+    // overwrite id/name/price with the server-validated values.
+    const mergedItems = data.items.map((clientItem, idx) => ({
+      ...clientItem,
+      id: validatedItems[idx].id,
+      name: validatedItems[idx].name,
+      price: validatedItems[idx].price,
+    }));
+
     const db = admin.firestore();
     const batch = db.batch();
 
@@ -378,8 +506,8 @@ exports.createOrder = onCall(
       batch.set(orderRef, {
         orderNumber: data.orderNumber,
         userId: data.userId,
-        items: data.items,
-        pricing: data.pricing,
+        items: mergedItems,
+        pricing: validatedPricing,
         delivery: data.delivery,
         payment: data.payment,
         status: "received", // Always set to 'received' for new orders
@@ -396,11 +524,11 @@ exports.createOrder = onCall(
         orderId: data.orderNumber,
         orderNumber: data.orderNumber,
         userId: data.userId,
-        total: data.pricing.total,
+        total: validatedPricing.total,
         status: "received", // Always set to 'received' for new orders
         deliveryStatus: "pending", // Client-side expects deliveryStatus
-        items: data.items,
-        pricing: data.pricing,
+        items: mergedItems,
+        pricing: validatedPricing,
         delivery: data.delivery,
         payment: data.payment,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -408,10 +536,10 @@ exports.createOrder = onCall(
       });
 
       // Get customer name from payment or user data
-      const customerName = data.payment?.customerName || 
-                          data.customerName || 
-                          request.auth.token?.name || 
-                          request.auth.token?.email?.split('@')[0] || 
+      const customerName = data.payment?.customerName ||
+                          data.customerName ||
+                          request.auth.token?.name ||
+                          request.auth.token?.email?.split('@')[0] ||
                           "Customer";
 
       // Create order confirmation notification
@@ -421,8 +549,8 @@ exports.createOrder = onCall(
         title: "Order Confirmed",
         body: `Thank you, ${customerName}! Your order #${data.orderNumber} has been confirmed.`,
         orderId: data.orderNumber,
-        items: data.items.map(item => `${item.name} x${item.quantity}`).join(", ") || "N/A",
-        totalAmount: data.pricing.total.toFixed(2),
+        items: mergedItems.map(item => `${item.name} x${item.quantity}`).join(", ") || "N/A",
+        totalAmount: validatedPricing.total.toFixed(2),
         customerName: customerName,
         estimatedDelivery: data.delivery.option === "Delivery" ? "30-45 minutes" : "N/A",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -431,7 +559,59 @@ exports.createOrder = onCall(
       logger.info("💾 Committing order batch", { orderId: data.orderNumber });
       await batch.commit();
       logger.info("Order batch committed successfully", { orderId: data.orderNumber });
-      
+
+      // Dual-write to Supabase (forward migration target) — best-effort, a
+      // Supabase hiccup should never block the order since Firestore above
+      // is the source every existing mobile screen still reads from.
+      try {
+        const supabaseServiceRole = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.value());
+        const { data: profile } = await supabaseServiceRole
+          .from("profiles")
+          .select("id")
+          .eq("email", request.auth.token?.email || "")
+          .single();
+
+        if (profile) {
+          const { data: order, error: orderError } = await supabaseServiceRole
+            .from("orders")
+            .insert({
+              user_id: profile.id,
+              status: "confirmed",
+              order_number: data.orderNumber,
+              order_type: orderType,
+              payment_method: "card",
+              delivery_address: data.delivery?.address?.address || null,
+              subtotal,
+              delivery_fee: deliveryFee,
+              tax,
+              total: validatedPricing.total,
+            })
+            .select()
+            .single();
+
+          if (orderError || !order) {
+            logger.warn("Supabase order dual-write failed", { error: orderError?.message });
+          } else {
+            const { error: itemsError } = await supabaseServiceRole.from("order_items").insert(
+              validatedItems.map((item) => ({
+                order_id: order.id,
+                meal_id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                unit_price: item.price,
+              }))
+            );
+            if (itemsError) {
+              logger.warn("Supabase order_items dual-write failed", { error: itemsError.message });
+            }
+          }
+        } else {
+          logger.warn("No Supabase profile found for dual-write", { email: request.auth.token?.email });
+        }
+      } catch (supabaseError) {
+        logger.warn("Supabase dual-write failed", { error: supabaseError.message });
+      }
+
       // Send FCM notification
       try {
         const userDoc = await db.collection('users').doc(data.userId).get();
@@ -449,23 +629,23 @@ exports.createOrder = onCall(
             },
             token: userDoc.data().fcmToken
           };
-          
+
           await messaging.send(message);
           logger.info("Order confirmation FCM sent", { orderId: data.orderNumber });
         } else {
           logger.info("No FCM token found for user", { userId: data.userId });
         }
       } catch (fcmError) {
-        logger.warn("FCM notification failed but order saved", { 
+        logger.warn("FCM notification failed but order saved", {
           orderId: data.orderNumber,
-          error: fcmError.message 
+          error: fcmError.message
         });
       }
 
       logger.info("Order and notification created", { orderId: data.orderNumber, userId: data.userId });
-      return { success: true, orderId: data.orderNumber };
+      return { success: true, orderId: data.orderNumber, pricing: validatedPricing, items: mergedItems };
     } catch (error) {
-      logger.error("Error saving order", { 
+      logger.error("Error saving order", {
         error: error.message,
         stack: error.stack,
         orderId: data?.orderNumber,
@@ -1628,21 +1808,42 @@ exports.createScheduledOrder = onCall({
   }
 
   const data = request.data;
-  
+
   if (data.userId !== request.auth.uid) {
     throw new HttpsError('permission-denied', 'User ID mismatch');
   }
 
+  // Never trust data.items/data.pricing — same validation createOrder runs.
+  const orderType = data.orderType === "delivery" ? "delivery" : "pickup";
+  const distanceMiles = typeof data.distanceMiles === "number" ? data.distanceMiles : 0;
+  const { subtotal, deliveryFee, tax, validatedItems } = await computeValidatedTotals({
+    items: data.items,
+    orderType,
+    distanceMiles,
+  });
+  const tip = typeof data.pricing?.tip === "number" && data.pricing.tip >= 0 ? data.pricing.tip : 0;
+  const total = subtotal + deliveryFee + tax + tip;
+  const validatedPricing = { subtotal, tax, tip, deliveryFee, total };
+
+  const mergedItems = data.items.map((clientItem, idx) => ({
+    ...clientItem,
+    id: validatedItems[idx].id,
+    name: validatedItems[idx].name,
+    price: validatedItems[idx].price,
+  }));
+
   try {
     const db = admin.firestore();
-    
+
     await db.collection('scheduled_orders').doc(data.orderNumber).set({
       ...data,
+      items: mergedItems,
+      pricing: validatedPricing,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    return { success: true, orderId: data.orderNumber };
+    return { success: true, orderId: data.orderNumber, pricing: validatedPricing, items: mergedItems };
   } catch (error) {
     logger.error('Scheduled order error', { error: error.message });
     throw new HttpsError('internal', 'Failed to create scheduled order');

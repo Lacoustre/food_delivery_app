@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 
@@ -12,11 +12,41 @@ class ReviewsPage extends StatefulWidget {
 
 class _ReviewsPageState extends State<ReviewsPage> {
   String _selectedFilter = 'all';
+  List<Map<String, dynamic>>? _reviews;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    try {
+      var query = Supabase.instance.client
+          .from('order_reviews')
+          .select('*, profiles!user_id(name, email), orders(order_items(name))');
+
+      if (_selectedFilter != 'all') {
+        final minRating = double.tryParse(_selectedFilter) ?? 0.0;
+        query = query.gte('rating', minRating);
+      }
+
+      final rows = await query.order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _reviews = List<Map<String, dynamic>>.from(rows);
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final query = _getReviewsQuery();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Customer Reviews'),
@@ -42,71 +72,65 @@ class _ReviewsPageState extends State<ReviewsPage> {
 
           // List + summary
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: query.snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error loading reviews: ${snapshot.error}'),
-                  );
-                }
-
-                final reviews = snapshot.data?.docs ?? [];
-
-                if (reviews.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.rate_review_outlined,
-                          size: 80,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Reviews Yet',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Be the first to leave a review!',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Summary (from currently shown docs)
-                final avg = _averageRating(reviews);
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: reviews.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return _buildSummaryCard(avg, reviews.length);
-                    }
-                    final review =
-                        reviews[index - 1].data() as Map<String, dynamic>;
-                    return _buildReviewCard(review);
-                  },
-                );
-              },
-            ),
+            child: _buildReviewsList(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildReviewsList() {
+    if (_error != null) {
+      return Center(child: Text('Error loading reviews: $_error'));
+    }
+    if (_reviews == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final reviews = _reviews!;
+
+    if (reviews.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.rate_review_outlined,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Reviews Yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Be the first to leave a review!',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final avg = _averageRating(reviews);
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: reviews.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return _buildSummaryCard(avg, reviews.length);
+        }
+        return _buildReviewCard(reviews[index - 1]);
+      },
     );
   }
 
@@ -115,7 +139,13 @@ class _ReviewsPageState extends State<ReviewsPage> {
   Widget _buildFilterChip(String value, String label) {
     final isSelected = _selectedFilter == value;
     return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = value),
+      onTap: () {
+        setState(() {
+          _selectedFilter = value;
+          _reviews = null;
+        });
+        _fetchReviews();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
@@ -164,15 +194,18 @@ class _ReviewsPageState extends State<ReviewsPage> {
 
   Widget _buildReviewCard(Map<String, dynamic> review) {
     final rating = _toDouble(review['rating']);
-    final reviewText = (review['review'] ?? '').toString();
-    final timestamp = review['timestamp'] as Timestamp?;
-    final customerName = (review['customerName'] ?? 'Anonymous')
+    final reviewText = (review['comment'] ?? '').toString();
+    final createdAt = review['created_at'] as String?;
+    final profile = review['profiles'] as Map<String, dynamic>?;
+    final customerName = (profile?['name'] ??
+            (profile?['email'] as String?)?.split('@').first ??
+            'Anonymous')
         .toString()
         .trim();
     final mealLabel = _mealLabel(review);
 
-    final dateStr = timestamp != null
-        ? DateFormat('MMM d, yyyy').format(timestamp.toDate())
+    final dateStr = createdAt != null
+        ? DateFormat('MMM d, yyyy').format(DateTime.parse(createdAt))
         : '';
 
     final avatarInitial = customerName.isNotEmpty
@@ -265,7 +298,7 @@ class _ReviewsPageState extends State<ReviewsPage> {
             ],
 
             // Admin Reply Section
-            if (review['adminReply'] != null && review['adminReply'].toString().isNotEmpty) ...[
+            if (review['admin_reply'] != null && review['admin_reply'].toString().isNotEmpty) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -294,10 +327,10 @@ class _ReviewsPageState extends State<ReviewsPage> {
                           ),
                         ),
                         const Spacer(),
-                        if (review['adminReplyDate'] != null)
+                        if (review['admin_reply_date'] != null)
                           Text(
                             DateFormat('MMM d').format(
-                              (review['adminReplyDate'] as Timestamp).toDate(),
+                              DateTime.parse(review['admin_reply_date'] as String),
                             ),
                             style: TextStyle(
                               color: Colors.orange.shade600,
@@ -308,7 +341,7 @@ class _ReviewsPageState extends State<ReviewsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      review['adminReply'].toString(),
+                      review['admin_reply'].toString(),
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontSize: 13,
@@ -342,32 +375,16 @@ class _ReviewsPageState extends State<ReviewsPage> {
     );
   }
 
-  // ---------- Query / Data helpers ----------
+  // ---------- Data helpers ----------
 
-  Query _getReviewsQuery() {
-    final col = FirebaseFirestore.instance.collection('order_reviews');
-
-    // To avoid composite indexes:
-    // - "All": sort by timestamp desc
-    // - With filter: inequality on rating + orderBy rating desc
-    if (_selectedFilter == 'all') {
-      return col.orderBy('timestamp', descending: true);
-    } else {
-      final minRating = double.tryParse(_selectedFilter) ?? 0.0;
-      return col
-          .where('rating', isGreaterThanOrEqualTo: minRating)
-          .orderBy('rating', descending: true);
-    }
-  }
-
-  double _averageRating(List<QueryDocumentSnapshot> docs) {
-    if (docs.isEmpty) return 0.0;
+  double _averageRating(List<Map<String, dynamic>> reviews) {
+    if (reviews.isEmpty) return 0.0;
     double sum = 0;
     var count = 0;
-    for (final d in docs) {
-      final r = _toDouble((d.data() as Map<String, dynamic>)['rating']);
-      if (r > 0) {
-        sum += r;
+    for (final r in reviews) {
+      final rating = _toDouble(r['rating']);
+      if (rating > 0) {
+        sum += rating;
         count++;
       }
     }
@@ -380,13 +397,10 @@ class _ReviewsPageState extends State<ReviewsPage> {
   }
 
   String _mealLabel(Map<String, dynamic> review) {
-    // Prefer explicit mealName if present
-    final mealName = (review['mealName'] ?? '').toString().trim();
-    if (mealName.isNotEmpty) return mealName;
-
-    // Otherwise, derive from items array: [{name, id, price}, ...]
+    // Derived via the order_id -> orders -> order_items join.
+    final order = review['orders'] as Map<String, dynamic>?;
     final items =
-        (review['items'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+        (order?['order_items'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
     final names = items
         .map((e) => (e['name'] ?? '').toString())
         .where((s) => s.isNotEmpty)

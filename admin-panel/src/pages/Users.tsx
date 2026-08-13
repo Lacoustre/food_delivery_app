@@ -1,79 +1,81 @@
-import { useState } from "react";
-import { useCollection } from "react-firebase-hooks/firestore";
-import { collection, query, orderBy } from "firebase/firestore";
-import { db } from "../firebase";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
 
 interface User {
   id: string;
-  name?: string;
-  displayName?: string;
-  email?: string;
-  phoneNumber?: string;
-  phone?: string;
-  createdAt?: { seconds: number };
-  active?: boolean;
-  role?: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
 }
 
 interface Order {
   id: string;
-  userId?: string;
+  user_id: string;
   status: string;
-  deliveryStatus?: string;
-  createdAt?: { seconds: number };
-  pricing?: { total?: number };
-  total?: number;
+  created_at: string;
+  total: number;
 }
 
 export default function Users() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
-  const [usersSnapshot, usersLoading, usersError] = useCollection(
-    query(collection(db, "users"), orderBy("createdAt", "desc"))
-  );
-  
-  const [ordersSnapshot, ordersLoading] = useCollection(
-    query(collection(db, "orders"), orderBy("createdAt", "desc"))
-  );
+  const [users, setUsers] = useState<User[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const users: User[] = usersSnapshot?.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as User[] || [];
-  
-  const orders: Order[] = ordersSnapshot?.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Order[] || [];
+  useEffect(() => {
+    const fetchData = async () => {
+      const [usersRes, ordersRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, name, email, phone, created_at")
+          .eq("role", "customer")
+          .order("created_at", { ascending: false }),
+        supabase.from("orders").select("id, user_id, status, created_at, total")
+      ]);
+
+      if (usersRes.error) {
+        setError(new Error(usersRes.error.message));
+      } else if (ordersRes.error) {
+        setError(new Error(ordersRes.error.message));
+      } else {
+        setError(null);
+        setUsers(usersRes.data as User[]);
+        setOrders(ordersRes.data as Order[]);
+      }
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getUserOrders = (userId: string) => {
-    return orders.filter(order => order.userId === userId);
+    return orders
+      .filter((order) => order.user_id === userId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   };
 
   const getUserStats = (userId: string) => {
     const userOrders = getUserOrders(userId);
-    const completedOrders = userOrders.filter(order => {
-      const status = order.deliveryStatus || order.status;
-      return status === 'delivered' || status === 'picked up' || status === 'completed';
-    });
-    const totalSpent = completedOrders.reduce((sum, order) => 
-      sum + (order.pricing?.total || order.total || 0), 0
+    const completedOrders = userOrders.filter(
+      (order) => order.status === "delivered" || order.status === "picked up" || order.status === "completed"
     );
+    const totalSpent = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
     const avgOrderValue = completedOrders.length > 0 ? totalSpent / completedOrders.length : 0;
-    
+
     return {
       totalOrders: userOrders.length,
       completedOrders: completedOrders.length,
       totalSpent,
       avgOrderValue,
-      lastOrderDate: userOrders[0]?.createdAt?.seconds ? 
-        moment(userOrders[0].createdAt.seconds * 1000).format("MMM D, YYYY") : null
+      lastOrderDate: userOrders[0]?.created_at ? moment(userOrders[0].created_at).format("MMM D, YYYY") : null
     };
   };
 
-  if (usersLoading || ordersLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-[70vh]">
         <Loader />
@@ -81,17 +83,12 @@ export default function Users() {
     );
   }
 
-  if (usersError) {
-    // Silently handle permission errors
-    if (usersError.toString().includes('Missing or insufficient permissions')) {
-      // Continue with empty state
-    } else {
-      return (
-        <div className="text-center text-red-900 font-semibold bg-red-100 p-4 rounded-xl max-w-6xl mx-auto">
-          Failed to load users: {usersError.message}
-        </div>
-      );
-    }
+  if (error) {
+    return (
+      <div className="text-center text-red-900 font-semibold bg-red-100 p-4 rounded-xl max-w-6xl mx-auto">
+        Failed to load users: {error.message}
+      </div>
+    );
   }
 
   return (
@@ -135,11 +132,11 @@ export default function Users() {
                         <div className="flex items-center">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                             <span className="text-blue-600 font-medium">
-                              {(user.name || user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                              {(user.name || user.email || 'U').charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <div className="font-medium">{user.name || user.displayName || (user.email ? user.email.split('@')[0] : 'No name')}</div>
+                            <div className="font-medium">{user.name || (user.email ? user.email.split('@')[0] : 'No name')}</div>
                             <div className="text-gray-500 text-xs">ID: {user.id.substring(0, 8)}...</div>
                           </div>
                         </div>
@@ -147,7 +144,7 @@ export default function Users() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
                           <div>{user.email || '—'}</div>
-                          <div className="text-gray-500 text-xs">{user.phoneNumber || user.phone || '—'}</div>
+                          <div className="text-gray-500 text-xs">{user.phone || '—'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -191,12 +188,12 @@ export default function Users() {
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-blue-600 font-bold text-xl">
-                      {(selectedUser.name || selectedUser.displayName || selectedUser.email || 'U').charAt(0).toUpperCase()}
+                      {(selectedUser.name || selectedUser.email || 'U').charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">
-                      {selectedUser.name || selectedUser.displayName || (selectedUser.email ? selectedUser.email.split('@')[0] : 'Customer')}
+                      {selectedUser.name || (selectedUser.email ? selectedUser.email.split('@')[0] : 'Customer')}
                     </h2>
                     <p className="text-gray-600">Customer Profile</p>
                   </div>
@@ -219,9 +216,9 @@ export default function Users() {
                   <h3 className="font-semibold text-gray-900 mb-3">Contact Information</h3>
                   <div className="space-y-2 text-sm">
                     <div><span className="text-gray-600">Email:</span> {selectedUser.email || '—'}</div>
-                    <div><span className="text-gray-600">Phone:</span> {selectedUser.phoneNumber || selectedUser.phone || '—'}</div>
+                    <div><span className="text-gray-600">Phone:</span> {selectedUser.phone || '—'}</div>
                     <div><span className="text-gray-600">Customer ID:</span> {selectedUser.id}</div>
-                    <div><span className="text-gray-600">Joined:</span> {selectedUser.createdAt?.seconds ? moment(selectedUser.createdAt.seconds * 1000).format("MMMM D, YYYY") : '—'}</div>
+                    <div><span className="text-gray-600">Joined:</span> {selectedUser.created_at ? moment(selectedUser.created_at).format("MMMM D, YYYY") : '—'}</div>
                   </div>
                 </div>
                 
@@ -258,23 +255,17 @@ export default function Users() {
                             <div>
                               <p className="font-medium text-gray-900">Order #{order.id.substring(0, 8)}</p>
                               <p className="text-sm text-gray-600">
-                                {order.createdAt?.seconds ? moment(order.createdAt.seconds * 1000).format("MMM D, YYYY h:mm A") : '—'}
+                                {order.created_at ? moment(order.created_at).format("MMM D, YYYY h:mm A") : '—'}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium text-gray-900">${(order.pricing?.total || order.total || 0).toFixed(2)}</p>
+                              <p className="font-medium text-gray-900">${(order.total || 0).toFixed(2)}</p>
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                (() => {
-                                  const status = order.deliveryStatus || order.status;
-                                  return status === 'delivered' || status === 'picked up' || status === 'completed' ? 'bg-green-100 text-green-800' :
-                                         status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                         'bg-yellow-100 text-yellow-800';
-                                })()
+                                order.status === 'delivered' || order.status === 'picked up' || order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
                               }`}>
-                                {(() => {
-                                  const status = order.deliveryStatus || order.status;
-                                  return status.charAt(0).toUpperCase() + status.slice(1);
-                                })()}
+                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                               </span>
                             </div>
                           </div>

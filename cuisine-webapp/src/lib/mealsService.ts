@@ -1,78 +1,78 @@
-import { collection, getDocs, doc, getDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore'
-import { db } from './firebase'
+import { supabase } from './supabase'
 
 export interface Meal {
   id: string
   name: string
   price: number
   category: string
-  rating?: number
   imageUrl: string
   description?: string
   available: boolean
   active?: boolean
-  ingredients?: string[]
-  spiceLevel?: 'mild' | 'medium' | 'hot'
-  preparationTime?: number
+}
+
+function toMeal(row: {
+  id: string
+  name: string
+  price: number
+  category: string | null
+  image_url: string | null
+  description: string | null
+  available: boolean
+  active: boolean
+}): Meal {
+  return {
+    id: row.id,
+    name: row.name,
+    price: row.price,
+    category: row.category || 'Main Dishes',
+    imageUrl: row.image_url || '',
+    description: row.description || undefined,
+    available: row.available,
+    active: row.active
+  }
 }
 
 export const mealsService = {
   async getAllMeals(): Promise<Meal[]> {
-    try {
-      const mealsCollection = collection(db, 'meals')
-      const mealsSnapshot = await getDocs(mealsCollection)
-      return mealsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Meal))
-    } catch (error) {
+    const { data, error } = await supabase.from('meals').select('*')
+    if (error) {
       console.error('Error fetching meals:', error)
       return []
     }
+    return (data || []).map(toMeal)
   },
 
   // Real-time listener for meals
   onMealsChange(callback: (meals: Meal[]) => void): () => void {
-    const mealsCollection = collection(db, 'meals')
-    return onSnapshot(mealsCollection, (snapshot) => {
-      const meals = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Meal))
-      callback(meals)
-    }, (error) => {
-      console.error('Error listening to meals:', error)
-      callback([])
-    })
+    const fetchAndEmit = async () => {
+      const { data, error } = await supabase.from('meals').select('*')
+      if (error) {
+        console.error('Error listening to meals:', error)
+        callback([])
+        return
+      }
+      callback((data || []).map(toMeal))
+    }
+
+    fetchAndEmit()
+
+    const channel = supabase
+      .channel('meals-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meals' }, fetchAndEmit)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   },
 
   async getMealsByCategory(category: string): Promise<Meal[]> {
-    try {
-      const mealsCollection = collection(db, 'meals')
-      const q = query(mealsCollection, where('category', '==', category))
-      const mealsSnapshot = await getDocs(q)
-      return mealsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Meal))
-    } catch (error) {
+    const { data, error } = await supabase.from('meals').select('*').eq('category', category)
+    if (error) {
       console.error('Error fetching meals by category:', error)
       return []
     }
-  },
-
-  async getFeaturedMeals(): Promise<Meal[]> {
-    try {
-      const mealsCollection = collection(db, 'meals')
-      const q = query(mealsCollection, where('rating', '>=', 4.5), orderBy('rating', 'desc'))
-      const mealsSnapshot = await getDocs(q)
-      return mealsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Meal))
-    } catch (error) {
-      console.error('Error fetching featured meals:', error)
-      return []
-    }
+    return (data || []).map(toMeal)
   }
 }

@@ -1,107 +1,204 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - users can read/write their own data
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    // IMPORTANT: only an existing admin doc can grant admin — a user can
+    // never write their own admins/{uid} doc into existence (see the
+    // `admins` rules below). The very first admin must be created directly
+    // in the Firebase Console / via the Admin SDK, bypassing these rules.
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // User subcollections (orders, notifications, addresses, etc.)
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isAdmin();
+
+      // Subcollections: addresses, cart, notifications, complaints, etc.
       match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isAdmin();
       }
     }
-    
-    // Favorites - users can read/write their own favorites
+
+    // ── Favorites ────────────────────────────────────────────────────────
     match /favorites/{favoriteId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && 
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+    }
+
+    // ── Orders ───────────────────────────────────────────────────────────
+    match /orders/{orderId} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId ||
+         request.auth.uid == resource.data.driverId ||
+         isAdmin());
+      // The order must be created by (and for) the requesting user — an
+      // authenticated user can no longer create an order impersonating
+      // someone else's userId.
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId ||
+         request.auth.uid == resource.data.driverId ||
+         isAdmin());
+    }
+
+    // ── Scheduled orders ─────────────────────────────────────────────────
+    match /scheduled_orders/{orderId} {
+      allow read, update: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn() &&
         request.auth.uid == request.resource.data.userId;
     }
-    
-    // Orders - users can read their own orders, authenticated users can read for analytics
-    match /orders/{orderId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.uid == resource.data.driverId ||
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-    }
-    
-    // Scheduled orders - users can read/write their own
-    match /scheduled_orders/{orderId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.uid == request.resource.data.userId ||
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-      allow create: if request.auth != null;
-    }
-    
-    // Meals - public read, admin write
+
+    // ── Meals — public read, admin-only write ───────────────────────────
     match /meals/{mealId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
-    
-    // Settings - public read for restaurant status
+
+    // ── Settings — public read (restaurant status), admin-only write ───
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
-    
-    // Reviews - public read, authenticated write
+
+    // ── Promotions — public read (checkout needs to validate codes),
+    // admin-only write. Note: usedCount is never actually incremented
+    // anywhere in the app today, so usageLimit doesn't really enforce
+    // anything yet — a separate pre-existing gap, not fixed here.
+    match /promotions/{promoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Reviews ──────────────────────────────────────────────────────────
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || isAdmin());
     }
-    
+
     match /order_reviews/{reviewId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || isAdmin());
     }
-    
-    // Drivers - authenticated access
+
+    // ── Drivers ──────────────────────────────────────────────────────────
     match /drivers/{driverId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        (request.auth.uid == driverId || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-      allow create: if request.auth != null;
-      
-      // Driver subcollections
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        (request.auth.uid == driverId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == driverId;
+
       match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == driverId;
+        allow read, write: if isSignedIn() &&
+          (request.auth.uid == driverId || isAdmin());
       }
     }
-    
-    // Support - authenticated access
+
+    // ── Live driver locations (doc id == driverId) ──────────────────────
+    // Note: any signed-in user can currently read any driver's live
+    // location (needed so a customer can watch their own delivery, but the
+    // schema has no per-customer scoping). Tightening this properly means
+    // moving location onto the order doc / a subcollection scoped by order
+    // — worth doing as a follow-up, not a blocker.
+    match /driver_locations/{driverId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == driverId;
+    }
+
+    // ── Delivery photos ──────────────────────────────────────────────────
+    match /delivery_photos/{photoId} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == resource.data.driverId ||
+         request.auth.uid == get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.userId ||
+         isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.driverId;
+    }
+
+    // ── Driver <-> customer messages ────────────────────────────────────
+    match /messages/{messageId} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == resource.data.senderId ||
+         request.auth.uid == resource.data.receiverId ||
+         isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.senderId;
+      // Marking as read: only the receiving party can flip `read`.
+      allow update: if isSignedIn() && request.auth.uid == resource.data.receiverId;
+    }
+
+    match /order_messages/{messageId} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == resource.data.senderId ||
+         request.auth.uid == resource.data.driverId ||
+         isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.senderId;
+      allow update: if isSignedIn() &&
+        (request.auth.uid == resource.data.senderId ||
+         request.auth.uid == resource.data.driverId ||
+         isAdmin());
+    }
+
+    // ── Support chat ─────────────────────────────────────────────────────
     match /support_chats/{chatId} {
-      allow read, write: if request.auth != null;
+      allow read, update: if isSignedIn() &&
+        (request.auth.uid == resource.data.customerId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.customerId;
     }
-    
+
     match /support_messages/{messageId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn() &&
+        (request.auth.uid == get(/databases/$(database)/documents/support_chats/$(resource.data.chatId)).data.customerId ||
+         isAdmin());
+      // senderId is either the customer's own uid, or the literal string
+      // "admin" — but only an actual admin may write a message claiming
+      // to be "admin".
+      allow create: if isSignedIn() &&
+        ((request.resource.data.senderId == request.auth.uid) ||
+         (request.resource.data.senderId == 'admin' && isAdmin()));
     }
-    
-    // Admin collections
+
+    // ── Admin collections ────────────────────────────────────────────────
+    // A user may only ever READ their own admins/{uid} doc (to check "am I
+    // an admin"), or read all of them if they're already an admin. Nobody
+    // can write here from the client at all — grant admin status via the
+    // Firebase Console / Admin SDK only. This is what closes the
+    // self-escalation hole.
     match /admins/{adminId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow write: if false;
     }
-    
+
     match /admin_notifications/{notificationId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
-    
-    // Complaints - users can create, admins can read/write
-    match /users/{userId}/complaints/{complaintId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == userId || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-      allow create: if request.auth != null && request.auth.uid == userId;
+
+    // ── Phone / email linking (driver app) ──────────────────────────────
+    // Used for uniqueness checks during driver signup/login. Read access
+    // is intentionally broader (any signed-in user can check whether a
+    // phone/email is already claimed), but a record can only ever be
+    // written by the uid it's being linked to.
+    match /phone_index/{phone} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
+    }
+
+    match /email_phone_links/{email} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
     }
   }
 }

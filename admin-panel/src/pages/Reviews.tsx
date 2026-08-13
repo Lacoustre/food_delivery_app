@@ -1,27 +1,30 @@
-import { useState, useEffect } from "react";
-import { useCollectionData, useCollection } from "react-firebase-hooks/firestore";
-import { collection, query, orderBy, limit, doc, updateDoc, deleteDoc, Timestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "../lib/supabase";
 import { Star, MessageSquare, Calendar, User, Reply, Send, Trash2, RotateCcw, Search, Filter, TrendingUp, Award, AlertTriangle, Download } from "lucide-react";
+import { toast } from "react-toastify";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import moment from "moment";
 
+interface ProfileRow {
+  name: string | null;
+  email: string | null;
+}
+
 interface Review {
   id: string;
-  userId: string;
-  customerName?: string;
-  orderId: string;
+  user_id: string;
+  order_id: string;
   rating: number;
-  review: string;
-  createdAt: any;
-  adminReply?: string;
-  adminReplyDate?: any;
+  comment: string | null;
+  created_at: string;
+  admin_reply: string | null;
+  admin_reply_date: string | null;
+  profiles: ProfileRow | ProfileRow[] | null;
 }
 
 export default function Reviews() {
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
-  const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,55 +35,55 @@ export default function Reviews() {
   const [sortBy, setSortBy] = useState("newest");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
-  
-  const [reviewsSnapshot, loading, error] = useCollection(
-    query(collection(db, "order_reviews"), orderBy("createdAt", "desc"), limit(100))
-  );
-  
-  const reviews = reviewsSnapshot?.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  })) as Review[] || [];
-  
-  const [usersSnapshot] = useCollection(
-    query(collection(db, "users"))
-  );
-  
-  useEffect(() => {
-    if (usersSnapshot?.docs) {
-      const nameMap: { [key: string]: string } = {};
-      usersSnapshot.docs.forEach((doc) => {
-        const userData = doc.data();
-        const userId = doc.id;
-        nameMap[userId] = userData.name || userData.displayName || userData.email?.split('@')[0] || 'Anonymous Customer';
-      });
-      setUserNames(nameMap);
 
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchReviews = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("order_reviews")
+      .select("*, profiles!user_id(name, email)")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      setError(new Error(error.message));
+    } else {
+      setError(null);
+      setReviews(data as Review[]);
     }
-  }, [usersSnapshot]);
-  
+    setLoading(false);
+  }, []);
 
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
-  const filteredReviews = reviews?.filter((review: Review) => {
-    // Rating filter
+  const getCustomerName = (review: Review) => {
+    const profile = Array.isArray(review.profiles) ? review.profiles[0] : review.profiles;
+    if (profile?.name) return profile.name;
+    if (profile?.email) return profile.email.split('@')[0];
+    return `Customer ${review.user_id?.slice(-4) || 'Unknown'}`;
+  };
+
+  const filteredReviews = reviews.filter((review) => {
     if (selectedRating !== null && Math.round(review.rating || 0) !== selectedRating) {
       return false;
     }
-    
-    // Search filter
+
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      const customerName = (review.customerName || userNames[review.userId] || '').toLowerCase();
-      const reviewText = (review.review || '').toLowerCase();
-      const orderId = (review.orderId || '').toLowerCase();
+      const customerName = getCustomerName(review).toLowerCase();
+      const reviewText = (review.comment || '').toLowerCase();
+      const orderId = (review.order_id || '').toLowerCase();
       if (!customerName.includes(searchLower) && !reviewText.includes(searchLower) && !orderId.includes(searchLower)) {
         return false;
       }
     }
-    
-    // Date filter
-    if (dateFilter !== "all" && review.createdAt?.seconds) {
-      const reviewDate = moment(review.createdAt.seconds * 1000);
+
+    if (dateFilter !== "all" && review.created_at) {
+      const reviewDate = moment(review.created_at);
       switch (dateFilter) {
         case "today":
           if (!reviewDate.isSame(moment(), "day")) return false;
@@ -93,40 +96,45 @@ export default function Reviews() {
           break;
       }
     }
-    
+
     return true;
   }).sort((a, b) => {
     switch (sortBy) {
       case "oldest":
-        return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       case "highest":
         return (b.rating || 0) - (a.rating || 0);
       case "lowest":
         return (a.rating || 0) - (b.rating || 0);
       default: // newest
-        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     }
-  }) || [];
+  });
 
-  const averageRating = reviews?.length 
-    ? (reviews.reduce((sum: number, review: Review) => sum + (review.rating || 0), 0) / reviews.length).toFixed(1)
+  const averageRating = reviews.length
+    ? (reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length).toFixed(1)
     : "0.0";
 
   const ratingCounts = [5, 4, 3, 2, 1].map(rating => ({
     rating,
-    count: reviews?.filter((r: Review) => Math.round(r.rating || 0) === rating).length || 0
+    count: reviews.filter((r) => Math.round(r.rating || 0) === rating).length
   }));
 
-  // Analytics calculations
   const analytics = {
-    totalReviews: reviews?.length || 0,
+    totalReviews: reviews.length,
     averageRating: parseFloat(averageRating),
-    positiveReviews: reviews?.filter(r => (r.rating || 0) >= 4).length || 0,
-    negativeReviews: reviews?.filter(r => (r.rating || 0) <= 2).length || 0,
-    repliedReviews: reviews?.filter(r => r.adminReply).length || 0,
-    recentReviews: reviews?.filter(r => 
-      r.createdAt?.seconds && moment(r.createdAt.seconds * 1000).isAfter(moment().subtract(7, 'days'))
-    ).length || 0
+    positiveReviews: reviews.filter(r => (r.rating || 0) >= 4).length,
+    negativeReviews: reviews.filter(r => (r.rating || 0) <= 2).length,
+    repliedReviews: reviews.filter(r => r.admin_reply).length,
+    recentReviews: reviews.filter(r =>
+      r.created_at && moment(r.created_at).isAfter(moment().subtract(7, 'days'))
+    ).length
+  };
+
+  const formatDate = (value: string | null) => {
+    if (!value) return "Unknown date";
+    const date = new Date(value);
+    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const exportReviewsToPDF = () => {
@@ -137,17 +145,17 @@ export default function Reviews() {
     pdfDoc.text("Customer Reviews Report", 14, 35);
     pdfDoc.setFontSize(12);
     pdfDoc.text(`Generated: ${moment().format("MMMM D, YYYY")}`, 14, 45);
-    pdfDoc.text(`Average Rating: ${averageRating}/5.0 (${reviews?.length || 0} reviews)`, 14, 55);
+    pdfDoc.text(`Average Rating: ${averageRating}/5.0 (${reviews.length} reviews)`, 14, 55);
 
     autoTable(pdfDoc, {
       startY: 65,
       head: [["Customer", "Rating", "Review", "Date", "Admin Reply"]],
       body: filteredReviews.map(review => [
-        review.customerName || userNames[review.userId] || 'Anonymous',
+        getCustomerName(review),
         `${review.rating}/5`,
-        (review.review || 'No comment').substring(0, 100) + (review.review?.length > 100 ? '...' : ''),
-        formatDate(review.createdAt),
-        review.adminReply ? 'Yes' : 'No'
+        (review.comment || 'No comment').substring(0, 100) + ((review.comment?.length || 0) > 100 ? '...' : ''),
+        formatDate(review.created_at),
+        review.admin_reply ? 'Yes' : 'No'
       ]),
     });
 
@@ -163,10 +171,11 @@ export default function Reviews() {
     if (!confirm(`Delete ${selectedReviews.length} selected reviews?`)) return;
 
     try {
-      const promises = selectedReviews.map(reviewId => deleteDoc(doc(db, "order_reviews", reviewId)));
-      await Promise.all(promises);
+      const { error } = await supabase.from("order_reviews").delete().in("id", selectedReviews);
+      if (error) throw error;
       toast.success(`Deleted ${selectedReviews.length} reviews`);
       setSelectedReviews([]);
+      fetchReviews();
     } catch {
       toast.error("Failed to delete reviews");
     }
@@ -191,39 +200,27 @@ export default function Reviews() {
     ));
   };
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "Unknown date";
-    const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
   const handleReplySubmit = async (reviewId: string) => {
     if (!replyText.trim()) {
-      alert('Please enter a reply message');
+      toast.error('Please enter a reply message');
       return;
     }
-    
-    if (!reviewId) {
-      alert('Invalid review ID');
-      return;
-    }
-    
+
     setIsSubmitting(true);
     try {
-      const reviewRef = doc(db, "order_reviews", reviewId);
-      await updateDoc(reviewRef, {
-        adminReply: replyText.trim(),
-        adminReplyDate: Timestamp.now()
-      });
-      
+      const { error } = await supabase
+        .from("order_reviews")
+        .update({ admin_reply: replyText.trim(), admin_reply_date: new Date().toISOString() })
+        .eq("id", reviewId);
+      if (error) throw error;
+
       setReplyingTo(null);
       setReplyText('');
-      
-      alert('Reply sent successfully!');
-      
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      alert('Failed to send reply: ' + error.message);
+      toast.success('Reply sent successfully!');
+      fetchReviews();
+    } catch (err) {
+      console.error('Error sending reply:', err);
+      toast.error('Failed to send reply: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsSubmitting(false);
     }
@@ -236,11 +233,13 @@ export default function Reviews() {
 
     setIsDeleting(reviewId);
     try {
-      await deleteDoc(doc(db, "order_reviews", reviewId));
-      alert('Review deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting review:', error);
-      alert('Failed to delete review: ' + error.message);
+      const { error } = await supabase.from("order_reviews").delete().eq("id", reviewId);
+      if (error) throw error;
+      toast.success('Review deleted successfully!');
+      fetchReviews();
+    } catch (err) {
+      console.error('Error deleting review:', err);
+      toast.error('Failed to delete review: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsDeleting(null);
     }
@@ -253,14 +252,16 @@ export default function Reviews() {
 
     setIsClearing(reviewId);
     try {
-      await updateDoc(doc(db, "order_reviews", reviewId), {
-        adminReply: null,
-        adminReplyDate: null
-      });
-      alert('Reply cleared successfully!');
-    } catch (error) {
-      console.error('Error clearing reply:', error);
-      alert('Failed to clear reply: ' + error.message);
+      const { error } = await supabase
+        .from("order_reviews")
+        .update({ admin_reply: null, admin_reply_date: null })
+        .eq("id", reviewId);
+      if (error) throw error;
+      toast.success('Reply cleared successfully!');
+      fetchReviews();
+    } catch (err) {
+      console.error('Error clearing reply:', err);
+      toast.error('Failed to clear reply: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsClearing(null);
     }
@@ -384,7 +385,7 @@ export default function Reviews() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Calendar className="text-gray-400 w-5 h-5" />
               <select
@@ -398,7 +399,7 @@ export default function Reviews() {
                 <option value="month">This Month</option>
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Filter className="text-gray-400 w-5 h-5" />
               <select
@@ -413,7 +414,7 @@ export default function Reviews() {
               </select>
             </div>
           </div>
-          
+
           {(searchTerm || dateFilter !== "all") && (
             <button
               onClick={() => {
@@ -464,7 +465,7 @@ export default function Reviews() {
             </div>
             <p className="text-gray-600">Average Rating</p>
           </div>
-          
+
           <div className="space-y-2">
             {ratingCounts.map(({ rating, count }) => (
               <div key={`rating-${rating}`} className="flex items-center space-x-2">
@@ -473,7 +474,7 @@ export default function Reviews() {
                   <div
                     className="bg-yellow-400 h-2 rounded-full"
                     style={{
-                      width: `${reviews?.length ? (count / reviews.length) * 100 : 0}%`
+                      width: `${reviews.length ? (count / reviews.length) * 100 : 0}%`
                     }}
                   ></div>
                 </div>
@@ -487,7 +488,7 @@ export default function Reviews() {
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
-          Showing {filteredReviews.length} of {reviews?.length || 0} reviews
+          Showing {filteredReviews.length} of {reviews.length} reviews
         </p>
         {filteredReviews.length > 0 && (
           <button
@@ -537,7 +538,7 @@ export default function Reviews() {
             </p>
           </div>
         ) : (
-          filteredReviews.map((review: Review, index: number) => (
+          filteredReviews.map((review, index) => (
             <div key={review.id || `review-${index}`} className="bg-white rounded-lg shadow p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -558,19 +559,19 @@ export default function Reviews() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">
-                      {review.customerName || userNames[review.userId] || `Customer ${review.userId?.slice(-4) || 'Unknown'}`}
+                      {getCustomerName(review)}
                     </h3>
-                    <p className="text-sm text-gray-500">Order: {review.orderId}</p>
+                    <p className="text-sm text-gray-500">Order: {review.order_id}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="flex">{renderStars(review.rating)}</div>
                   <span className="text-sm text-gray-600 flex items-center">
                     <Calendar className="w-3 h-3 mr-1" />
-                    {formatDate(review.createdAt)}
+                    {formatDate(review.created_at)}
                   </span>
                   <div className="flex items-center space-x-1 ml-2">
-                    {review.adminReply && (
+                    {review.admin_reply && (
                       <button
                         onClick={() => handleClearReply(review.id)}
                         disabled={isClearing === review.id}
@@ -591,26 +592,26 @@ export default function Reviews() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 rounded-lg p-4 space-y-4">
                 <div>
                   <p className="text-gray-700 font-medium mb-1">Customer Review:</p>
                   <p className="text-gray-700">
-                    {review.review || "No written review provided."}
+                    {review.comment || "No written review provided."}
                   </p>
                 </div>
-                
+
                 {/* Admin Reply Section */}
-                {review.adminReply ? (
+                {review.admin_reply ? (
                   <div className="border-l-4 border-orange-500 pl-4 bg-orange-50 rounded-r-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Reply className="w-4 h-4 text-orange-600" />
                       <span className="text-sm font-medium text-orange-800">Admin Response</span>
                       <span className="text-xs text-orange-600">
-                        {review.adminReplyDate ? formatDate(review.adminReplyDate) : ''}
+                        {review.admin_reply_date ? formatDate(review.admin_reply_date) : ''}
                       </span>
                     </div>
-                    <p className="text-orange-900">{review.adminReply}</p>
+                    <p className="text-orange-900">{review.admin_reply}</p>
                   </div>
                 ) : (
                   <div className="pt-2 border-t border-gray-200">

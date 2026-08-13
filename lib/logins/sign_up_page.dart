@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -116,6 +117,29 @@ class _SignupPageState extends State<SignupPage>
         }
       } catch (e) {
         // FCM token save failed - non-critical, continue
+      }
+
+      // 🟢 Supabase migration: also create the account + profile row on
+      // Supabase, alongside the existing Firebase account. Best-effort so a
+      // Supabase hiccup never blocks signup while the rest of the app is
+      // still Firebase-backed.
+      try {
+        final supabaseRes = await Supabase.instance.client.auth.signUp(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+        final supabaseUser = supabaseRes.user;
+        if (supabaseUser != null) {
+          await Supabase.instance.client.from('profiles').upsert({
+            'id': supabaseUser.id,
+            'name': _nameController.text.trim(),
+            'email': createdUser.email,
+            'phone': phone,
+            'role': 'customer',
+          });
+        }
+      } catch (e) {
+        debugPrint('Supabase signup mirror failed: $e');
       }
 
       await createdUser.updateDisplayName(_nameController.text.trim());

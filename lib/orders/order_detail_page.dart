@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User, MapType;
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
+import 'package:african_cuisine/services/order_adapter.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +36,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
   final TextEditingController _reviewController = TextEditingController();
 
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _orderSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _orderSub;
   Map<String, dynamic>? _order; // the live/merged order data we render
   String? _orderDocId; // actual Firestore doc id we resolved
   bool _isLiveLoading = false;
@@ -115,27 +117,49 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   void _startOrderStream(String docId) {
     setState(() => _isLiveLoading = true);
-    _orderSub = FirebaseFirestore.instance
-        .collection('orders')
-        .doc(docId)
-        .snapshots()
+
+    // Full fetch (with joined order_items) once, then patch just the
+    // fields that can actually change live (status, driver assignment) —
+    // Supabase's realtime .stream() builder doesn't support embedded joins,
+    // and order_items never changes after order creation anyway.
+    Supabase.instance.client
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('id', docId)
+        .single()
+        .then((row) {
+          if (!mounted) return;
+          setState(() {
+            _order = orderRowToLegacyMap(row);
+            _orderDocId = docId;
+            _isLiveLoading = false;
+          });
+        })
+        .catchError((_) {
+          if (!mounted) return;
+          setState(() => _isLiveLoading = false);
+          if (_order == null) _order = {};
+        });
+
+    _orderSub = Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('id', docId)
         .listen(
-          (snap) {
-            if (!mounted) return;
+          (rows) {
+            if (!mounted || rows.isEmpty || _order == null) return;
+            final row = rows.first;
             setState(() {
-              _isLiveLoading = false;
-              if (snap.exists && snap.data() != null) {
-                _order = snap.data()!;
-                _orderDocId = snap.id;
-              } else if (_order == null) {
-                // no local data and remote not found
-                _order = {};
-              }
+              final status = row['status'] as String? ?? _order!['status'];
+              _order!['status'] = status;
+              _order!['deliveryStatus'] = status;
+              final driverName = row['driver_name'] as String?;
+              _order!['driver'] = driverName != null ? {'name': driverName} : null;
             });
           },
           onError: (_) {
-            if (!mounted) return;
-            setState(() => _isLiveLoading = false);
+            // Best-effort live updates — the initial fetch above already
+            // succeeded, so just keep showing that.
           },
         );
   }
@@ -251,16 +275,13 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
     setState(() => _isSubmittingReview = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('order_reviews')
-          .doc(oid)
-          .set({
-            'orderId': oid,
-            'rating': _rating,
-            'review': _reviewController.text,
-            'createdAt': FieldValue.serverTimestamp(),
-            'userId': FirebaseAuth.instance.currentUser?.uid,
-          });
+      final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
+      await Supabase.instance.client.from('order_reviews').upsert({
+        'order_id': oid,
+        'rating': _rating,
+        'comment': _reviewController.text,
+        'user_id': supabaseUserId,
+      }, onConflict: 'order_id,user_id');
 
       await _analytics.logEvent(
         name: 'submit_order_review',
@@ -311,33 +332,33 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     if (confirmed != true) return;
 
     try {
+      // Ownership check against the Supabase user id — the order's
+      // userId/user_id is a Supabase UUID, not the Firebase uid.
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not authenticated');
+      final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (user == null || supabaseUserId == null) {
+        throw Exception('User not authenticated');
+      }
 
       final orderUserId = (order['userId'] ?? '').toString();
-      if (orderUserId != user.uid)
+      if (orderUserId != supabaseUserId)
         throw Exception('You can only cancel your own orders');
 
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
-        'deliveryStatus': 'cancelled',
-        'cancelledAt': FieldValue.serverTimestamp(),
-        'cancelledBy': 'customer',
-        'cancellationReason': 'Customer requested cancellation',
-      });
+      await Supabase.instance.client.from('orders').update({
+        'status': 'cancelled',
+        'cancelled_at': DateTime.now().toIso8601String(),
+        'cancelled_by': 'customer',
+        'cancellation_reason': 'Customer requested cancellation',
+      }).eq('id', docId);
 
       setState(() {
         (_order ?? widget.orderData!)['deliveryStatus'] = 'cancelled';
       });
 
-      await FirebaseFirestore.instance.collection('admin_notifications').add({
-        'type': 'order_cancelled',
-        'orderId': docId,
-        'orderNumber': order['orderNumber'],
-        'message':
-            'Order #${order['orderNumber']} has been cancelled by customer',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-      });
+      // Admin sees cancellations live via admin-panel's own Orders realtime
+      // subscription — no separate notification write needed, and RLS
+      // wouldn't allow a non-admin customer to write admin_notifications
+      // anyway.
 
       final userEmail = user.email;
       final userName = user.displayName ?? 'Customer';

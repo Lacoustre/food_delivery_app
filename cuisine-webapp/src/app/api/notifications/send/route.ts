@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { verifyAuth } from '@/lib/verifyAuth'
 
 export async function POST(request: NextRequest) {
   try {
+    const decodedToken = await verifyAuth(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { type, email, phone, orderNumber, customerName, total, status, orderId } = await request.json()
 
     if (type === 'order_confirmation') {
+      // Only allow notifying the caller's own verified email — prevents an
+      // authenticated-but-malicious caller from using this endpoint to spam
+      // or phish arbitrary recipients under the restaurant's name.
+      if (email !== decodedToken.email) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
       await Promise.all([
         sendEmail({
           to: email,
@@ -28,6 +41,14 @@ export async function POST(request: NextRequest) {
       if (orderId) {
         const orderDoc = await getDoc(doc(db, 'orders', orderId))
         orderData = orderDoc.data()
+      }
+
+      // Only allow notifying the order's own customer — verified against
+      // the order record itself (or the `email` field as a fallback when
+      // no orderId was supplied), never trusted blindly from the client.
+      const targetEmail = orderData?.customerInfo?.email || email
+      if (targetEmail !== decodedToken.email) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
 
       const statusMessages = {

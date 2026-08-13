@@ -1,111 +1,133 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 
-class RatePastOrdersPage extends StatelessWidget {
+class RatePastOrdersPage extends StatefulWidget {
   const RatePastOrdersPage({super.key});
 
   @override
+  State<RatePastOrdersPage> createState() => _RatePastOrdersPageState();
+}
+
+class _RatePastOrdersPageState extends State<RatePastOrdersPage> {
+  List<Map<String, dynamic>>? _orders;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUnratedOrders();
+  }
+
+  Future<void> _fetchUnratedOrders() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // "Rated" isn't a column here — an order counts as rated if it has a
+      // matching order_reviews row (same convention as review_notification_
+      // service.dart and order_detail_page.dart use), so embed and filter
+      // client-side rather than relying on a boolean flag.
+      final rows = await Supabase.instance.client
+          .from('orders')
+          .select('*, order_items(*), order_reviews(id)')
+          .eq('user_id', user.id)
+          .inFilter('status', ['delivered', 'picked up', 'completed'])
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _orders = rows
+            .where((row) => (row['order_reviews'] as List).isEmpty)
+            .toList();
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       return const Scaffold(
         body: Center(child: Text("Please log in to view your orders.")),
       );
     }
 
-    // Top-level orders, owned by the user, completed flow, and not yet rated
-    final query = FirebaseFirestore.instance
-        .collection('orders')
-        .where('userId', isEqualTo: user.uid)
-        .where('status', whereIn: ['delivered', 'picked up', 'completed'])
-        .where('rated', isEqualTo: false);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Rate Past Orders'),
         backgroundColor: Colors.deepOrange,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return const Center(child: Text("Error loading orders."));
-          }
-          final docs = snap.data?.docs ?? [];
-          if (docs.isEmpty) {
-            return const Center(
-              child: Text(
-                'No completed orders to rate at the moment.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            );
-          }
+      body: _buildBody(),
+    );
+  }
 
-          // Client-side sort by createdAt desc (avoids composite index)
-          docs.sort((a, b) {
-            final ta =
-                (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-            final tb =
-                (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-            return tb.compareTo(ta);
-          });
+  Widget _buildBody() {
+    if (_error != null) {
+      return const Center(child: Text("Error loading orders."));
+    }
+    if (_orders == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_orders!.isEmpty) {
+      return const Center(
+        child: Text(
+          'No completed orders to rate at the moment.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, i) {
-              final d = docs[i];
-              final orderId = d.id;
-              final orderNumber = d['orderNumber']?.toString() ?? orderId;
-              final createdAt = (d['createdAt'] as Timestamp?)?.toDate();
-              final items =
-                  (d['items'] as List?)?.cast<Map<String, dynamic>>() ??
-                  const [];
-              final itemsLabel = _itemsLabel(items);
-              final total = (d['pricing']?['total'] as num?)?.toDouble();
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _orders!.length,
+      separatorBuilder: (_, __) => const Divider(),
+      itemBuilder: (context, i) {
+        final order = _orders![i];
+        final orderId = order['id'] as String;
+        final orderNumber = order['order_number']?.toString() ?? orderId;
+        final createdAt = order['created_at'] != null
+            ? DateTime.parse(order['created_at'] as String)
+            : null;
+        final items = (order['order_items'] as List?)
+                ?.cast<Map<String, dynamic>>() ??
+            const [];
+        final itemsLabel = _itemsLabel(items);
+        final total = (order['total'] as num?)?.toDouble();
 
-              return ListTile(
-                leading: const Icon(
-                  Icons.receipt_long,
-                  color: Colors.deepOrange,
+        return ListTile(
+          leading: const Icon(
+            Icons.receipt_long,
+            color: Colors.deepOrange,
+          ),
+          title: Text('Order #$orderNumber'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (createdAt != null)
+                Text(DateFormat('MMM d, y • h:mm a').format(createdAt)),
+              if (itemsLabel.isNotEmpty) Text(itemsLabel),
+              if (total != null)
+                Text(
+                  'Total: ${NumberFormat.simpleCurrency().format(total)}',
                 ),
-                title: Text('Order #$orderNumber'),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (createdAt != null)
-                      Text(DateFormat('MMM d, y • h:mm a').format(createdAt)),
-                    if (itemsLabel.isNotEmpty) Text(itemsLabel),
-                    if (total != null)
-                      Text(
-                        'Total: ${NumberFormat.simpleCurrency().format(total)}',
-                      ),
-                  ],
-                ),
-                trailing: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
-                  ),
-                  onPressed: () => _showRatingDialog(
-                    context,
-                    orderId,
-                    d.data() as Map<String, dynamic>,
-                  ),
-                  child: const Text('Rate'),
-                ),
-              );
-            },
-          );
-        },
-      ),
+            ],
+          ),
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrange,
+            ),
+            onPressed: () => _showRatingDialog(context, orderId),
+            child: const Text('Rate'),
+          ),
+        );
+      },
     );
   }
 
@@ -122,11 +144,7 @@ class RatePastOrdersPage extends StatelessWidget {
     return more > 0 ? '$first +$more more' : first;
   }
 
-  void _showRatingDialog(
-    BuildContext context,
-    String orderDocId,
-    Map<String, dynamic> order,
-  ) {
+  void _showRatingDialog(BuildContext context, String orderId) {
     double rating = 4.0;
     final controller = TextEditingController();
     bool busy = false;
@@ -174,44 +192,19 @@ class RatePastOrdersPage extends StatelessWidget {
                       if (rating <= 0) return;
                       setState(() => busy = true);
                       try {
-                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        final uid = Supabase.instance.client.auth.currentUser?.id;
                         if (uid == null) throw 'Not signed in';
 
-                        // Update order doc (top-level /orders/{orderDocId})
-                        await FirebaseFirestore.instance
-                            .collection('orders')
-                            .doc(orderDocId)
-                            .update({
-                              'rated': true,
-                              'rating': rating,
-                              'review': controller.text.trim(),
-                              'ratedAt': FieldValue.serverTimestamp(),
-                            });
-
-                        // Save to global reviews
-                        final items =
-                            (order['items'] as List?)
-                                ?.cast<Map<String, dynamic>>() ??
-                            const [];
-                        await FirebaseFirestore.instance
-                            .collection('reviews')
-                            .add({
-                              'userId': uid,
-                              'orderId': orderDocId,
-                              'orderNumber': order['orderNumber'],
-                              'items': items
-                                  .map(
-                                    (e) => {
-                                      'name': e['name'],
-                                      'id': e['id'],
-                                      'price': e['price'],
-                                    },
-                                  )
-                                  .toList(),
-                              'rating': rating,
-                              'review': controller.text.trim(),
-                              'timestamp': FieldValue.serverTimestamp(),
-                            });
+                        // Same order_reviews table every other review-writing
+                        // screen uses — this used to write to a separate
+                        // top-level `reviews` collection plus a `rated` flag
+                        // on the order doc, a pre-existing third storage path.
+                        await Supabase.instance.client.from('order_reviews').upsert({
+                          'order_id': orderId,
+                          'user_id': uid,
+                          'rating': rating,
+                          'comment': controller.text.trim(),
+                        }, onConflict: 'order_id,user_id');
 
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
@@ -221,6 +214,7 @@ class RatePastOrdersPage extends StatelessWidget {
                             ),
                           );
                         }
+                        await _fetchUnratedOrders();
                       } catch (e) {
                         setState(() => busy = false);
                         if (ctx.mounted) {

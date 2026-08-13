@@ -1,53 +1,43 @@
-import { useCollection, useDocumentData } from "react-firebase-hooks/firestore";
-import {
-  collection,
-  query,
-  orderBy,
-  Timestamp,
-  updateDoc,
-  doc,
-  addDoc,
-  deleteDoc,
-  setDoc,
-  getDocs,
-} from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../firebase";
+import { supabase } from "../lib/supabase";
 import moment from "moment";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
-import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, MoreHorizontal, TrendingUp, DollarSign } from "lucide-react";
+import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign } from "lucide-react";
 
 interface Meal {
   id: string;
+  slug: string;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
   active: boolean;
-  imageUrl?: string;
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
-  available?: boolean;
-  category?: string;
+  available: boolean;
+  image_url: string | null;
+  created_at: string;
+  category: string | null;
 }
 
-
+interface MealAnalytic {
+  name: string;
+  totalOrders: number;
+  totalRevenue: number;
+}
 
 const CATEGORIES = [
   'Main Dishes',
-  'Side Dishes', 
+  'Side Dishes',
   'Pastries',
   'Drinks'
 ];
 
-const getImageUrl = (imageUrl) => {
-  if (!imageUrl) return null;
-  if (imageUrl.startsWith('http')) return imageUrl;
-  if (imageUrl.startsWith('assets/')) return `/${imageUrl}`;
-  return imageUrl;
-};
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
 
 export default function Meals() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,9 +45,7 @@ export default function Meals() {
   const [availabilityFilter, setAvailabilityFilter] = useState<"all" | "available" | "unavailable">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [selectedMeals, setSelectedMeals] = useState<string[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
-  const [mealAnalytics, setMealAnalytics] = useState<any[]>([]);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [mealAnalytics, setMealAnalytics] = useState<MealAnalytic[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
@@ -66,150 +54,92 @@ export default function Meals() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  
-  // Restaurant status query - using same approach as Dashboard
-  const [restaurantDoc] = useDocumentData(doc(db, "settings", "restaurant"));
-  
-  // Update local state when Firestore data changes
-  useEffect(() => {
-    if (restaurantDoc) {
-      setRestaurantOpen(restaurantDoc.isOpen ?? true);
-    }
-  }, [restaurantDoc]);
 
-  // Load meal analytics
-  useEffect(() => {
-    loadMealAnalytics();
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchMeals = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("meals")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError(new Error(error.message));
+    } else {
+      setError(null);
+      setMeals(data as Meal[]);
+    }
+    setLoading(false);
   }, []);
 
-  const loadMealAnalytics = async () => {
-    try {
-      const ordersSnapshot = await getDocs(collection(db, "orders"));
-      const mealStats = new Map();
-      
-      ordersSnapshot.docs.forEach(doc => {
-        const order = doc.data();
-        if (order.items && Array.isArray(order.items)) {
-          order.items.forEach((item: any) => {
-            const mealName = item.name;
-            const quantity = item.quantity || 1;
-            const price = item.price || 0;
-            const revenue = quantity * price;
-            
-            if (mealStats.has(mealName)) {
-              const existing = mealStats.get(mealName);
-              mealStats.set(mealName, {
-                ...existing,
-                totalOrders: existing.totalOrders + quantity,
-                totalRevenue: existing.totalRevenue + revenue
-              });
-            } else {
-              mealStats.set(mealName, {
-                name: mealName,
-                totalOrders: quantity,
-                totalRevenue: revenue
-              });
-            }
-          });
-        }
-      });
-      
-      const analyticsArray = Array.from(mealStats.values())
-        .sort((a, b) => b.totalOrders - a.totalOrders)
-        .slice(0, 10);
-      
-      setMealAnalytics(analyticsArray);
-    } catch (err) {
-      console.error('Failed to load analytics:', err);
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  };
-
-  const mealsQuery = query(
-    collection(db, "meals"),
-    orderBy("createdAt", "desc")
-  );
-
-  const [snapshot, loading, error] = useCollection(mealsQuery);
-
-  const meals: Meal[] =
-    snapshot?.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Meal[] ?? [];
-
-  // Auto-categorize existing meals on component mount
   useEffect(() => {
-    const updateMealCategories = async () => {
-      if (meals.length === 0) return;
-      
-      const updates = [];
-      for (const meal of meals) {
-        if (!meal.category) {
-          const name = meal.name.toLowerCase();
-          let category = 'Main Dishes'; // default
-          
-          if (name.includes('sprite') || name.includes('coke') || name.includes('fanta') || 
-              name.includes('water') || name.includes('juice') || name.includes('malt') || 
-              name.includes('sobolo') || name.includes('drink')) {
-            category = 'Drinks';
-          } else if (name.includes('shito') || name.includes('side')) {
-            category = 'Side Dishes';
-          } else if (name.includes('pastry') || name.includes('bread') || name.includes('cake')) {
-            category = 'Pastries';
-          } else if (name.includes('appetizer') || name.includes('starter')) {
-            category = 'Appetizers';
-          } else if (name.includes('dessert') || name.includes('sweet')) {
-            category = 'Desserts';
-          }
-          
-          if (category !== 'Main Dishes') {
-            updates.push({
-              id: meal.id,
-              category
-            });
-          }
-        }
-      }
-      
-      // Update meals with categories
-      if (updates.length > 0) {
-        try {
-          const promises = updates.map(update => 
-            updateDoc(doc(db, "meals", update.id), { 
-              category: update.category,
-              updatedAt: Timestamp.now()
-            })
-          );
-          await Promise.all(promises);
-          console.log(`Updated ${updates.length} meals with categories`);
-        } catch (err) {
-          console.error('Failed to update meal categories:', err);
-        }
-      }
+    fetchMeals();
+  }, [fetchMeals]);
+
+  useEffect(() => {
+    const fetchRestaurantStatus = async () => {
+      const { data } = await supabase.from("settings").select("value").eq("key", "restaurant").single();
+      const isOpen = (data?.value as { isOpen?: boolean } | null)?.isOpen;
+      setRestaurantOpen(isOpen ?? true);
     };
-    
-    updateMealCategories();
-  }, [meals.length]);
+    fetchRestaurantStatus();
+  }, []);
+
+  const loadMealAnalytics = useCallback(async () => {
+    const { data, error } = await supabase.from("order_items").select("name, quantity, unit_price");
+    if (error) {
+      console.error('Failed to load analytics:', error);
+      return;
+    }
+
+    const mealStats = new Map<string, MealAnalytic>();
+    (data || []).forEach((item) => {
+      const mealName = item.name || 'Unknown';
+      const quantity = item.quantity || 1;
+      const revenue = quantity * (item.unit_price || 0);
+
+      const existing = mealStats.get(mealName);
+      if (existing) {
+        mealStats.set(mealName, {
+          ...existing,
+          totalOrders: existing.totalOrders + quantity,
+          totalRevenue: existing.totalRevenue + revenue
+        });
+      } else {
+        mealStats.set(mealName, { name: mealName, totalOrders: quantity, totalRevenue: revenue });
+      }
+    });
+
+    setMealAnalytics(
+      Array.from(mealStats.values())
+        .sort((a, b) => b.totalOrders - a.totalOrders)
+        .slice(0, 10)
+    );
+  }, []);
+
+  useEffect(() => {
+    loadMealAnalytics();
+  }, [loadMealAnalytics]);
 
   const filteredMeals = meals.filter((meal) => {
     const matchesSearch = meal.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         meal.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || 
-                         (statusFilter === "active" && meal.active) ||
-                         (statusFilter === "inactive" && !meal.active);
-    const matchesAvailability = availabilityFilter === "all" || 
-                               (availabilityFilter === "available" && (meal.available !== false)) ||
-                               (availabilityFilter === "unavailable" && meal.available === false);
+      (meal.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" ||
+      (statusFilter === "active" && meal.active) ||
+      (statusFilter === "inactive" && !meal.active);
+    const matchesAvailability = availabilityFilter === "all" ||
+      (availabilityFilter === "available" && meal.available) ||
+      (availabilityFilter === "unavailable" && !meal.available);
     const matchesCategory = categoryFilter === "all" || meal.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesAvailability && matchesCategory;
   });
 
   // Summary calculations
   const totalMeals = meals.length;
-  const availableMeals = meals.filter(m => m.available !== false && m.active).length;
-  const unavailableMeals = meals.filter(m => m.available === false || !m.active).length;
+  const availableMeals = meals.filter(m => m.available && m.active).length;
+  const unavailableMeals = meals.filter(m => !m.available || !m.active).length;
   const avgPrice = meals.length > 0 ? meals.reduce((sum, m) => sum + m.price, 0) / meals.length : 0;
 
   const exportMealsToPDF = () => {
@@ -231,7 +161,7 @@ export default function Meals() {
       body: exportable.map((meal, idx) => [
         idx + 1,
         meal.name,
-        meal.description.length > 50 ? meal.description.substring(0, 50) + '...' : meal.description,
+        (meal.description || '').length > 50 ? (meal.description || '').substring(0, 50) + '...' : (meal.description || ''),
         meal.price.toFixed(2)
       ]),
     });
@@ -241,12 +171,13 @@ export default function Meals() {
 
   const toggleMealStatus = async (mealId: string, currentStatus: boolean) => {
     try {
-      const mealRef = doc(db, "meals", mealId);
-      await updateDoc(mealRef, {
-        active: !currentStatus,
-        updatedAt: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from("meals")
+        .update({ active: !currentStatus, updated_at: new Date().toISOString() })
+        .eq("id", mealId);
+      if (error) throw error;
       toast.success(`Meal marked as ${!currentStatus ? "active" : "inactive"}`);
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to update meal status");
@@ -264,16 +195,12 @@ export default function Meals() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    try {
-      const sanitizedName = file.name.replace(/[\r\n\t]/g, '').trim();
-      const imageRef = ref(storage, `meals/${Date.now()}_${sanitizedName}`);
-      const snapshot = await uploadBytes(imageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
-      return url;
-    } catch (error) {
-      console.error("Upload error:", error);
-      throw new Error("Failed to upload image");
-    }
+    const sanitizedName = file.name.replace(/[\r\n\t]/g, '').trim();
+    const path = `${Date.now()}_${sanitizedName}`;
+    const { error } = await supabase.storage.from("meals").upload(path, file);
+    if (error) throw new Error("Failed to upload image");
+    const { data } = supabase.storage.from("meals").getPublicUrl(path);
+    return data.publicUrl;
   };
 
   const handleAddMeal = async () => {
@@ -281,31 +208,32 @@ export default function Meals() {
       toast.error("Please fill in all fields");
       return;
     }
-    
+
     setUploading(true);
     try {
       let imageUrl = "";
       if (selectedImage) {
         imageUrl = await uploadImage(selectedImage);
       }
-      
-      await addDoc(collection(db, "meals"), {
+
+      const { error } = await supabase.from("meals").insert({
+        slug: slugify(newMeal.name),
         name: newMeal.name,
         description: newMeal.description,
         price: parseFloat(newMeal.price),
-        imageUrl,
+        image_url: imageUrl,
         active: true,
         available: true,
-        category: newMeal.category,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        category: newMeal.category
       });
-      
+      if (error) throw error;
+
       toast.success("Meal added successfully");
       setNewMeal({ name: "", description: "", price: "", category: "Main Dishes" });
       setSelectedImage(null);
       setImagePreview(null);
       setShowAddModal(false);
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to add meal");
@@ -316,29 +244,33 @@ export default function Meals() {
 
   const handleEditMeal = async () => {
     if (!editingMeal) return;
-    
+
     setUploading(true);
     try {
-      let imageUrl = editingMeal.imageUrl;
+      let imageUrl = editingMeal.image_url;
       if (selectedImage) {
         imageUrl = await uploadImage(selectedImage);
       }
-      
-      const mealRef = doc(db, "meals", editingMeal.id);
-      await updateDoc(mealRef, {
-        name: editingMeal.name,
-        description: editingMeal.description,
-        price: editingMeal.price,
-        imageUrl,
-        category: editingMeal.category || "Main Dishes",
-        updatedAt: Timestamp.now(),
-      });
-      
+
+      const { error } = await supabase
+        .from("meals")
+        .update({
+          name: editingMeal.name,
+          description: editingMeal.description,
+          price: editingMeal.price,
+          image_url: imageUrl,
+          category: editingMeal.category || "Main Dishes",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", editingMeal.id);
+      if (error) throw error;
+
       toast.success("Meal updated successfully");
       setShowEditModal(false);
       setEditingMeal(null);
       setSelectedImage(null);
       setImagePreview(null);
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to update meal");
@@ -350,8 +282,10 @@ export default function Meals() {
   const handleDeleteMeal = async (mealId: string) => {
     if (!confirm("Are you sure you want to delete this meal?")) return;
     try {
-      await deleteDoc(doc(db, "meals", mealId));
+      const { error } = await supabase.from("meals").delete().eq("id", mealId);
+      if (error) throw error;
       toast.success("Meal deleted successfully");
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete meal");
@@ -360,12 +294,13 @@ export default function Meals() {
 
   const toggleAvailability = async (mealId: string, currentAvailability: boolean) => {
     try {
-      const mealRef = doc(db, "meals", mealId);
-      await updateDoc(mealRef, {
-        available: !currentAvailability,
-        updatedAt: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from("meals")
+        .update({ available: !currentAvailability, updated_at: new Date().toISOString() })
+        .eq("id", mealId);
+      if (error) throw error;
       toast.success(`Meal marked as ${!currentAvailability ? "available" : "unavailable"}`);
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to update meal availability");
@@ -379,28 +314,27 @@ export default function Meals() {
     }
 
     try {
-      const promises = selectedMeals.map(mealId => {
-        const mealRef = doc(db, "meals", mealId);
-        switch (action) {
-          case 'available':
-            return updateDoc(mealRef, { available: true, updatedAt: Timestamp.now() });
-          case 'unavailable':
-            return updateDoc(mealRef, { available: false, updatedAt: Timestamp.now() });
-          case 'active':
-            return updateDoc(mealRef, { active: true, updatedAt: Timestamp.now() });
-          case 'inactive':
-            return updateDoc(mealRef, { active: false, updatedAt: Timestamp.now() });
-          case 'delete':
-            return deleteDoc(doc(db, "meals", mealId));
-          default:
-            return Promise.resolve();
-        }
-      });
-      
-      await Promise.all(promises);
+      if (action === 'delete') {
+        const { error } = await supabase.from("meals").delete().in("id", selectedMeals);
+        if (error) throw error;
+      } else {
+        const patch =
+          action === 'available' ? { available: true } :
+          action === 'unavailable' ? { available: false } :
+          action === 'active' ? { active: true } :
+          action === 'inactive' ? { active: false } : null;
+        if (!patch) return;
+
+        const { error } = await supabase
+          .from("meals")
+          .update({ ...patch, updated_at: new Date().toISOString() })
+          .in("id", selectedMeals);
+        if (error) throw error;
+      }
+
       toast.success(`Bulk action completed for ${selectedMeals.length} meals`);
       setSelectedMeals([]);
-      setShowBulkActions(false);
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to perform bulk action");
@@ -417,18 +351,19 @@ export default function Meals() {
 
   const duplicateMeal = async (meal: Meal) => {
     try {
-      await addDoc(collection(db, "meals"), {
+      const { error } = await supabase.from("meals").insert({
+        slug: `${meal.slug}-copy-${Date.now()}`,
         name: `${meal.name} (Copy)`,
         description: meal.description,
         price: meal.price,
-        imageUrl: meal.imageUrl || "",
+        image_url: meal.image_url || "",
         category: meal.category || "Main Dishes",
         active: false,
-        available: true,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        available: true
       });
+      if (error) throw error;
       toast.success("Meal duplicated successfully");
+      fetchMeals();
     } catch (err) {
       console.error(err);
       toast.error("Failed to duplicate meal");
@@ -437,10 +372,10 @@ export default function Meals() {
 
   const toggleRestaurantStatus = async () => {
     try {
-      await setDoc(doc(db, "settings", "restaurant"), {
-        isOpen: !restaurantOpen,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
+      const { error } = await supabase
+        .from("settings")
+        .upsert({ key: "restaurant", value: { isOpen: !restaurantOpen }, updated_at: new Date().toISOString() });
+      if (error) throw error;
       setRestaurantOpen(!restaurantOpen);
       toast.success(`Restaurant ${!restaurantOpen ? "opened" : "closed"}`);
     } catch (err) {
@@ -469,7 +404,7 @@ export default function Meals() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -481,7 +416,7 @@ export default function Meals() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -493,7 +428,7 @@ export default function Meals() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -532,7 +467,7 @@ export default function Meals() {
                 ))}
               </div>
             </div>
-            
+
             {/* Top Revenue */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
@@ -540,7 +475,7 @@ export default function Meals() {
                 Top Revenue Meals
               </h3>
               <div className="space-y-2">
-                {mealAnalytics
+                {[...mealAnalytics]
                   .sort((a, b) => b.totalRevenue - a.totalRevenue)
                   .slice(0, 5)
                   .map((meal, index) => (
@@ -575,7 +510,7 @@ export default function Meals() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Filter className="text-gray-400 w-5 h-5" />
               <select
@@ -588,7 +523,7 @@ export default function Meals() {
                 <option value="inactive">Inactive Only</option>
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <CheckCircle className="text-gray-400 w-5 h-5" />
               <select
@@ -601,7 +536,7 @@ export default function Meals() {
                 <option value="unavailable">Unavailable</option>
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Filter className="text-gray-400 w-5 h-5" />
               <select
@@ -616,13 +551,13 @@ export default function Meals() {
               </select>
             </div>
           </div>
-          
+
           <div className="flex gap-3">
             <button
               onClick={toggleRestaurantStatus}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm ${
-                restaurantOpen 
-                  ? "bg-red-600 text-white hover:bg-red-700" 
+                restaurantOpen
+                  ? "bg-red-600 text-white hover:bg-red-700"
                   : "bg-green-600 text-white hover:bg-green-700"
               }`}
             >
@@ -634,7 +569,7 @@ export default function Meals() {
             >
               Export Menu
             </button>
-            <button 
+            <button
               onClick={() => setShowAddModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-all duration-200 shadow-sm flex items-center gap-2"
             >
@@ -763,9 +698,9 @@ export default function Meals() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-12 h-12 rounded-lg overflow-hidden">
-                        {meal.imageUrl ? (
-                          <img 
-                            src={meal.imageUrl.replace(/&amp;/g, '&')}
+                        {meal.image_url ? (
+                          <img
+                            src={meal.image_url}
                             alt={meal.name}
                             className="w-full h-full object-cover"
                           />
@@ -785,7 +720,7 @@ export default function Meals() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 max-w-xs truncate" title={meal.description}>
+                      <div className="text-sm text-gray-900 max-w-xs truncate" title={meal.description || ''}>
                         {meal.description}
                       </div>
                     </td>
@@ -794,19 +729,19 @@ export default function Meals() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => toggleAvailability(meal.id, meal.available !== false)}
+                        onClick={() => toggleAvailability(meal.id, meal.available)}
                         className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                          meal.available !== false
+                          meal.available
                             ? 'bg-green-100 text-green-800 hover:bg-green-200'
                             : 'bg-red-100 text-red-800 hover:bg-red-200'
                         }`}
                       >
-                        {meal.available !== false ? (
+                        {meal.available ? (
                           <CheckCircle className="w-4 h-4" />
                         ) : (
                           <XCircle className="w-4 h-4" />
                         )}
-                        {meal.available !== false ? 'Available' : 'Unavailable'}
+                        {meal.available ? 'Available' : 'Unavailable'}
                       </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -826,13 +761,13 @@ export default function Meals() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {meal.createdAt?.seconds
-                        ? moment(meal.createdAt.seconds * 1000).format("MMM D, YYYY")
+                      {meal.created_at
+                        ? moment(meal.created_at).format("MMM D, YYYY")
                         : "—"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center gap-2">
-                        <button 
+                        <button
                           onClick={() => {
                             setEditingMeal(meal);
                             setShowEditModal(true);
@@ -842,14 +777,14 @@ export default function Meals() {
                           <Edit className="w-4 h-4" />
                           Edit
                         </button>
-                        <button 
+                        <button
                           onClick={() => duplicateMeal(meal)}
                           className="text-green-600 hover:text-green-800 transition-colors duration-150 inline-flex items-center gap-1"
                         >
                           <Copy className="w-4 h-4" />
                           Duplicate
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDeleteMeal(meal.id)}
                           className="text-red-600 hover:text-red-800 transition-colors duration-150 inline-flex items-center gap-1"
                         >
@@ -879,7 +814,7 @@ export default function Meals() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
@@ -947,7 +882,7 @@ export default function Meals() {
                 </select>
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-3 mt-8">
               <button
                 onClick={() => setShowAddModal(false)}
@@ -986,7 +921,7 @@ export default function Meals() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Image</label>
@@ -1005,8 +940,8 @@ export default function Meals() {
                     <Upload className="w-4 h-4" />
                     Change Image
                   </label>
-                  {editingMeal.imageUrl || imagePreview ? (
-                    <img src={imagePreview || editingMeal.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
+                  {editingMeal.image_url || imagePreview ? (
+                    <img src={imagePreview || editingMeal.image_url || ''} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
                   ) : (
                     <div className="w-16 h-16 rounded-lg border flex items-center justify-center bg-gray-100">
                       <ImageIcon className="w-6 h-6 text-gray-400" />
@@ -1026,7 +961,7 @@ export default function Meals() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
-                  value={editingMeal.description}
+                  value={editingMeal.description || ''}
                   onChange={(e) => setEditingMeal({...editingMeal, description: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={3}
@@ -1055,7 +990,7 @@ export default function Meals() {
                 </select>
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-3 mt-8">
               <button
                 onClick={() => {

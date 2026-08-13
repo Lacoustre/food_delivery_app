@@ -18,10 +18,11 @@ import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
 import 'package:african_cuisine/provider/notification_provider.dart';
 import 'package:african_cuisine/home/map_picker_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_google_places/flutter_google_places.dart';
-import 'package:google_maps_webservice/places.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:african_cuisine/widgets/review_reminder_banner.dart';
 import 'package:african_cuisine/config/env_config.dart';
+import 'package:african_cuisine/services/places_service.dart';
+import 'package:african_cuisine/home/places_autocomplete_sheet.dart';
 
 class MainFoodPage extends StatefulWidget {
   const MainFoodPage({super.key});
@@ -63,7 +64,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
   final LocationAccuracy _currentAccuracy = LocationAccuracy.high;
   bool _isRestaurantOpen = true;
   bool _showClosedDialog = true;
-  StreamSubscription<DocumentSnapshot>? _restaurantStatusSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _restaurantStatusSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _mealsSubscription;
 
   @override
   void initState() {
@@ -82,34 +84,36 @@ class _MainFoodPageState extends State<MainFoodPage> {
     _mapController?.dispose();
     _searchController.dispose();
     _restaurantStatusSubscription?.cancel();
+    _mealsSubscription?.cancel();
     super.dispose();
   }
 
   void _listenToRestaurantStatus() {
-    _restaurantStatusSubscription = FirebaseFirestore.instance
-        .collection('settings')
-        .doc('restaurant')
-        .snapshots()
-        .listen((snapshot) {
-          if (snapshot.exists && mounted) {
+    _restaurantStatusSubscription = Supabase.instance.client
+        .from('settings')
+        .stream(primaryKey: ['key'])
+        .eq('key', 'restaurant')
+        .listen((rows) {
+          if (rows.isNotEmpty && mounted) {
+            final value = rows.first['value'] as Map<String, dynamic>?;
             setState(() {
-              _isRestaurantOpen = snapshot.data()?['isOpen'] ?? true;
+              _isRestaurantOpen = value?['isOpen'] ?? true;
             });
           }
         });
   }
 
   void _loadMealsFromFirebase() {
-    FirebaseFirestore.instance
-        .collection('meals')
-        .where('active', isEqualTo: true)
-        .snapshots()
-        .listen((snapshot) {
+    _mealsSubscription = Supabase.instance.client
+        .from('meals')
+        .stream(primaryKey: ['id'])
+        .eq('active', true)
+        .listen((rows) {
       if (mounted) {
         setState(() {
-          meals = snapshot.docs.map((doc) {
-            final data = doc.data();
-            var imageUrl = data['imageUrl'] ?? 'assets/images/logo.png';
+          meals = rows.map((data) {
+            var imageUrl = (data['image_url'] as String?) ?? 'assets/images/logo.png';
+            if (imageUrl.isEmpty) imageUrl = 'assets/images/logo.png';
             imageUrl = imageUrl.replaceAll('&amp;', '&');
             // Remove leading slash from asset paths
             if (imageUrl.startsWith('/assets/')) {
@@ -117,9 +121,9 @@ class _MainFoodPageState extends State<MainFoodPage> {
             }
             final available = data['available'] ?? true;
             return {
-              'id': doc.id,
+              'id': data['id'],
               'name': data['name'] ?? 'Unknown',
-              'price': '\$${(data['price'] ?? 0.0).toStringAsFixed(2)}',
+              'price': '\$${((data['price'] ?? 0.0) as num).toStringAsFixed(2)}',
               'image': imageUrl,
               'category': data['category'] ?? 'Main Dishes',
               'available': available,
@@ -133,67 +137,65 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
   void _loadPopularMeals() async {
     try {
-      final ordersSnapshot = await FirebaseFirestore.instance
-          .collection('orders')
-          .limit(100)
-          .get();
-      
+      // order_items already has name/quantity directly — no need to join
+      // through orders at all (and orders are the authoritative Supabase
+      // ones now, not Firestore's, which no longer receive new orders).
+      final itemRows = await Supabase.instance.client
+          .from('order_items')
+          .select('name, quantity')
+          .limit(500);
+
       Map<String, Map<String, dynamic>> mealStats = {};
-      
-      for (var doc in ordersSnapshot.docs) {
-        final order = doc.data();
-        if (order['items'] != null) {
-          for (var item in order['items']) {
-            final mealName = item['name'] ?? '';
-            final quantity = item['quantity'] ?? 1;
-            
-            if (mealStats.containsKey(mealName)) {
-              mealStats[mealName]!['count'] = (mealStats[mealName]!['count'] ?? 0) + quantity;
-            } else {
-              mealStats[mealName] = {
-                'name': mealName,
-                'count': quantity,
-              };
-            }
-          }
+
+      for (var item in itemRows) {
+        final mealName = item['name'] ?? '';
+        final quantity = item['quantity'] ?? 1;
+
+        if (mealStats.containsKey(mealName)) {
+          mealStats[mealName]!['count'] = (mealStats[mealName]!['count'] ?? 0) + quantity;
+        } else {
+          mealStats[mealName] = {
+            'name': mealName,
+            'count': quantity,
+          };
         }
       }
-      
+
       // Get top 5 most ordered meals
       final sortedMeals = mealStats.values.toList()
         ..sort((a, b) => (b['count'] ?? 0).compareTo(a['count'] ?? 0));
-      
-      final topMealNames = sortedMeals.take(5).map((m) => m['name']).toList();
-      
+
+      final topMealNames = sortedMeals.take(5).map((m) => m['name'] as String).toList();
+
       // Get meal details for popular items
       if (topMealNames.isNotEmpty) {
-        final mealsSnapshot = await FirebaseFirestore.instance
-            .collection('meals')
-            .where('active', isEqualTo: true)
-            .where('name', whereIn: topMealNames)
-            .get();
-        
+        final mealsRows = await Supabase.instance.client
+            .from('meals')
+            .select()
+            .eq('active', true)
+            .inFilter('name', topMealNames);
+
         if (mounted) {
           setState(() {
-            popularMeals = mealsSnapshot.docs.map((doc) {
-              final data = doc.data();
-              var imageUrl = data['imageUrl'] ?? 'assets/images/logo.png';
+            popularMeals = (mealsRows as List<dynamic>).map((data) {
+              var imageUrl = (data['image_url'] as String?) ?? 'assets/images/logo.png';
+              if (imageUrl.isEmpty) imageUrl = 'assets/images/logo.png';
               imageUrl = imageUrl.replaceAll('&amp;', '&');
               // Remove leading slash from asset paths
               if (imageUrl.startsWith('/assets/')) {
                 imageUrl = imageUrl.substring(1);
               }
               return {
-                'id': doc.id,
+                'id': data['id'],
                 'name': data['name'] ?? 'Unknown',
-                'price': '\$${(data['price'] ?? 0.0).toStringAsFixed(2)}',
+                'price': '\$${((data['price'] ?? 0.0) as num).toStringAsFixed(2)}',
                 'image': imageUrl,
                 'category': data['category'] ?? 'Main Dishes',
                 'available': data['available'] ?? true,
                 'orderCount': mealStats[data['name']]?['count'] ?? 0,
               };
             }).toList();
-            
+
             // Sort by order count
             popularMeals.sort((a, b) => (b['orderCount'] ?? 0).compareTo(a['orderCount'] ?? 0));
             _popularLoading = false;
@@ -655,24 +657,14 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
   Future<void> _showPlacesAutocomplete() async {
     try {
-      final prediction = await PlacesAutocomplete.show(
+      final prediction = await showPlacesAutocompleteSheet(
         context: context,
-        apiKey: EnvConfig.googleMapsApiKey,
-        mode: Mode.overlay,
-        language: 'en',
-        components: [Component(Component.country, 'us')],
-        types: ['address'],
-        strictbounds: false,
+        placesService: PlacesService(EnvConfig.googleMapsApiKey),
       );
 
       if (prediction != null && mounted) {
-        final places = GoogleMapsPlaces(
-          apiKey: EnvConfig.googleMapsApiKey,
-        );
-
-        final detail = await places.getDetailsByPlaceId(prediction.placeId!);
-        final geometry = detail.result.geometry!;
-        final location = geometry.location;
+        final placesService = PlacesService(EnvConfig.googleMapsApiKey);
+        final location = await placesService.getDetails(prediction.placeId);
 
         final position = Position(
           latitude: location.lat,
@@ -691,7 +683,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
           setState(() {
             _currentPosition = position;
             _isManualLocation = true;
-            _location = prediction.description ?? 'Selected location';
+            _location = prediction.description;
             _updateMarkers();
             _updateLocationCircle();
           });

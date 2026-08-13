@@ -1,39 +1,58 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class OrderTrackingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get real-time order updates for customer
-  static Stream<DocumentSnapshot> trackOrder(String orderId) {
-    return _firestore.collection('orders').doc(orderId).snapshots();
+  static Stream<List<Map<String, dynamic>>> trackOrder(String orderId) {
+    return Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('id', orderId);
   }
 
   // Get customer's active orders
-  static Stream<QuerySnapshot> getActiveOrders() {
-    final user = FirebaseAuth.instance.currentUser;
+  static Stream<List<Map<String, dynamic>>> getActiveOrders() {
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return const Stream.empty();
 
-    return _firestore
-        .collection('orders')
-        .where('userId', isEqualTo: user.uid)
-        .where('deliveryStatus', whereIn: ['pending', 'confirmed', 'preparing', 'ready for pickup', 'on the way'])
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    return Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', user.id)
+        .order('created_at')
+        .map((rows) => rows
+            .where((row) => [
+                  'pending',
+                  'confirmed',
+                  'preparing',
+                  'ready for pickup',
+                  'on the way',
+                ].contains(row['status']))
+            .toList());
   }
 
   // Get order history for customer
-  static Stream<QuerySnapshot> getOrderHistory() {
-    final user = FirebaseAuth.instance.currentUser;
+  static Stream<List<Map<String, dynamic>>> getOrderHistory() {
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return const Stream.empty();
 
-    return _firestore
-        .collection('orders')
-        .where('userId', isEqualTo: user.uid)
-        .where('deliveryStatus', whereIn: ['delivered', 'picked up', 'completed', 'cancelled'])
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots();
+    return Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', user.id)
+        .order('created_at')
+        .map((rows) => rows
+            .where((row) => [
+                  'delivered',
+                  'picked up',
+                  'completed',
+                  'cancelled',
+                ].contains(row['status']))
+            .take(20)
+            .toList());
   }
 
   // Get driver location if available

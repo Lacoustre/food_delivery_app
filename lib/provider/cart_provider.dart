@@ -71,6 +71,7 @@ class CartProvider extends ChangeNotifier {
           (_cartItems[index]['quantity'] ?? 1) + (meal['quantity'] ?? 1);
     } else {
       _cartItems.add({
+        'id': meal['id'],
         'name': incomingName,
         'price': incomingPrice,
         'image': meal['image'],
@@ -224,6 +225,7 @@ class CartProvider extends ChangeNotifier {
 }
 
 class CartItem {
+  final String? id;
   final String name;
   final double price;
   final int quantity;
@@ -233,6 +235,7 @@ class CartItem {
   final String instructions;
 
   CartItem({
+    this.id,
     required this.name,
     required this.price,
     required this.quantity,
@@ -244,6 +247,7 @@ class CartItem {
 
   factory CartItem.fromMap(Map<String, dynamic> map) {
     return CartItem(
+      id: map['id'] as String?,
       name: map['name'] ?? '',
       price: CartProvider._asDouble(map['price']),
       quantity: (map['quantity'] ?? 1) as int,

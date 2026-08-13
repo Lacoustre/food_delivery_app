@@ -12,6 +12,7 @@ import { orderService } from '@/lib/orderService'
 import PromoCode from '@/components/PromoCode'
 import { promotionsService, type Promotion } from '@/lib/promotionsService'
 import { createPaymentIntent, stripePromise } from '@/lib/stripeService'
+import { getAuthHeaders } from '@/lib/authHeaders'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -36,35 +37,24 @@ interface OrderData {
   deliveryTime?: string
 }
 
-const StripePaymentForm = ({ onPaymentSuccess, total, processing, orderData }: {
+const StripePaymentForm = ({ onPaymentSuccess, total, processing }: {
   onPaymentSuccess: () => void
   total: number
   processing: boolean
-  orderData: OrderData
 }) => {
   const stripe = useStripe()
   const elements = useElements()
   const [error, setError] = useState<string | null>(null)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-
-  useEffect(() => {
-    createPaymentIntent(total).then(({ clientSecret }) => {
-      setClientSecret(clientSecret)
-    }).catch(err => {
-      console.error('Failed to create payment intent:', err)
-      setError('Failed to initialize payment. Please try again.')
-    })
-  }, [total])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    
-    if (!stripe || !elements || !clientSecret || isProcessing || processing) return
-    
+
+    if (!stripe || !elements || isProcessing || processing) return
+
     setIsProcessing(true)
     setError(null)
-    
+
     try {
       const { error: submitError } = await elements.submit()
       if (submitError) {
@@ -72,10 +62,12 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing, orderData }: {
         setIsProcessing(false)
         return
       }
-      
+
+      // `elements` already carries the clientSecret it was initialized with
+      // via the parent <Elements options={{ clientSecret }}> — no need to
+      // create or pass a second one here.
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        clientSecret,
         redirect: 'if_required'
       })
 
@@ -95,11 +87,7 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing, orderData }: {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="p-6 border-2 border-orange-200 rounded-2xl bg-white/80">
-        {clientSecret ? (
-          <PaymentElement />
-        ) : (
-          <div className="text-center py-8 text-gray-600">Loading payment form...</div>
-        )}
+        <PaymentElement />
       </div>
       {error && (
         <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
@@ -108,7 +96,7 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing, orderData }: {
       )}
       <button
         type="submit"
-        disabled={!stripe || !clientSecret || isProcessing || processing}
+        disabled={!stripe || isProcessing || processing}
         className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
       >
         {(isProcessing || processing) ? (
@@ -247,7 +235,12 @@ function CheckoutContent() {
 
   useEffect(() => {
     if (total > 0) {
-      createPaymentIntent(total)
+      createPaymentIntent({
+        items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
+        orderType: orderData.orderType,
+        distanceMiles: calculatedDistance,
+        promoCode: appliedPromo?.promotion.code
+      })
         .then(({ clientSecret }) => {
           setClientSecret(clientSecret)
         })
@@ -256,6 +249,7 @@ function CheckoutContent() {
           alert('Unable to initialize payment. Please try again or use cash payment.')
         })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total])
 
   const getCurrentLocation = async () => {
@@ -339,6 +333,41 @@ function CheckoutContent() {
     }
   }
 
+  // Re-validates items/prices/promo server-side and creates the order in
+  // Supabase, returning the authoritative data. The Firestore order (and
+  // the confirmation email) are built from THIS response, not from raw
+  // client cart state — otherwise a tampered cart could still get a
+  // different order fulfilled than what was actually paid for.
+  const createValidatedOrder = async () => {
+    const response = await fetch('/api/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+      body: JSON.stringify({
+        items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
+        orderType: orderData.orderType,
+        distanceMiles: calculatedDistance,
+        promoCode: appliedPromo?.promotion.code,
+        customerInfo: orderData.customerInfo,
+        deliveryAddress: orderData.deliveryAddress,
+        deliveryTime: orderData.deliveryTime,
+        paymentMethod: orderData.paymentMethod
+      })
+    })
+    const validated = await response.json()
+    if (!response.ok) {
+      throw new Error(validated.error || 'Failed to create order')
+    }
+    return validated as {
+      orderId: string
+      orderNumber: string
+      items: { id: string; name: string; price: number; quantity: number }[]
+      subtotal: number
+      deliveryFee: number
+      tax: number
+      total: number
+    }
+  }
+
   const handlePaymentSuccess = async () => {
     setProcessing(true)
     
@@ -371,35 +400,33 @@ function CheckoutContent() {
         return
       }
 
-      // Create order in database
+      // Re-validates items/prices/promo server-side; the order that gets
+      // fulfilled and emailed is built from this response, not raw cart state.
+      const validated = await createValidatedOrder()
+
       const orderPayload = {
-        orderNumber: Math.floor(Math.random() * 10000) + 1000,
+        orderNumber: validated.orderNumber,
         userId: user?.uid || '',
         customerInfo: orderData.customerInfo,
-        items: cartItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        })),
+        items: validated.items,
         orderType: orderData.orderType,
         deliveryAddress: orderData.deliveryAddress,
         deliveryTime: orderData.deliveryTime,
-        subtotal,
-        deliveryFee,
-        tax,
-        total,
+        subtotal: validated.subtotal,
+        deliveryFee: validated.deliveryFee,
+        tax: validated.tax,
+        total: validated.total,
         paymentMethod: orderData.paymentMethod,
         status: 'confirmed' as const
       }
-      
+
       await orderService.createOrder(orderPayload)
-      
+
       // Send confirmation email
       try {
         await fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
           body: JSON.stringify({
             type: 'confirmation',
             orderData: {
@@ -407,15 +434,15 @@ function CheckoutContent() {
               customerName: orderData.customerInfo.name,
               orderNumber: orderPayload.orderNumber,
               orderType: orderData.orderType,
-              items: cartItems.map(item => ({
+              items: validated.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price
               })),
-              subtotal,
-              deliveryFee,
-              tax,
-              total,
+              subtotal: validated.subtotal,
+              deliveryFee: validated.deliveryFee,
+              tax: validated.tax,
+              total: validated.total,
               deliveryAddress: orderData.deliveryAddress,
               status: 'confirmed'
             }
@@ -424,7 +451,7 @@ function CheckoutContent() {
       } catch (emailError) {
         console.error('Failed to send confirmation email:', emailError)
       }
-      
+
       // Send confirmation notification
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('Order Confirmed!', {
@@ -432,14 +459,14 @@ function CheckoutContent() {
           icon: '/assets/images/logo.png'
         })
       }
-      
+
       // Clear cart and redirect
       localStorage.removeItem('cart')
       localStorage.removeItem('orderType')
       localStorage.removeItem('deliveryAddress')
       localStorage.removeItem('calculatedDistance')
       localStorage.removeItem('checkoutRedirect')
-      
+
       setPaymentSuccess(true)
       
       // Delay redirect to show success state
@@ -490,35 +517,33 @@ function CheckoutContent() {
         return
       }
 
-      // Create order in database
+      // Re-validates items/prices/promo server-side; the order that gets
+      // fulfilled and emailed is built from this response, not raw cart state.
+      const validated = await createValidatedOrder()
+
       const orderPayload = {
-        orderNumber: Math.floor(Math.random() * 10000) + 1000,
+        orderNumber: validated.orderNumber,
         userId: user?.uid || '',
         customerInfo: orderData.customerInfo,
-        items: cartItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        })),
+        items: validated.items,
         orderType: orderData.orderType,
         deliveryAddress: orderData.deliveryAddress,
         deliveryTime: orderData.deliveryTime,
-        subtotal,
-        deliveryFee,
-        tax,
-        total,
+        subtotal: validated.subtotal,
+        deliveryFee: validated.deliveryFee,
+        tax: validated.tax,
+        total: validated.total,
         paymentMethod: orderData.paymentMethod,
         status: 'confirmed' as const
       }
-      
+
       await orderService.createOrder(orderPayload)
-      
+
       // Send confirmation email
       try {
         await fetch('/api/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
           body: JSON.stringify({
             type: 'confirmation',
             orderData: {
@@ -526,15 +551,15 @@ function CheckoutContent() {
               customerName: orderData.customerInfo.name,
               orderNumber: orderPayload.orderNumber,
               orderType: orderData.orderType,
-              items: cartItems.map(item => ({
+              items: validated.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price
               })),
-              subtotal,
-              deliveryFee,
-              tax,
-              total,
+              subtotal: validated.subtotal,
+              deliveryFee: validated.deliveryFee,
+              tax: validated.tax,
+              total: validated.total,
               deliveryAddress: orderData.deliveryAddress,
               status: 'confirmed'
             }
@@ -543,7 +568,7 @@ function CheckoutContent() {
       } catch (emailError) {
         console.error('Failed to send confirmation email:', emailError)
       }
-      
+
       // Send confirmation notification
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('Order Confirmed!', {
@@ -551,13 +576,13 @@ function CheckoutContent() {
           icon: '/assets/images/logo.png'
         })
       }
-      
+
       // Clear cart and redirect
       localStorage.removeItem('cart')
       localStorage.removeItem('orderType')
       localStorage.removeItem('deliveryAddress')
       localStorage.removeItem('calculatedDistance')
-      
+
       router.push('/order-confirmation')
     } catch (error) {
       console.error('Order failed:', error)
@@ -818,11 +843,10 @@ function CheckoutContent() {
               {orderData.paymentMethod === 'card' ? (
                 clientSecret ? (
                   <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <StripePaymentForm 
+                    <StripePaymentForm
                       onPaymentSuccess={handlePaymentSuccess}
                       total={total}
                       processing={processing}
-                      orderData={orderData}
                     />
                   </Elements>
                 ) : (
