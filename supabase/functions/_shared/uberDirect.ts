@@ -16,7 +16,7 @@ const UBER_API_BASE = "https://api.uber.com/v1/customers";
 export const RESTAURANT_PICKUP = {
   name: "Taste of African Cuisine",
   address: "200 Hartford Turnpike, Vernon, CT 06066",
-  phone: "+19294563215",
+  phone: "+18608055121",
   lat: 41.82457,
   lng: -72.4978,
 };
