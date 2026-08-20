@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { computeOrderTotals } from '@/lib/pricing'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
+import { createUberDelivery } from '@/lib/uberDirect'
 
 interface CartItemInput {
   id: string
@@ -130,12 +131,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }
 
+    // Dispatch ASAP delivery orders to Uber Direct. Delayed options
+    // ("1hour"/"2hours"/"3hours") skip auto-dispatch — a courier shouldn't
+    // arrive before the food is wanted; those are handled manually until
+    // scheduled dispatch lands. A dispatch failure must not fail the order —
+    // it's already created — so it's caught and logged instead.
+    let uberTrackingUrl: string | null = null
+    if (orderType === 'delivery' && (!deliveryTime || deliveryTime === 'asap')) {
+      try {
+        const uber = await createUberDelivery({
+          orderNumber,
+          dropoffAddress: deliveryAddress!,
+          dropoffName: customerInfo?.name || 'Customer',
+          dropoffPhone: customerInfo?.phone || null,
+          items: validatedItems.map(i => ({ name: i.name, quantity: i.quantity }))
+        })
+
+        uberTrackingUrl = uber.trackingUrl
+        const { error: uberUpdateError } = await supabase
+          .from('orders')
+          .update({
+            delivery_provider: 'uber_direct',
+            uber_delivery_id: uber.deliveryId,
+            uber_tracking_url: uber.trackingUrl,
+            uber_delivery_status: uber.status,
+            uber_fee: uber.fee
+          })
+          .eq('id', order.id)
+        if (uberUpdateError) {
+          console.error(`Uber dispatch record failed for order ${order.id}:`, uberUpdateError)
+        }
+      } catch (uberError) {
+        console.error(`Uber dispatch failed for order ${order.id}:`, uberError)
+      }
+    }
+
     return NextResponse.json({
       orderId: order.id,
       orderNumber,
       items: validatedItems,
       customerInfo,
       deliveryTime,
+      uberTrackingUrl,
       ...totals
     })
   } catch (error) {
