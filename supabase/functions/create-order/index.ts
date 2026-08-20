@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeValidatedTotals } from "../_shared/pricing.ts";
+import { createUberDelivery } from "../_shared/uberDirect.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,6 +90,42 @@ Deno.serve(async (req) => {
       throw new Error(itemsError.message);
     }
 
+    // Dispatch confirmed (non-scheduled) delivery orders to Uber Direct.
+    // A dispatch failure must not fail the order — it's already created and
+    // paid for — so it's caught and the order is left for manual dispatch.
+    let uberTrackingUrl: string | null = null;
+    if (orderType === "delivery" && order.status === "confirmed") {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, phone")
+          .eq("id", userData.user.id)
+          .single();
+
+        const uber = await createUberDelivery({
+          orderNumber,
+          dropoffAddress: deliveryAddress,
+          dropoffName: profile?.name || "Customer",
+          dropoffPhone: profile?.phone || null,
+          items: validatedItems.map((i) => ({ name: i.name, quantity: i.quantity })),
+        });
+
+        uberTrackingUrl = uber.trackingUrl;
+        await supabase
+          .from("orders")
+          .update({
+            delivery_provider: "uber_direct",
+            uber_delivery_id: uber.deliveryId,
+            uber_tracking_url: uber.trackingUrl,
+            uber_delivery_status: uber.status,
+            uber_fee: uber.fee,
+          })
+          .eq("id", order.id);
+      } catch (uberError) {
+        console.error(`Uber dispatch failed for order ${order.id}:`, uberError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         orderId: order.id,
@@ -99,6 +136,7 @@ Deno.serve(async (req) => {
         tax,
         tip: safeTip,
         total,
+        uberTrackingUrl,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
