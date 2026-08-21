@@ -94,6 +94,15 @@ export async function POST(request: NextRequest) {
     const totals = computeOrderTotals({ subtotal, orderType, distanceMiles, promoDiscount })
     const orderNumber = String(Math.floor(Math.random() * 10000) + 1000)
 
+    // Persist delayed delivery-time choices so the dispatch-due-orders cron
+    // can send them to Uber at the right time — previously "1hour" etc. was
+    // only echoed back to the client and lost.
+    const DELAY_HOURS: Record<string, number> = { '30mins': 0.5, '1hour': 1, '2hours': 2, '3hours': 3 }
+    const delayHours = deliveryTime ? DELAY_HOURS[deliveryTime] : undefined
+    const scheduledFor = delayHours
+      ? new Date(Date.now() + delayHours * 3600_000).toISOString()
+      : null
+
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
@@ -103,6 +112,7 @@ export async function POST(request: NextRequest) {
         order_type: orderType,
         payment_method: paymentMethod,
         delivery_address: orderType === 'delivery' ? deliveryAddress : null,
+        scheduled_for: scheduledFor,
         subtotal: totals.subtotal,
         delivery_fee: totals.deliveryFee,
         tax: totals.tax,

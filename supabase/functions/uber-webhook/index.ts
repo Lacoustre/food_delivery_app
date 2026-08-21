@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
     // so a shape drift degrades to a logged no-op instead of an error.
     const delivery = event.data ?? event;
     const deliveryId: string | undefined = delivery.id ?? delivery.delivery_id;
-    const uberStatus: string | undefined = delivery.status ?? event.status;
+    // Refund requests carry no delivery status — surface them on the order
+    // as a distinct uber_delivery_status so the admin panel flags them.
+    const isRefund = typeof event.kind === "string" && event.kind.includes("refund");
+    const uberStatus: string | undefined = isRefund
+      ? "refund_requested"
+      : (delivery.status ?? event.status);
+    if (isRefund) console.warn(`uber-webhook: refund requested for delivery ${deliveryId}`, rawBody.slice(0, 500));
 
     if (!deliveryId || !uberStatus) {
       console.warn("uber-webhook: event missing delivery id or status", event.kind ?? "");
