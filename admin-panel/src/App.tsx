@@ -9,7 +9,6 @@ import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Analytics from "./pages/Analytics";
 import Support from "./pages/Support";
-import Drivers from "./pages/Drivers";
 import Reviews from "./pages/Reviews";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -107,16 +106,6 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Support />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/drivers"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Drivers />
               </DashboardLayout>
             </ProtectedRoute>
           }

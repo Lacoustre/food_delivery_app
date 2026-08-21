@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Utensils, Users, BarChart3, Settings, MessageCircle, Calendar, Car, Star } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Utensils, Users, BarChart3, Settings, MessageCircle, Calendar, Star } from "lucide-react";
 import logo from "../assets/images/logo.png";
 
 const navItems = [
@@ -8,7 +8,6 @@ const navItems = [
   { name: "Scheduled Orders", path: "/scheduled-orders", icon: Calendar },
   { name: "Meals", path: "/meals", icon: Utensils },
   { name: "Customers", path: "/users", icon: Users },
-  { name: "Drivers", path: "/drivers", icon: Car },
   { name: "Reviews", path: "/reviews", icon: Star },
   { name: "Support", path: "/support", icon: MessageCircle },
   { name: "Analytics", path: "/analytics", icon: BarChart3 },

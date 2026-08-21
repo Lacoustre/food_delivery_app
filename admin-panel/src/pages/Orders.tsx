@@ -1,6 +1,3 @@
-import { useCollection } from "react-firebase-hooks/firestore";
-import { collection, query, where } from "firebase/firestore";
-import { db } from "../firebase";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
@@ -42,6 +39,10 @@ type Order = {
   driver_id: string | null;
   driver_name: string | null;
   driver_status: string | null;
+  delivery_provider: string | null;
+  uber_delivery_id: string | null;
+  uber_tracking_url: string | null;
+  uber_delivery_status: string | null;
   created_at: string;
   order_items: OrderItemRow[];
   profiles: ProfileRow | ProfileRow[] | null;
@@ -52,19 +53,10 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [previousStatusMap, setPreviousStatusMap] = useState<{ [key: string]: string }>({});
   const [selectedMonth, setSelectedMonth] = useState(moment().format("YYYY-MM"));
-  const [showDriverModal, setShowDriverModal] = useState(false);
-  const [selectedOrderForDriver, setSelectedOrderForDriver] = useState<Order | null>(null);
 
   const [allOrders, setAllOrders] = useState<Order[] | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  // Drivers still live in Firestore — that system hasn't been migrated yet.
-  const driversQuery = query(
-    collection(db, "drivers"),
-    where("approvalStatus", "==", "approved")
-  );
-  const [driversSnapshot] = useCollection(driversQuery);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -115,27 +107,6 @@ export default function Orders() {
     if (customer?.name) return customer.name;
     if (customer?.email) return customer.email.split("@")[0];
     return "Unknown Customer";
-  };
-
-  const handleAssignDriver = async (orderId: string, driverName: string) => {
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          driver_name: driverName,
-          driver_status: "assigned",
-          assigned_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", orderId);
-      if (error) throw error;
-
-      toast.success(`Order assigned to ${driverName}`);
-      setShowDriverModal(false);
-      setSelectedOrderForDriver(null);
-    } catch {
-      toast.error("Failed to assign driver");
-    }
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
@@ -454,17 +425,31 @@ export default function Orders() {
                         >
                           View
                         </button>
-                        {!order.driver_name && (order.status === "confirmed" || order.status === "preparing") && !isPickup && (
-                          <button
-                            onClick={() => {
-                              setSelectedOrderForDriver(order);
-                              setShowDriverModal(true);
-                            }}
-                            className="text-green-600 hover:text-green-800 transition-colors duration-150 flex items-center gap-1"
-                          >
-                            <Truck className="w-4 h-4" />
-                            Assign Driver
-                          </button>
+                        {/* Delivery is handled by Uber Direct — dispatched automatically
+                            at order confirmation; couriers are no longer assigned here. */}
+                        {order.delivery_provider === "uber_direct" && (
+                          order.uber_tracking_url ? (
+                            <a
+                              href={order.uber_tracking_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:text-green-800 transition-colors duration-150 inline-flex items-center gap-1"
+                            >
+                              <Truck className="w-4 h-4" />
+                              {order.uber_delivery_status || "dispatched"}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-500 inline-flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              {order.uber_delivery_status || "dispatched"}
+                            </span>
+                          )
+                        )}
+                        {!order.delivery_provider && !isPickup && (order.status === "confirmed" || order.status === "preparing") && (
+                          <span className="text-xs text-amber-600 inline-flex items-center gap-1" title="Uber dispatch didn't run for this order — arrange delivery manually">
+                            <Truck className="w-3 h-3" />
+                            not dispatched
+                          </span>
                         )}
                         {order.driver_name && (
                           <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -604,81 +589,6 @@ export default function Orders() {
         </div>
       )}
 
-      {/* Driver Assignment Modal */}
-      {showDriverModal && selectedOrderForDriver && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border border-gray-200 m-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Assign Driver</h2>
-              <button
-                onClick={() => {
-                  setShowDriverModal(false);
-                  setSelectedOrderForDriver(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <span className="sr-only">Close</span>
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">Order: {selectedOrderForDriver.order_number || selectedOrderForDriver.id}</p>
-              <p className="text-sm text-gray-600">Customer: {getCustomerName(selectedOrderForDriver)}</p>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-700">Available Drivers:</h3>
-              {driversSnapshot?.docs.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">No available drivers found</p>
-              ) : (
-                driversSnapshot?.docs.map((driverDoc) => {
-                  const driver = driverDoc.data();
-                  const isOnline = driver.isActive;
-                  const driverName = driver.name || driver.email || "Unknown Driver";
-                  return (
-                    <button
-                      key={driverDoc.id}
-                      onClick={() => handleAssignDriver(selectedOrderForDriver.id, driverName)}
-                      disabled={!isOnline}
-                      className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                        isOnline
-                          ? "border-green-200 bg-green-50 hover:bg-green-100 text-green-900"
-                          : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{driverName}</p>
-                          <p className="text-xs text-gray-500">{driver.email}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-green-500" : "bg-gray-400"}`} />
-                          <span className="text-xs">{isOnline ? "Online" : "Offline"}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => {
-                  setShowDriverModal(false);
-                  setSelectedOrderForDriver(null);
-                }}
-                className="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 font-medium transition-colors duration-200"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
