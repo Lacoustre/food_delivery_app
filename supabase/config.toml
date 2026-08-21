@@ -412,3 +412,8 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Uber calls this webhook directly — no Supabase JWT on the request; auth is
+# the HMAC signature check inside the function itself.
+[functions.uber-webhook]
+verify_jwt = false

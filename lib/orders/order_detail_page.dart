@@ -155,6 +155,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               _order!['deliveryStatus'] = status;
               final driverName = row['driver_name'] as String?;
               _order!['driver'] = driverName != null ? {'name': driverName} : null;
+              // Uber dispatch/webhook fields land after order creation —
+              // patch them so the tracking button appears without a reload.
+              _order!['deliveryProvider'] = row['delivery_provider'];
+              _order!['uberTrackingUrl'] = row['uber_tracking_url'];
+              _order!['uberDeliveryStatus'] = row['uber_delivery_status'];
             });
           },
           onError: (_) {
@@ -842,6 +847,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       address = addressData['address']?.toString() ?? 'No address provided';
     }
     final driverPhone = data['driver']?['phone']?.toString();
+    final uberTrackingUrl = data['uberTrackingUrl']?.toString();
 
     return Card(
       elevation: 2,
@@ -883,13 +889,25 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   onPressed: _getDeliveryLocation,
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.phone, size: 18),
-                  label: const Text('Call Driver'),
-                  onPressed: driverPhone != null
-                      ? () => launchUrl(Uri.parse('tel:$driverPhone'))
-                      : null,
-                ),
+                // Uber Direct orders get Uber's live tracking page; the
+                // in-house Call Driver button only shows for legacy orders.
+                if (uberTrackingUrl != null)
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.local_shipping, size: 18),
+                    label: const Text('Track Delivery'),
+                    onPressed: () => launchUrl(
+                      Uri.parse(uberTrackingUrl),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                  )
+                else
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.phone, size: 18),
+                    label: const Text('Call Driver'),
+                    onPressed: driverPhone != null
+                        ? () => launchUrl(Uri.parse('tel:$driverPhone'))
+                        : null,
+                  ),
               ],
             ),
           ),

@@ -53,6 +53,11 @@ Map<String, dynamic> orderRowToLegacyMap(Map<String, dynamic> order) {
     // Driver assignment display-only (name), not live tracking — driver
     // location/messaging stays on Firestore, untouched, for now.
     'driver': order['driver_name'] != null ? {'name': order['driver_name']} : null,
+    // Uber Direct handoff — when set, the detail page shows Uber's live
+    // tracking link instead of the in-house driver UI.
+    'deliveryProvider': order['delivery_provider'],
+    'uberTrackingUrl': order['uber_tracking_url'],
+    'uberDeliveryStatus': order['uber_delivery_status'],
     'switchedToPickup': false,
     'scheduledTime': order['scheduled_for'],
     'createdAt': order['created_at'] != null
