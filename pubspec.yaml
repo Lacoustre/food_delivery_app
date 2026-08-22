@@ -34,7 +34,6 @@ dependencies:
   url_launcher: ^6.3.1
   emoji_picker_flutter: ^4.3.0
   flutter_rating_bar: ^4.0.1
-  cloud_functions: ^5.6.0
   intl: ^0.20.2
   location: ^8.0.1
   flutter_displaymode: ^0.6.0

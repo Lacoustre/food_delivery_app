@@ -195,7 +195,7 @@ function CheckoutContent() {
     
     // Auto-detect location if delivery and no saved address
     if (savedOrderType === 'delivery' && !savedDeliveryAddress) {
-      detectLocation()
+      getCurrentLocation()
     }
     
     setLoading(false)

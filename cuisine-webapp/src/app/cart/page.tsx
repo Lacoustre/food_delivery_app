@@ -145,6 +145,9 @@ export default function CartPage() {
 
   const calculateDistance = async (userLat: number, userLng: number) => {
     try {
+      // Loaded globally by the Maps script tag in layout.tsx
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const google = (window as any).google
       const service = new google.maps.DistanceMatrixService()
       
       return new Promise<number>((resolve, reject) => {
@@ -155,7 +158,7 @@ export default function CartPage() {
           unitSystem: google.maps.UnitSystem.IMPERIAL,
           avoidHighways: false,
           avoidTolls: false
-        }, (response, status) => {
+        }, (response: any, status: any) => {
           if (status === google.maps.DistanceMatrixStatus.OK && response) {
             const distance = response.rows[0].elements[0].distance
             if (distance) {

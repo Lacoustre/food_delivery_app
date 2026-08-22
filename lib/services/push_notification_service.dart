@@ -1,4 +1,3 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
@@ -11,19 +10,19 @@ class PushNotificationService {
     required String body,
   }) async {
     try {
-      final callable = FirebaseFunctions.instanceFor(region: "us-central1")
-          .httpsCallable('sendPushNotification');
-      
-      await callable.call({
-        'userId': userId,
-        'title': title,
-        'body': body,
-        'data': {
-          'type': 'order',
-          'orderId': orderId,
-          'status': status,
+      await Supabase.instance.client.functions.invoke(
+        'send-push',
+        body: {
+          'userId': userId,
+          'title': title,
+          'body': body,
+          'data': {
+            'type': 'order',
+            'orderId': orderId,
+            'status': status,
+          },
         },
-      });
+      );
       
       debugPrint('✅ Push notification sent for order: $orderId');
     } catch (e) {
@@ -100,18 +99,18 @@ class PushNotificationService {
     required String userId,
   }) async {
     try {
-      final callable = FirebaseFunctions.instanceFor(region: "us-central1")
-          .httpsCallable('sendPushNotification');
-      
-      await callable.call({
-        'userId': userId,
-        'title': '⭐ How was your meal?',
-        'body': 'Please rate your experience with order #$orderId',
-        'data': {
-          'type': 'review',
-          'orderId': orderId,
+      await Supabase.instance.client.functions.invoke(
+        'send-push',
+        body: {
+          'userId': userId,
+          'title': '⭐ How was your meal?',
+          'body': 'Please rate your experience with order #$orderId',
+          'data': {
+            'type': 'review',
+            'orderId': orderId,
+          },
         },
-      });
+      );
       
       debugPrint('✅ Review prompt sent for order: $orderId');
     } catch (e) {

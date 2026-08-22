@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DeliveryCalculator {
@@ -74,25 +73,25 @@ class DeliveryCalculator {
     required double customerLon,
   }) async {
     try {
-      final callable = FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('getDrivingDistance');
+      final result = await Supabase.instance.client.functions.invoke(
+        'get-driving-distance',
+        body: {
+          'customerLat': customerLat,
+          'customerLon': customerLon,
+        },
+      );
 
-      final result = await callable.call({
-        'customerLat': customerLat,
-        'customerLon': customerLon,
-      });
-
-      if (result.data == null || result.data['distanceMiles'] == null) {
-        throw Exception('Invalid response from cloud function');
+      final data = result.data as Map<String, dynamic>?;
+      if (data == null || data['distanceMiles'] == null) {
+        throw Exception('Invalid response from edge function');
       }
 
-      final miles = (result.data['distanceMiles'] as num).toDouble();
+      final miles = (data['distanceMiles'] as num).toDouble();
       _logDebug('Driving distance: ${miles.toStringAsFixed(2)} mi');
 
       return miles;
     } catch (e) {
-      _logError('Cloud distance failed, using fallback', e);
+      _logError('Distance function failed, using fallback', e);
       return _calculateStraightLineDistance(customerLat, customerLon);
     }
   }

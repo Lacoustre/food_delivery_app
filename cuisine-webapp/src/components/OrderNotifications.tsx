@@ -8,7 +8,7 @@ import { CheckCircle, Clock, Truck, Package, X } from 'lucide-react'
 interface Notification {
   id: string
   orderId: string
-  orderNumber: number
+  orderNumber: string
   status: Order['status']
   message: string
   timestamp: Date
@@ -75,7 +75,7 @@ export default function OrderNotifications() {
     }
   }, [])
 
-  const getStatusMessage = (status: Order['status'], orderNumber: number) => {
+  const getStatusMessage = (status: Order['status'], orderNumber: string) => {
     switch (status) {
       case 'confirmed':
         return `Order #${orderNumber} has been confirmed! We're preparing your delicious meal.`
