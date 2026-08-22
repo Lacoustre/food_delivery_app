@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
 import Loader from "../components/Loader";
 
@@ -51,15 +50,21 @@ export default function Settings() {
     loadSettings();
   }, []);
 
+  // Settings live in the Supabase settings table (key='restaurant', value
+  // jsonb) — the same row the webapp banner and mobile app read.
   const loadSettings = async () => {
     try {
-      const docRef = doc(db, "settings", "restaurant");
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        setSettings({ ...defaultSettings, ...docSnap.data() });
+      const { data, error } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "restaurant")
+        .maybeSingle();
+      if (error) throw error;
+
+      if (data?.value) {
+        setSettings({ ...defaultSettings, ...(data.value as Partial<RestaurantSettings>) });
       } else {
-        await setDoc(docRef, defaultSettings);
+        await supabase.from("settings").upsert({ key: "restaurant", value: defaultSettings });
       }
     } catch {
       toast.error("Failed to load settings");
@@ -68,11 +73,17 @@ export default function Settings() {
     }
   };
 
+  const persistSettings = async (next: RestaurantSettings) => {
+    const { error } = await supabase
+      .from("settings")
+      .upsert({ key: "restaurant", value: next, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  };
+
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const docRef = doc(db, "settings", "restaurant");
-      await updateDoc(docRef, settings as Partial<RestaurantSettings>);
+      await persistSettings(settings);
       toast.success("Settings saved successfully");
     } catch {
       toast.error("Failed to save settings");
@@ -83,11 +94,11 @@ export default function Settings() {
 
   const toggleRestaurant = async () => {
     const newStatus = !settings.isOpen;
-    setSettings(prev => ({ ...prev, isOpen: newStatus }));
-    
+    const next = { ...settings, isOpen: newStatus };
+    setSettings(next);
+
     try {
-      const docRef = doc(db, "settings", "restaurant");
-      await updateDoc(docRef, { isOpen: newStatus });
+      await persistSettings(next);
       toast.success(`Restaurant ${newStatus ? 'opened' : 'closed'}`);
     } catch {
       toast.error("Failed to update restaurant status");

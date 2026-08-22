@@ -1,6 +1,5 @@
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
-import { doc, updateDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import { supabase } from './supabase'
 
 class NotificationService {
   private messaging: any = null
@@ -42,15 +41,14 @@ class NotificationService {
     }
   }
 
+  // Stored on the Supabase profile (profiles.fcm_token) — the same place
+  // the mobile app keeps its token — using the mirrored Supabase session
+  // instead of the old localStorage Firebase uid.
   async saveTokenToDatabase(token: string) {
-    const userId = localStorage.getItem('userId')
-    if (!userId) return
-
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        fcmToken: token,
-        updatedAt: new Date()
-      })
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData?.user) return
+      await supabase.from('profiles').update({ fcm_token: token }).eq('id', userData.user.id)
     } catch (error) {
       console.error('Failed to save token:', error)
     }

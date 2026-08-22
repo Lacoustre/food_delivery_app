@@ -1,8 +1,12 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Open/closed status lives in the Supabase `settings` table
+/// (key='restaurant', value jsonb) — the same row the admin panel manages
+/// and the webapp banner reads. Status writes only succeed for admin
+/// sessions (RLS); for customers they fail silently, same as the old
+/// Firestore rules.
 class RestaurantHoursService {
   static final RestaurantHoursService _instance =
       RestaurantHoursService._internal();
@@ -10,7 +14,7 @@ class RestaurantHoursService {
   RestaurantHoursService._internal();
 
   Timer? _timer;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   void startAutoSchedule() {
     // Check every minute (or more frequently during opening/closing times)
@@ -26,30 +30,33 @@ class RestaurantHoursService {
     _timer?.cancel();
   }
 
+  Future<Map<String, dynamic>?> _fetchSettingsValue() async {
+    final row = await _supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'restaurant')
+        .maybeSingle();
+    return row?['value'] as Map<String, dynamic>?;
+  }
+
   Future<void> _updateRestaurantStatus() async {
     try {
       final now = DateTime.now();
       final currentTime = TimeOfDay.fromDateTime(now);
       final currentDay = _getDayOfWeek(now.weekday);
 
-      final hoursDoc = await _firestore
-          .collection('settings')
-          .doc('restaurant')
-          .get();
+      final value = await _fetchSettingsValue();
+      if (value == null) return;
 
-      if (!hoursDoc.exists) {
-        return; // Skip if no settings document
-      }
-
-      final hoursData = hoursDoc.data()!;
-      final hours = hoursData['hours'] as Map<String, dynamic>?;
-
+      // Admin panel writes businessHours; accept the legacy hours key too.
+      final hours = (value['businessHours'] ?? value['hours'])
+          as Map<String, dynamic>?;
       if (hours == null) return;
 
       final daySchedule = hours[currentDay] as Map<String, dynamic>?;
 
       if (daySchedule == null || daySchedule['closed'] == true) {
-        await _setRestaurantStatus(false);
+        await _setRestaurantStatus(false, value);
         return;
       }
 
@@ -58,7 +65,7 @@ class RestaurantHoursService {
 
       if (openTime != null && closeTime != null) {
         final isOpen = _isTimeInRange(currentTime, openTime, closeTime);
-        await _setRestaurantStatus(isOpen);
+        await _setRestaurantStatus(isOpen, value);
       }
     } catch (e) {
       // Silently handle permission errors
@@ -66,12 +73,16 @@ class RestaurantHoursService {
     }
   }
 
-  Future<void> _setRestaurantStatus(bool isOpen) async {
+  Future<void> _setRestaurantStatus(
+    bool isOpen,
+    Map<String, dynamic> currentValue,
+  ) async {
+    if (currentValue['isOpen'] == isOpen) return; // no change, skip the write
     try {
-      await _firestore.collection('settings').doc('restaurant').set({
-        'isOpen': isOpen,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _supabase.from('settings').update({
+        'value': {...currentValue, 'isOpen': isOpen},
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('key', 'restaurant');
     } catch (e) {
       debugPrint('Failed to update restaurant status: $e');
     }
@@ -118,26 +129,23 @@ class RestaurantHoursService {
 
   Future<bool> isRestaurantOpen() async {
     try {
-      final statusDoc = await _firestore
-          .collection('settings')
-          .doc('restaurant')
-          .get();
-
-      if (statusDoc.exists) {
-        return statusDoc.data()?['isOpen'] ?? false;
-      }
-      return false;
+      final value = await _fetchSettingsValue();
+      return value?['isOpen'] ?? false;
     } catch (e) {
       return false;
     }
   }
 
-  Stream restaurantStatusStream() {
-    return _firestore
-        .collection('settings')
-        .doc('restaurant')
-        .snapshots()
-        .map((doc) => doc.data()?['isOpen'] ?? false)
+  Stream<bool> restaurantStatusStream() {
+    return _supabase
+        .from('settings')
+        .stream(primaryKey: ['key'])
+        .eq('key', 'restaurant')
+        .map((rows) {
+          if (rows.isEmpty) return false;
+          final value = rows.first['value'] as Map<String, dynamic>?;
+          return (value?['isOpen'] as bool?) ?? false;
+        })
         .handleError((error) {
           debugPrint('Restaurant status stream error: $error');
         });

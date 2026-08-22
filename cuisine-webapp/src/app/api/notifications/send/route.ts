@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { createClient } from '@supabase/supabase-js'
 import { verifyAuth } from '@/lib/verifyAuth'
 
 export async function POST(request: NextRequest) {
@@ -37,10 +36,25 @@ export async function POST(request: NextRequest) {
         })
       ])
     } else if (type === 'status_update') {
-      let orderData = null
+      // Look up the order in Supabase (scoped to the caller's own token,
+      // so RLS enforces they can only read their own orders) and pull the
+      // customer contact info off the joined profile.
+      let orderData: { customerInfo?: { name?: string; email?: string; phone?: string } } | null = null
       if (orderId) {
-        const orderDoc = await getDoc(doc(db, 'orders', orderId))
-        orderData = orderDoc.data()
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { global: { headers: { Authorization: request.headers.get('authorization')! } } }
+        )
+        const { data: order } = await supabase
+          .from('orders')
+          .select('id, profiles!user_id(name, email, phone)')
+          .eq('id', orderId)
+          .maybeSingle()
+        const profile = Array.isArray(order?.profiles) ? order?.profiles[0] : order?.profiles
+        if (profile) {
+          orderData = { customerInfo: { name: profile.name, email: profile.email, phone: profile.phone } }
+        }
       }
 
       // Only allow notifying the order's own customer — verified against
