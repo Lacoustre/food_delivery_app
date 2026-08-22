@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,7 +17,6 @@ import 'package:african_cuisine/orders/scheduled_orders_page.dart';
 import 'package:african_cuisine/phone_number_update.dart';
 import 'package:african_cuisine/logins/link_phone_page.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -48,107 +46,29 @@ class _ProfilePageState extends State<ProfilePage> {
     _displayNameController.text = user?.displayName ?? '';
   }
 
-  /// Check if user has a custom profile image
+  /// Check if user has a custom profile image — the Supabase profile's
+  /// avatar_url is authoritative; Firebase Auth photoURL covers photos
+  /// uploaded before the storage migration.
   Future<void> _checkForCustomImage() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    var hasCustom = user.photoURL != null && user.photoURL!.isNotEmpty;
     try {
-      // Check both old and new storage paths
-      final oldStorageRef = FirebaseStorage.instance.ref().child(
-        'profile_pictures/${user.uid}.jpg',
-      );
-      final newStorageRef = FirebaseStorage.instance.ref().child(
-        'users/${user.uid}/profile_picture.jpg',
-      );
-
-      try {
-        // Try new path first
-        await newStorageRef.getDownloadURL();
-        setState(() {
-          _hasCustomImage = true;
-        });
-        return;
-      } catch (e) {
-        // Try old path
-        try {
-          await oldStorageRef.getDownloadURL();
-          setState(() {
-            _hasCustomImage = true;
-          });
-          return;
-        } catch (e) {
-          // No custom image found
-        }
+      final supabaseUser = Supabase.instance.client.auth.currentUser;
+      if (supabaseUser != null) {
+        final row = await Supabase.instance.client
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', supabaseUser.id)
+            .maybeSingle();
+        final avatarUrl = row?['avatar_url'] as String?;
+        if (avatarUrl != null && avatarUrl.isNotEmpty) hasCustom = true;
       }
-
-      // Check if user has photoURL set
-      if (user.photoURL != null && user.photoURL!.isNotEmpty) {
-        setState(() {
-          _hasCustomImage = true;
-        });
-      } else {
-        setState(() {
-          _hasCustomImage = false;
-        });
-      }
-    } catch (e) {
-      // Image doesn't exist in storage
-      setState(() {
-        _hasCustomImage = false;
-      });
-
-      // Clear any broken photoURL from Firebase Auth
-      if (user.photoURL != null) {
-        try {
-          await user.updatePhotoURL(null);
-          await user.reload();
-        } catch (updateError) {
-          print('Failed to clear broken photoURL: $updateError');
-        }
-      }
+    } catch (_) {
+      // fall back to the photoURL check alone
     }
-  }
-
-  // Handle simulator upload errors
-  Future<void> _handleSimulatorUploadError(User user) async {
-    // Wait a bit for potential upload completion
-    await Future.delayed(const Duration(seconds: 3));
-
-    try {
-      final storageRef = FirebaseStorage.instance.ref().child(
-        'profile_pictures/${user.uid}.jpg',
-      );
-      final downloadUrl = await storageRef.getDownloadURL();
-
-      await user.updatePhotoURL(downloadUrl);
-      await user.reload();
-
-      setState(() {
-        _profileImagePath = null;
-        _imageLoadError = false;
-        _hasCustomImage = true;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile picture updated (simulator mode)!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (secondError) {
-      // Actually failed
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: Cannot verify upload completion'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    if (mounted) setState(() => _hasCustomImage = hasCustom);
   }
 
   Future<void> _uploadAndSetProfileImage(File imageFile) async {
@@ -168,63 +88,34 @@ class _ProfilePageState extends State<ProfilePage> {
     });
 
     try {
-      // Ensure user is authenticated and get fresh token
-      await user.reload();
-      final idToken = await user.getIdToken(true);
-      
-      if (idToken == null) {
-        throw Exception('Authentication token not available');
+      final supabase = Supabase.instance.client;
+      final supabaseUser = supabase.auth.currentUser;
+      if (supabaseUser == null) {
+        throw Exception('Not signed in');
       }
 
-      // Check if user is properly authenticated
-      if (!user.emailVerified && user.providerData.isEmpty) {
-        throw FirebaseException(
-          plugin: 'firebase_storage',
-          code: 'unauthenticated',
-          message: 'User not properly authenticated',
-        );
-      }
+      // Upload to the Supabase avatars bucket (owner-scoped folder);
+      // upsert replaces the previous photo, cache-buster keeps the stable
+      // public URL fresh in image caches.
+      final path = '${supabaseUser.id}/profile.jpg';
+      await supabase.storage.from('avatars').upload(
+            path,
+            imageFile,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
+      final downloadUrl =
+          '${supabase.storage.from('avatars').getPublicUrl(path)}'
+          '?v=${DateTime.now().millisecondsSinceEpoch}';
 
-      final storageRef = FirebaseStorage.instance.ref().child(
-        'users/${user.uid}/profile_picture.jpg',
-      );
-
-      // Add metadata for better organization
-      final metadata = SettableMetadata(
-        contentType: 'image/jpeg',
-        customMetadata: {
-          'userId': user.uid,
-          'uploadedAt': DateTime.now().toIso8601String(),
-        },
-      );
-
-      final uploadTask = storageRef.putFile(imageFile, metadata);
-      
-      // Monitor upload progress
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-        debugPrint('Upload progress: ${(progress * 100).toStringAsFixed(1)}%');
-      });
-
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
-      // Update user profile with new photo URL
+      // Firebase Auth photoURL stays the display source while auth is
+      // still Firebase; the profile row is what web/admin read.
       await user.updatePhotoURL(downloadUrl);
-      
-      // Also save to Firestore for backup
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
-              'photoURL': downloadUrl,
-              'profileUpdatedAt': FieldValue.serverTimestamp(),
-            });
-      } catch (firestoreError) {
-        // Continue even if Firestore update fails
-        debugPrint('Firestore update failed: $firestoreError');
-      }
+      await supabase
+          .from('profiles')
+          .update({'avatar_url': downloadUrl}).eq('id', supabaseUser.id);
 
       await user.reload();
 
@@ -243,77 +134,18 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         );
       }
-    } on FirebaseException catch (e) {
-      setState(() {
-        _isUploading = false;
-      });
-
-      String errorMessage = 'Upload failed';
-      
-      switch (e.code) {
-        case 'storage/unauthorized':
-        case 'unauthenticated':
-          errorMessage = 'Please sign out and sign back in to upload images.';
-          // Force re-authentication
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-          }
-          return;
-        case 'storage/canceled':
-          errorMessage = 'Upload was cancelled';
-          break;
-        case 'storage/unknown':
-          errorMessage = 'An unknown error occurred during upload';
-          break;
-        case 'storage/object-not-found':
-          errorMessage = 'File not found during upload';
-          break;
-        case 'storage/bucket-not-found':
-          errorMessage = 'Storage bucket not found';
-          break;
-        case 'storage/project-not-found':
-          errorMessage = 'Project not found';
-          break;
-        case 'storage/quota-exceeded':
-          errorMessage = 'Storage quota exceeded';
-          break;
-        case 'storage/retry-limit-exceeded':
-          errorMessage = 'Upload retry limit exceeded. Please try again.';
-          break;
-        default:
-          errorMessage = 'Upload failed: ${e.message}';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
     } catch (e) {
       setState(() {
         _isUploading = false;
       });
-
-      // Enhanced error handling for simulator issues
-      if (e.toString().contains('cannot parse response') ||
-          e.toString().contains('XMLHttpRequest')) {
-        // Common simulator/web errors - try to verify upload
-        await _handleSimulatorUploadError(user);
-      } else {
-        // Actual upload failure
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Upload failed: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
@@ -348,43 +180,28 @@ class _ProfilePageState extends State<ProfilePage> {
     if (shouldDelete != true) return;
 
     try {
-      // Try to delete from both storage paths
-      final oldStorageRef = FirebaseStorage.instance.ref().child(
-        'profile_pictures/${user.uid}.jpg',
-      );
-      final newStorageRef = FirebaseStorage.instance.ref().child(
-        'users/${user.uid}/profile_picture.jpg',
-      );
-
-      // Try to delete from both locations
-      try {
-        await newStorageRef.delete();
-      } catch (e) {
-        print('New storage path deletion failed: $e');
-      }
-      
-      try {
-        await oldStorageRef.delete();
-      } catch (e) {
-        print('Old storage path deletion failed: $e');
+      final supabase = Supabase.instance.client;
+      final supabaseUser = supabase.auth.currentUser;
+      if (supabaseUser != null) {
+        try {
+          await supabase.storage
+              .from('avatars')
+              .remove(['${supabaseUser.id}/profile.jpg']);
+        } catch (e) {
+          print('Avatar deletion failed: $e');
+        }
+        try {
+          await supabase
+              .from('profiles')
+              .update({'avatar_url': null}).eq('id', supabaseUser.id);
+        } catch (e) {
+          print('Profile avatar clear failed: $e');
+        }
       }
 
       // Clear the photoURL from Firebase Auth
       await user.updatePhotoURL(null);
-      
-      // Also remove from Firestore
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({
-              'photoURL': FieldValue.delete(),
-              'profileUpdatedAt': FieldValue.serverTimestamp(),
-            });
-      } catch (firestoreError) {
-        print('Firestore update failed: $firestoreError');
-      }
-      
+
       await user.reload();
 
       setState(() {
@@ -1079,19 +896,21 @@ class _ProfilePageState extends State<ProfilePage> {
 
 
   Widget _buildPhoneNumberSection() {
-    final user = FirebaseAuth.instance.currentUser;
-    
-    return FutureBuilder<DocumentSnapshot>(
-      future: user != null 
-          ? FirebaseFirestore.instance.collection('users').doc(user.uid).get()
-          : null,
+    final supabaseUser = Supabase.instance.client.auth.currentUser;
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: supabaseUser != null
+          ? Supabase.instance.client
+                .from('profiles')
+                .select('phone')
+                .eq('id', supabaseUser.id)
+                .maybeSingle()
+          : Future.value(null),
       builder: (context, snapshot) {
         String? phoneNumber;
         bool isLinked = false;
-        
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          phoneNumber = userData['phone'] as String?;
+
+        if (snapshot.hasData) {
+          phoneNumber = snapshot.data?['phone'] as String?;
           isLinked = phoneNumber != null && phoneNumber.isNotEmpty;
         }
         
