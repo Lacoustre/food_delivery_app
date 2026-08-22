@@ -1,15 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:vibration/vibration.dart';
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -129,15 +126,15 @@ class NotificationService {
       _handleTapNavigationFromData(initial.data, _context!);
     }
 
-    // Save FCM token to user doc
+    // Save FCM token to the Supabase profile (where the notification
+    // sender and admin views read it)
     final token = await _messaging.getToken();
-    final user = FirebaseAuth.instance.currentUser;
-    if (token != null && user != null) {
+    final supabaseUser = Supabase.instance.client.auth.currentUser;
+    if (token != null && supabaseUser != null) {
       try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'fcmToken': token,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await Supabase.instance.client
+            .from('profiles')
+            .update({'fcm_token': token}).eq('id', supabaseUser.id);
         debugPrint('✅ FCM token saved successfully');
       } catch (e) {
         debugPrint('❌ Failed to save FCM token: $e');
@@ -304,40 +301,23 @@ class NotificationService {
     );
   }
 
-  // ====== STORAGE (users/{uid}.notifications ARRAY) ======
+  // ====== STORAGE (Supabase user_notifications — what the notification
+  // page and unread badge stream) ======
   static Future<void> _appendUserNotificationList(RemoteMessage message) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final uid = message.data['uid']?.toString() ?? user?.uid;
-    if (uid == null || uid.isEmpty) return; // cannot save without uid
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return; // cannot save without a session
 
-    final notif = {
-      'id':
-          message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      'title': message.notification?.title ?? '',
-      'body': message.notification?.body ?? '',
-      'timestamp': DateTime.now().millisecondsSinceEpoch, // int ms (UI expects)
-      'read': false,
-      'type': (message.data['type'] ?? 'general').toString(),
-      'orderId': message.data['orderId']?.toString(),
-    };
-
-    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      final snap = await tx.get(userRef);
-      final List<dynamic> list =
-          (snap.data()?['notifications'] as List<dynamic>?)?.toList() ?? [];
-      // put newest at the top
-      list.insert(0, notif);
-
-      // Optional: cap list size
-      const maxItems = 200;
-      if (list.length > maxItems) {
-        list.removeRange(maxItems, list.length);
-      }
-
-      tx.set(userRef, {'notifications': list}, SetOptions(merge: true));
-    });
+    try {
+      await Supabase.instance.client.from('user_notifications').insert({
+        'user_id': user.id,
+        'title': message.notification?.title ?? '',
+        'body': message.notification?.body ?? '',
+        'type': (message.data['type'] ?? 'general').toString(),
+        'read': false,
+      });
+    } catch (e) {
+      debugPrint('❌ Failed to record notification: $e');
+    }
   }
 
   // ====== HELPERS ======
@@ -375,32 +355,9 @@ class NotificationService {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
-  final uid =
-      message.data['uid']?.toString() ?? FirebaseAuth.instance.currentUser?.uid;
-
-  if (uid != null && uid.isNotEmpty) {
-    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-    final notif = {
-      'id':
-          message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      'title': message.notification?.title ?? '',
-      'body': message.notification?.body ?? '',
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'read': false,
-      'type': (message.data['type'] ?? 'general').toString(),
-      'orderId': message.data['orderId']?.toString(),
-    };
-
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      final snap = await tx.get(userRef);
-      final List<dynamic> list =
-          (snap.data()?['notifications'] as List<dynamic>?)?.toList() ?? [];
-      list.insert(0, notif);
-      const maxItems = 200;
-      if (list.length > maxItems) list.removeRange(maxItems, list.length);
-      tx.set(userRef, {'notifications': list}, SetOptions(merge: true));
-    });
-  }
+  // No in-app feed write here: the background isolate has no Supabase
+  // session, and the OS already displays the push itself. The old
+  // Firestore array this wrote to is no longer read by anything.
 
   // background vibration hint
   final t = message.data['type']?.toString().toLowerCase() ?? '';
