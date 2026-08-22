@@ -1,15 +1,17 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// In-app notification feed backed by the Supabase user_notifications
+/// table (owner-only RLS, streamed live).
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -23,14 +25,14 @@ class NotificationPage extends StatelessWidget {
             onPressed: () async {
               if (user == null) return;
               try {
-                final coll = FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('notifications');
+                final unread = await supabase
+                    .from('user_notifications')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('read', false)
+                    .limit(1);
 
-                final unread = await coll.where('read', isEqualTo: false).get();
-
-                if (unread.docs.isEmpty) {
+                if (unread.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("All notifications are already read."),
@@ -39,11 +41,11 @@ class NotificationPage extends StatelessWidget {
                   return;
                 }
 
-                final batch = FirebaseFirestore.instance.batch();
-                for (final d in unread.docs) {
-                  batch.update(d.reference, {'read': true});
-                }
-                await batch.commit();
+                await supabase
+                    .from('user_notifications')
+                    .update({'read': true})
+                    .eq('user_id', user.id)
+                    .eq('read', false);
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -66,13 +68,12 @@ class NotificationPage extends StatelessWidget {
             onPressed: () async {
               if (user == null) return;
               try {
-                final coll = FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('notifications');
-
-                final snap = await coll.limit(1).get();
-                if (snap.docs.isEmpty) {
+                final snap = await supabase
+                    .from('user_notifications')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .limit(1);
+                if (snap.isEmpty) {
                   _showCustomDialog(
                     context,
                     title: "Already Empty",
@@ -106,17 +107,10 @@ class NotificationPage extends StatelessWidget {
 
                 if (confirm != true) return;
 
-                // Delete in batches to be safe
-                const pageSize = 400;
-                while (true) {
-                  final page = await coll.limit(pageSize).get();
-                  if (page.docs.isEmpty) break;
-                  final batch = FirebaseFirestore.instance.batch();
-                  for (final d in page.docs) {
-                    batch.delete(d.reference);
-                  }
-                  await batch.commit();
-                }
+                await supabase
+                    .from('user_notifications')
+                    .delete()
+                    .eq('user_id', user.id);
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("All notifications cleared.")),
@@ -137,13 +131,12 @@ class NotificationPage extends StatelessWidget {
           : RefreshIndicator(
               onRefresh: () async =>
                   Future.delayed(const Duration(milliseconds: 400)),
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('notifications')
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: supabase
+                    .from('user_notifications')
+                    .stream(primaryKey: ['id'])
+                    .eq('user_id', user.id)
+                    .order('created_at', ascending: false),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return ListView.builder(
@@ -164,37 +157,33 @@ class NotificationPage extends StatelessWidget {
                     );
                   }
 
-                  final docs = snapshot.data?.docs ?? [];
-                  if (docs.isEmpty) {
+                  final rows = snapshot.data ?? [];
+                  if (rows.isEmpty) {
                     return _emptyState();
                   }
 
                   return ListView.separated(
                     padding: const EdgeInsets.all(12),
-                    itemCount: docs.length,
+                    itemCount: rows.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>? ?? {};
+                      final data = rows[index];
+                      final id = data['id'] as String;
                       final title = (data['title'] ?? 'No Title').toString();
                       final body = (data['body'] ?? 'No Message').toString();
                       final type = (data['type'] ?? 'General').toString();
                       final read = (data['read'] ?? false) == true;
-                      final ts = data['timestamp'];
-                      DateTime? timestamp;
-
-                      if (ts is Timestamp) {
-                        timestamp = ts.toDate();
-                      } else if (ts is int) {
-                        timestamp = DateTime.fromMillisecondsSinceEpoch(ts);
-                      } // else leave null
+                      final timestamp = data['created_at'] != null
+                          ? DateTime.tryParse(data['created_at'] as String)
+                              ?.toLocal()
+                          : null;
 
                       final formattedDate = timestamp != null
                           ? DateFormat('MMM d, h:mm a').format(timestamp)
                           : "";
 
                       return Dismissible(
-                        key: Key(doc.id),
+                        key: Key(id),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           alignment: Alignment.centerRight,
@@ -204,7 +193,10 @@ class NotificationPage extends StatelessWidget {
                         ),
                         onDismissed: (_) async {
                           try {
-                            await doc.reference.delete();
+                            await supabase
+                                .from('user_notifications')
+                                .delete()
+                                .eq('id', id);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text("Notification deleted."),
@@ -222,7 +214,10 @@ class NotificationPage extends StatelessWidget {
                           onTap: () async {
                             try {
                               if (!read) {
-                                await doc.reference.update({'read': true});
+                                await supabase
+                                    .from('user_notifications')
+                                    .update({'read': true})
+                                    .eq('id', id);
                               }
 
                               if (type == 'order' ||
