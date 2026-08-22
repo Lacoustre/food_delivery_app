@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Address {
   final String id;
   final String street;
@@ -8,7 +6,7 @@ class Address {
   final String zipCode;
   final double? latitude;
   final double? longitude;
-  final Timestamp? createdAt; // ✅ Made nullable
+  final DateTime? createdAt;
   final bool isDefault;
 
   Address({
@@ -19,32 +17,32 @@ class Address {
     required this.zipCode,
     this.latitude,
     this.longitude,
-    this.createdAt, // ✅ Accept null safely
+    this.createdAt,
     this.isDefault = false,
   });
 
-  factory Address.fromMap(String id, Map<String, dynamic> data) => Address(
-    id: id,
-    street: data['street'] as String,
-    city: data['city'] as String,
-    state: data['state'] as String,
-    zipCode: data['zipCode'] as String,
-    latitude: (data['latitude'] as num?)?.toDouble(),
-    longitude: (data['longitude'] as num?)?.toDouble(),
-    createdAt: data['createdAt'] is Timestamp
-        ? data['createdAt'] as Timestamp
-        : null, // ✅ Prevent crash if null or missing
-    isDefault: data['isDefault'] as bool? ?? false,
+  /// From a Supabase `addresses` row.
+  factory Address.fromRow(Map<String, dynamic> row) => Address(
+    id: row['id'] as String,
+    street: row['street'] as String? ?? '',
+    city: row['city'] as String? ?? '',
+    state: row['state'] as String? ?? '',
+    zipCode: row['zip'] as String? ?? '',
+    latitude: (row['lat'] as num?)?.toDouble(),
+    longitude: (row['lng'] as num?)?.toDouble(),
+    createdAt: row['created_at'] != null
+        ? DateTime.tryParse(row['created_at'] as String)
+        : null,
+    isDefault: row['is_default'] as bool? ?? false,
   );
 
-  Map<String, dynamic> toMap() => {
+  Map<String, dynamic> toRow() => {
     'street': street,
     'city': city,
     'state': state,
-    'zipCode': zipCode,
-    'latitude': latitude,
-    'longitude': longitude,
-    'createdAt': Timestamp.now(), // Optional
-    'isDefault': isDefault,
+    'zip': zipCode,
+    'lat': latitude,
+    'lng': longitude,
+    'is_default': isDefault,
   };
 }

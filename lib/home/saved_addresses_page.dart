@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/address.dart';
 import '../home/map_picker_page.dart';
 
+/// Saved addresses live in the Supabase addresses table (owner-only RLS),
+/// replacing the per-user Firestore subcollection.
 class SavedAddressesPage extends StatefulWidget {
   const SavedAddressesPage({super.key});
 
@@ -23,11 +24,8 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
   bool _isDefault = false;
   LatLng? _selectedLatLng;
 
-  late final CollectionReference<Map<String, dynamic>> _addrColl =
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
-          .collection('addresses');
+  final SupabaseClient _supabase = Supabase.instance.client;
+  String get _userId => _supabase.auth.currentUser!.id;
 
   Future<void> _pickLocationAndFillFields() async {
     final LatLng? picked = await Navigator.push(
@@ -53,10 +51,22 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
         });
       }
     } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to reverse geocode location.")),
       );
     }
+  }
+
+  void _showToast(String msg, Color background) {
+    Fluttertoast.showToast(
+      msg: msg,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.TOP,
+      backgroundColor: background,
+      textColor: Colors.white,
+      fontSize: 14.0,
+    );
   }
 
   void _showAddressDialog({Address? address}) {
@@ -161,75 +171,62 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
                     final state = _stateController.text.trim();
                     final zip = _zipController.text.trim();
 
-                    final fullAddress = '$street, $city, $state $zip';
-
-                    // Duplicate check (fullAddress)
-                    final dupSnap = await _addrColl
-                        .where('fullAddress', isEqualTo: fullAddress)
-                        .limit(1)
-                        .get();
-
-                    final isDuplicate =
-                        dupSnap.docs.isNotEmpty &&
-                        (address == null ||
-                            dupSnap.docs.first.id != address.id);
+                    // Duplicate check on the address fields themselves
+                    var dupQuery = _supabase
+                        .from('addresses')
+                        .select('id')
+                        .eq('user_id', _userId)
+                        .eq('street', street)
+                        .eq('city', city)
+                        .eq('state', state)
+                        .eq('zip', zip);
+                    final dups = await dupQuery.limit(2);
+                    final isDuplicate = dups.any(
+                      (row) => address == null || row['id'] != address.id,
+                    );
 
                     if (isDuplicate) {
-                      Fluttertoast.showToast(
-                        msg: "⚠️ Address already exists",
-                        toastLength: Toast.LENGTH_SHORT,
-                        gravity: ToastGravity.TOP,
-                        backgroundColor: Colors.orange.shade600,
-                        textColor: Colors.white,
-                        fontSize: 14.0,
+                      _showToast(
+                        "⚠️ Address already exists",
+                        Colors.orange.shade600,
                       );
                       return;
                     }
 
                     // If setting a new default, unset previous ones
                     if (_isDefault) {
-                      final snapshot = await _addrColl.get();
-                      for (final doc in snapshot.docs) {
-                        if (address == null || doc.id != address.id) {
-                          await doc.reference.update({'isDefault': false});
-                        }
-                      }
+                      await _supabase
+                          .from('addresses')
+                          .update({'is_default': false})
+                          .eq('user_id', _userId);
                     }
 
                     final data = {
                       'street': street,
                       'city': city,
                       'state': state,
-                      'zipCode': zip,
-                      'latitude': _selectedLatLng?.latitude,
-                      'longitude': _selectedLatLng?.longitude,
-                      'isDefault': _isDefault,
-                      'fullAddress': fullAddress,
-                      // createdAt is added only on create (below)
+                      'zip': zip,
+                      'lat': _selectedLatLng?.latitude,
+                      'lng': _selectedLatLng?.longitude,
+                      'is_default': _isDefault,
                     };
 
                     if (address != null) {
-                      await _addrColl.doc(address.id).update(data);
-                      Fluttertoast.showToast(
-                        msg: "✅ Address updated successfully",
-                        toastLength: Toast.LENGTH_SHORT,
-                        gravity: ToastGravity.TOP,
-                        backgroundColor: Colors.green.shade600,
-                        textColor: Colors.white,
-                        fontSize: 14.0,
+                      await _supabase
+                          .from('addresses')
+                          .update(data)
+                          .eq('id', address.id);
+                      _showToast(
+                        "✅ Address updated successfully",
+                        Colors.green.shade600,
                       );
                     } else {
-                      await _addrColl.add({
-                        ...data,
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-                      Fluttertoast.showToast(
-                        msg: "✅ Address added successfully",
-                        toastLength: Toast.LENGTH_SHORT,
-                        gravity: ToastGravity.TOP,
-                        backgroundColor: Colors.green.shade600,
-                        textColor: Colors.white,
-                        fontSize: 14.0,
+                      await _supabase
+                          .from('addresses')
+                          .insert({...data, 'user_id': _userId});
+                      _showToast(
+                        "✅ Address added successfully",
+                        Colors.green.shade600,
                       );
                     }
 
@@ -251,15 +248,8 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
   }
 
   Future<void> _deleteAddress(String id) async {
-    await _addrColl.doc(id).delete();
-    Fluttertoast.showToast(
-      msg: "🗑️ Address deleted",
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.TOP,
-      backgroundColor: Colors.red.shade600,
-      textColor: Colors.white,
-      fontSize: 14.0,
-    );
+    await _supabase.from('addresses').delete().eq('id', id);
+    _showToast("🗑️ Address deleted", Colors.red.shade600);
   }
 
   @override
@@ -269,12 +259,11 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
         title: const Text('Saved Addresses'),
         backgroundColor: Colors.deepOrange,
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        // Default addresses first, then newest
-        stream: _addrColl
-            .orderBy('isDefault', descending: true)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _supabase
+            .from('addresses')
+            .stream(primaryKey: ['id'])
+            .eq('user_id', _userId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text('Error loading addresses'));
@@ -283,8 +272,18 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
+          // Default first, then newest — sorted client-side since the
+          // realtime stream builder only supports one order key.
+          final rows = [...snapshot.data!];
+          rows.sort((a, b) {
+            final defaultCmp = ((b['is_default'] as bool? ?? false) ? 1 : 0)
+                .compareTo((a['is_default'] as bool? ?? false) ? 1 : 0);
+            if (defaultCmp != 0) return defaultCmp;
+            return (b['created_at'] as String? ?? '')
+                .compareTo(a['created_at'] as String? ?? '');
+          });
+
+          if (rows.isEmpty) {
             return const Center(
               child: Text(
                 'No saved addresses yet.',
@@ -295,10 +294,10 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
 
           return ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
+            itemCount: rows.length,
             separatorBuilder: (_, __) => const Divider(),
             itemBuilder: (context, i) {
-              final addr = Address.fromMap(docs[i].id, docs[i].data());
+              final addr = Address.fromRow(rows[i]);
 
               return ListTile(
                 leading: const Icon(
