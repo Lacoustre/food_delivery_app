@@ -1,12 +1,17 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
+/// Cart is device-local (SharedPreferences). The old Firestore mirror was
+/// write-only dead weight — its loadCart was never called, so carts never
+/// actually synced across devices; now the local copy is restored on start.
 class CartProvider extends ChangeNotifier {
   final List<Map<String, dynamic>> _cartItems = [];
   DateTime? _lastSaved;
+
+  CartProvider() {
+    loadCart();
+  }
 
   List<Map<String, dynamic>> get cartItems => _cartItems;
 
@@ -137,18 +142,6 @@ class CartProvider extends ChangeNotifier {
     await prefs.remove('cartItems');
     await prefs.remove('cartTimestamp');
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final cartRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('cart');
-      final snapshot = await cartRef.get();
-      for (var doc in snapshot.docs) {
-        await doc.reference.delete();
-      }
-    }
-
     notifyListeners();
   }
 
@@ -157,45 +150,27 @@ class CartProvider extends ChangeNotifier {
     await prefs.setString('cartItems', jsonEncode(_cartItems));
     _lastSaved = DateTime.now();
     await prefs.setString('cartTimestamp', _lastSaved!.toIso8601String());
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final cartRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('cart');
-
-    final existingDocs = await cartRef.get();
-    for (var doc in existingDocs.docs) {
-      await doc.reference.delete();
-    }
-
-    for (var item in _cartItems) {
-      await cartRef.add(item);
-    }
   }
 
   Future<void> loadCart() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = prefs.getString('cartItems');
+    if (encoded == null) return;
 
-    final cartRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('cart');
-
-    final snapshot = await cartRef.get();
-
-    _cartItems.clear();
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      // normalize note on load too (keeps matching consistent)
-      data['instructions'] = _normNote(data['instructions']);
-      _cartItems.add(data);
+    try {
+      final List decoded = jsonDecode(encoded);
+      _cartItems
+        ..clear()
+        ..addAll(decoded.map((e) {
+          final data = Map<String, dynamic>.from(e);
+          // normalize note on load too (keeps matching consistent)
+          data['instructions'] = _normNote(data['instructions']);
+          return data;
+        }));
+      notifyListeners();
+    } catch (_) {
+      // corrupted cache — start with an empty cart
     }
-
-    notifyListeners();
   }
 
   bool validateAllRequiredExtras(
