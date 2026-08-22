@@ -478,23 +478,18 @@ export default function OrdersPage() {
                     </div>
                   </div>
                   
-                  {/* Reviews Section */}
-                  {expandedOrder === order.id && isCompleted && (
+                  {/* Reviews Section — one review per order, shared with the
+                      mobile app and admin panel via Supabase order_reviews */}
+                  {expandedOrder === order.id && isCompleted && order.id && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
                       <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <span>⭐</span> Rate Your Experience
                       </h4>
-                      <div className="space-y-4">
-                        {order.items.map((item) => (
-                          <div key={item.id} className="bg-white/60 rounded-xl p-4 border border-gray-100">
-                            <Reviews
-                              mealId={item.id}
-                              mealName={item.name}
-                              userCanReview={true}
-                            />
-                          </div>
-                        ))}
-                      </div>
+                      <Reviews
+                        orderId={order.id}
+                        orderLabel={`Order #${order.orderNumber}`}
+                        userCanReview={true}
+                      />
                     </div>
                   )}
                 </div>
