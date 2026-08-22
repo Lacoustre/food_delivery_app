@@ -1,14 +1,18 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Favorites live in the Supabase favorites table (user_id + meal_id, the
+/// same rows the webapp reads), hydrated against meals for display. Local
+/// SharedPreferences copy is kept as an offline cache. Display order is
+/// local-only — the table has no position column (neither did Firestore).
 class FavoritesProvider extends ChangeNotifier {
   final List<Map<String, dynamic>> _favorites = [];
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  StreamSubscription<QuerySnapshot>? _favoritesSubscription;
+  final SupabaseClient _supabase = Supabase.instance.client;
+  StreamSubscription<List<Map<String, dynamic>>>? _favoritesSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
 
   List<Map<String, dynamic>> get favorites => List.unmodifiable(_favorites);
 
@@ -17,15 +21,12 @@ class FavoritesProvider extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    await _ensureUserLoggedIn();
     await _loadFromLocal();
     _loadFavoritesRealtime();
-  }
-
-  Future<void> _ensureUserLoggedIn() async {
-    if (FirebaseAuth.instance.currentUser == null) {
-      await FirebaseAuth.instance.signInAnonymously();
-    }
+    // Session can arrive after startup — re-attach the stream when it does.
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((_) {
+      _loadFavoritesRealtime();
+    });
   }
 
   bool isFavorite(String mealId) {
@@ -33,37 +34,37 @@ class FavoritesProvider extends ChangeNotifier {
   }
 
   void addToFavorites(Map<String, dynamic> meal) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    final updatedMeal = {
-      ...meal,
-      'favoritedBy': user.uid,
-      'profilePhoto': user.photoURL ?? '',
-    };
-
     if (!isFavorite(meal['id'])) {
-      _favorites.add(updatedMeal);
+      _favorites.add(meal);
       _saveToLocal();
-      _addToFirebase(updatedMeal);
+      _supabase
+          .from('favorites')
+          .upsert(
+            {'user_id': user.id, 'meal_id': meal['id']},
+            onConflict: 'user_id,meal_id',
+          )
+          .then((_) {}, onError: (e) => debugPrint('favorite add failed: $e'));
       notifyListeners();
     }
   }
 
   void removeFromFavorites(Map<String, dynamic> meal) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _supabase.auth.currentUser;
     if (user == null) return;
 
     final index = _favorites.indexWhere((item) => item['id'] == meal['id']);
     if (index != -1) {
       _favorites.removeAt(index);
       _saveToLocal();
-      _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorites')
-          .doc(meal['id'])
-          .delete();
+      _supabase
+          .from('favorites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('meal_id', meal['id'])
+          .then((_) {}, onError: (e) => debugPrint('favorite remove failed: $e'));
       notifyListeners();
     }
   }
@@ -73,23 +74,16 @@ class FavoritesProvider extends ChangeNotifier {
   }
 
   void clearAllFavorites() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _supabase.auth.currentUser;
     if (user == null) return;
-
-    final batch = _firestore.batch();
-    final favoritesRef = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favorites');
-
-    for (final meal in _favorites) {
-      final docRef = favoritesRef.doc(meal['id']);
-      batch.delete(docRef);
-    }
 
     _favorites.clear();
     _saveToLocal();
-    batch.commit();
+    _supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', user.id)
+        .then((_) {}, onError: (e) => debugPrint('favorites clear failed: $e'));
     notifyListeners();
   }
 
@@ -98,56 +92,44 @@ class FavoritesProvider extends ChangeNotifier {
     final meal = _favorites.removeAt(oldIndex);
     _favorites.insert(newIndex, meal);
     _saveToLocal();
-    _syncToFirebase();
     notifyListeners();
   }
 
   void _loadFavoritesRealtime() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    _favoritesSubscription = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favorites')
-        .snapshots()
-        .listen((querySnapshot) {
+    _favoritesSubscription?.cancel();
+    _favoritesSubscription = _supabase
+        .from('favorites')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', user.id)
+        .listen((rows) async {
+          final mealIds = rows.map((r) => r['meal_id'] as String).toList();
+          final meals = mealIds.isEmpty
+              ? <Map<String, dynamic>>[]
+              : List<Map<String, dynamic>>.from(
+                  await _supabase
+                      .from('meals')
+                      .select('id, name, price, image_url, category')
+                      .inFilter('id', mealIds),
+                );
+
+          // Same display shape main_home_page builds from meals rows.
           _favorites
             ..clear()
-            ..addAll(querySnapshot.docs.map((doc) => doc.data()));
+            ..addAll(meals.map((m) => {
+                  'id': m['id'],
+                  'name': m['name'] ?? '',
+                  'price':
+                      '\$${((m['price'] ?? 0.0) as num).toStringAsFixed(2)}',
+                  'image':
+                      (m['image_url'] as String?) ?? 'assets/images/logo.png',
+                  'category': m['category'] ?? 'Main Dishes',
+                }));
           _saveToLocal();
           notifyListeners();
         });
-  }
-
-  Future<void> _addToFirebase(Map<String, dynamic> meal) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    await _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favorites')
-        .doc(meal['id'])
-        .set(meal);
-  }
-
-  Future<void> _syncToFirebase() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final batch = _firestore.batch();
-    final favoritesRef = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('favorites');
-
-    for (final meal in _favorites) {
-      final docRef = favoritesRef.doc(meal['id']);
-      batch.set(docRef, meal);
-    }
-
-    await batch.commit();
   }
 
   Future<void> _saveToLocal() async {
@@ -169,6 +151,7 @@ class FavoritesProvider extends ChangeNotifier {
   @override
   void dispose() {
     _favoritesSubscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }
