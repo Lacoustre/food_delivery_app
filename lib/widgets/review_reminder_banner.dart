@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:african_cuisine/support/rate_orders_page.dart';
 
+/// Shows while an unread review_reminder row exists in the Supabase
+/// user_notifications table (streamed live, filtered client-side — the
+/// realtime stream builder supports one filter).
 class ReviewReminderBanner extends StatelessWidget {
   const ReviewReminderBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
     if (user == null) return const SizedBox.shrink();
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('notifications')
-          .where('type', isEqualTo: 'review_reminder')
-          .where('read', isEqualTo: false)
-          .limit(1)
-          .snapshots(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: supabase
+          .from('user_notifications')
+          .stream(primaryKey: ['id'])
+          .eq('user_id', user.id),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        final reminders = (snapshot.data ?? [])
+            .where((r) =>
+                r['type'] == 'review_reminder' && r['read'] != true)
+            .toList();
+        if (reminders.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -95,7 +98,7 @@ class ReviewReminderBanner extends StatelessWidget {
               ),
               IconButton(
                 onPressed: () =>
-                    _dismissNotification(snapshot.data!.docs.first.id),
+                    _dismissNotification(reminders.first['id'] as String),
                 icon: const Icon(Icons.close, size: 20),
                 color: Colors.grey[600],
               ),
@@ -107,16 +110,11 @@ class ReviewReminderBanner extends StatelessWidget {
   }
 
   void _dismissNotification(String notificationId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'read': true});
+      await Supabase.instance.client
+          .from('user_notifications')
+          .update({'read': true})
+          .eq('id', notificationId);
     } catch (e) {
       print('Error dismissing notification: $e');
     }

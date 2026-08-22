@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vibration/vibration.dart';
 
 class ConfirmationPage extends StatefulWidget {
@@ -18,7 +18,7 @@ class ConfirmationPage extends StatefulWidget {
 }
 
 class _ConfirmationPageState extends State<ConfirmationPage> {
-  late StreamSubscription<DocumentSnapshot> _orderSubscription;
+  late StreamSubscription<List<Map<String, dynamic>>> _orderSubscription;
   Map<String, dynamic>? _orderData;
   bool _isLoading = true;
 
@@ -29,15 +29,21 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
   }
 
   void _listenToOrderUpdates() {
-    final collection = widget.isScheduled ? 'scheduled_orders' : 'orders';
-
-    _orderSubscription = FirebaseFirestore.instance
-        .collection(collection)
-        .doc(widget.orderId)
-        .snapshots()
-        .listen((snapshot) {
-          if (mounted && snapshot.exists) {
-            final data = snapshot.data() as Map<String, dynamic>;
+    // Scheduled and regular orders live in the same Supabase orders table
+    // now (scheduled ones just carry scheduled_for).
+    _orderSubscription = Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.orderId)
+        .listen((rows) {
+          if (mounted && rows.isNotEmpty) {
+            final row = rows.first;
+            // Keep the legacy field names the page's UI reads.
+            final data = {
+              ...row,
+              'orderNumber': row['order_number'],
+              'scheduledTime': row['scheduled_for'],
+            };
 
             final previousStatus = _orderData?['status'];
             final newStatus = data['status'];
@@ -217,9 +223,9 @@ class _ConfirmationPageState extends State<ConfirmationPage> {
   }
 
   String _formatScheduledTime() {
-    if (_orderData?['scheduledTime'] != null) {
-      final scheduledTime = (_orderData!['scheduledTime'] as Timestamp)
-          .toDate();
+    final raw = _orderData?['scheduledTime'];
+    final scheduledTime = raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+    if (scheduledTime != null) {
       return '${scheduledTime.day}/${scheduledTime.month}/${scheduledTime.year} at ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}';
     }
     return 'Soon';

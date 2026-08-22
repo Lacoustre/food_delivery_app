@@ -1,10 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter/material.dart';
 import 'package:african_cuisine/support/rate_orders_page.dart';
 
 class ReviewNotificationService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Check for orders that need review notifications
   static Future<void> checkForReviewNotifications(BuildContext context) async {
@@ -106,26 +104,21 @@ class ReviewNotificationService {
     );
   }
 
-  // Create in-app notification for review reminder
+  // Create in-app notification for review reminder (Supabase
+  // user_notifications — the same table the notification page streams)
   static Future<void> createReviewReminder(
     String orderId,
     String userId,
   ) async {
     try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('notifications')
-          .add({
-            'type': 'review_reminder',
-            'title': 'Rate Your Recent Order',
-            'message':
-                'How was your experience? Share your feedback to help us improve!',
-            'orderId': orderId,
-            'createdAt': FieldValue.serverTimestamp(),
-            'read': false,
-            'actionType': 'rate_order',
-          });
+      await Supabase.instance.client.from('user_notifications').insert({
+        'user_id': userId,
+        'type': 'review_reminder',
+        'title': 'Rate Your Recent Order',
+        'body':
+            'How was your experience? Share your feedback to help us improve!',
+        'read': false,
+      });
     } catch (e) {
       print('Error creating review reminder: $e');
     }
