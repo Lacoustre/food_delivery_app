@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Live chat backed by Supabase support_chats/support_messages — the same
+/// tables the admin panel's Support page streams, so both sides see one
+/// conversation. The welcome greeting is rendered as a static bubble (RLS
+/// forbids a customer inserting an admin-typed message row).
 class LiveChatSupportPage extends StatefulWidget {
   const LiveChatSupportPage({super.key});
 
@@ -12,60 +15,51 @@ class LiveChatSupportPage extends StatefulWidget {
 
 class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
   final TextEditingController _controller = TextEditingController();
+  final SupabaseClient _supabase = Supabase.instance.client;
   String? _chatId;
-  User? user;
+
+  static const _welcomeText =
+      '👋🏾 Hello! Welcome to Taste of African Cuisine. This is Irene, how can I help you today?';
 
   @override
   void initState() {
     super.initState();
-    FirebaseAuth.instance.authStateChanges().listen((u) {
-      if (u != null) {
-        setState(() => user = u);
-        _initializeChat();
-      }
-    });
+    _initializeChat();
   }
 
   Future<void> _initializeChat() async {
     try {
+      final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final existingChats = await FirebaseFirestore.instance
-          .collection('support_chats')
-          .where('customerId', isEqualTo: user!.uid)
-          .where('status', isEqualTo: 'active')
-          .get();
+      final existing = await _supabase
+          .from('support_chats')
+          .select('id')
+          .eq('customer_id', user.id)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
 
-      if (existingChats.docs.isNotEmpty) {
-        setState(() => _chatId = existingChats.docs.first.id);
+      if (existing != null) {
+        setState(() => _chatId = existing['id'] as String);
       } else {
-        final chatDoc = await FirebaseFirestore.instance
-            .collection('support_chats')
-            .add({
-              'customerId': user!.uid,
-              'customerName': user!.displayName ?? user!.email ?? 'Customer',
-              'customerEmail': user!.email ?? '',
-              'lastMessage': 'Chat started',
-              'lastMessageTime': FieldValue.serverTimestamp(),
-              'unreadCount': 0,
+        final chat = await _supabase
+            .from('support_chats')
+            .insert({
+              'customer_id': user.id,
+              'last_message': 'Chat started',
+              'last_message_time': DateTime.now().toIso8601String(),
+              'unread_count': 0,
               'status': 'active',
-              'createdAt': FieldValue.serverTimestamp(),
-            });
+            })
+            .select('id')
+            .single();
 
-        await FirebaseFirestore.instance.collection('support_messages').add({
-          'chatId': chatDoc.id,
-          'senderId': 'admin',
-          'senderType': 'admin',
-          'message':
-              '👋🏾 Hello! Welcome to Taste of African Cuisine. This is Irene, how can I help you today?',
-          'timestamp': FieldValue.serverTimestamp(),
-          'read': false,
-        });
-
-        setState(() => _chatId = chatDoc.id);
+        setState(() => _chatId = chat['id'] as String);
       }
     } catch (e) {
       debugPrint('🔥 Error initializing chat: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to load chat: $e')));
@@ -74,30 +68,33 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
 
   Future<void> _sendMessage() async {
     final message = _controller.text.trim();
+    final user = _supabase.auth.currentUser;
     if (message.isEmpty || _chatId == null || user == null) return;
 
     try {
-      await FirebaseFirestore.instance.collection('support_messages').add({
-        'chatId': _chatId,
-        'senderId': user!.uid,
-        'senderType': 'customer',
+      await _supabase.from('support_messages').insert({
+        'chat_id': _chatId,
+        'sender_id': user.id,
+        'sender_type': 'customer',
         'message': message,
-        'timestamp': FieldValue.serverTimestamp(),
         'read': false,
       });
 
-      await FirebaseFirestore.instance
-          .collection('support_chats')
-          .doc(_chatId)
-          .update({
-            'lastMessage': message,
-            'lastMessageTime': FieldValue.serverTimestamp(),
-            'unreadCount': FieldValue.increment(1),
-          });
+      final chat = await _supabase
+          .from('support_chats')
+          .select('unread_count')
+          .eq('id', _chatId!)
+          .single();
+      await _supabase.from('support_chats').update({
+        'last_message': message,
+        'last_message_time': DateTime.now().toIso8601String(),
+        'unread_count': ((chat['unread_count'] as int?) ?? 0) + 1,
+      }).eq('id', _chatId!);
 
       _controller.clear();
     } catch (e) {
       debugPrint('🔥 Error sending message: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to send message: $e')));
@@ -106,32 +103,32 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
 
   Future<void> _endChat() async {
     if (_chatId == null) return;
-    
+
     try {
-      await FirebaseFirestore.instance
-          .collection('support_chats')
-          .doc(_chatId)
-          .update({
-            'status': 'closed',
-            'lastMessage': 'Chat ended by customer',
-            'lastMessageTime': FieldValue.serverTimestamp(),
-          });
-      
+      await _supabase.from('support_chats').update({
+        'status': 'closed',
+        'last_message': 'Chat ended by customer',
+        'last_message_time': DateTime.now().toIso8601String(),
+      }).eq('id', _chatId!);
+
+      if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chat ended successfully')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to end chat: $e')),
       );
     }
   }
 
-  Widget _buildMessage(Map<String, dynamic> msg) {
-    final isUser = msg['senderType'] == 'customer';
-    final timestamp = msg['timestamp'] as Timestamp?;
-
+  Widget _buildBubble({
+    required String message,
+    required bool isUser,
+    DateTime? time,
+  }) {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -146,17 +143,17 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              msg['message'] ?? '',
+              message,
               style: TextStyle(
                 color: isUser ? Colors.white : Colors.black87,
                 fontSize: 15,
               ),
             ),
-            if (timestamp != null)
+            if (time != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  DateFormat('h:mm a').format(timestamp.toDate()),
+                  DateFormat('h:mm a').format(time.toLocal()),
                   style: TextStyle(
                     color: isUser ? Colors.white70 : Colors.grey[600],
                     fontSize: 12,
@@ -166,6 +163,16 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMessage(Map<String, dynamic> msg) {
+    final isUser = msg['sender_type'] == 'customer';
+    final createdAt = msg['created_at'] as String?;
+    return _buildBubble(
+      message: msg['message'] as String? ?? '',
+      isUser: isUser,
+      time: createdAt != null ? DateTime.tryParse(createdAt) : null,
     );
   }
 
@@ -223,12 +230,12 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
           Expanded(
             child: _chatId == null
                 ? const Center(child: CircularProgressIndicator())
-                : StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('support_messages')
-                        .where('chatId', isEqualTo: _chatId)
-                        .orderBy('timestamp', descending: false)
-                        .snapshots(),
+                : StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _supabase
+                        .from('support_messages')
+                        .stream(primaryKey: ['id'])
+                        .eq('chat_id', _chatId!)
+                        .order('created_at', ascending: true),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -238,20 +245,20 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
                         return Center(child: Text('Error: ${snapshot.error}'));
                       }
 
-                      final messages = snapshot.data?.docs ?? [];
-                      if (messages.isEmpty) {
-                        return const Center(
-                          child: Text('No messages yet. Say hi 👋🦾'),
-                        );
-                      }
+                      final messages = snapshot.data ?? [];
 
                       return ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: messages.length,
+                        itemCount: messages.length + 1,
                         itemBuilder: (context, index) {
-                          final msg =
-                              messages[index].data() as Map<String, dynamic>;
-                          return _buildMessage(msg);
+                          if (index == 0) {
+                            // Static greeting — not a DB row
+                            return _buildBubble(
+                              message: _welcomeText,
+                              isUser: false,
+                            );
+                          }
+                          return _buildMessage(messages[index - 1]);
                         },
                       );
                     },

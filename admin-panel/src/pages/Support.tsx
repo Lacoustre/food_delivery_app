@@ -1,26 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, where, getDocs, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 import moment from 'moment';
 
+// Support chat lives in Supabase support_chats/support_messages — the same
+// tables the mobile app's live chat uses.
 interface Message {
   id: string;
-  chatId: string;
-  senderId: string;
-  senderType: 'customer' | 'admin';
+  chat_id: string;
+  sender_id: string;
+  sender_type: 'customer' | 'admin';
   message: string;
-  timestamp: { seconds: number; nanoseconds: number };
+  created_at: string;
   read: boolean;
 }
 
 interface Chat {
   id: string;
-  customerId: string;
+  customer_id: string;
   customerName: string;
   customerEmail: string;
-  lastMessage: string;
-  lastMessageTime: { seconds: number; nanoseconds: number };
-  unreadCount: number;
+  last_message: string | null;
+  last_message_time: string | null;
+  unread_count: number;
   status: 'active' | 'closed';
 }
 
@@ -32,50 +33,74 @@ export default function Support() {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const chatsQuery = query(
-      collection(db, 'support_chats'),
-      orderBy('lastMessageTime', 'desc')
+  const fetchChats = useCallback(async () => {
+    const { data } = await supabase
+      .from('support_chats')
+      .select('*, profiles!customer_id(name, email)')
+      .order('last_message_time', { ascending: false, nullsFirst: false });
+    setChats(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (data ?? []).map((row: any) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        return {
+          id: row.id,
+          customer_id: row.customer_id,
+          customerName: profile?.name || profile?.email || 'Customer',
+          customerEmail: profile?.email || '',
+          last_message: row.last_message,
+          last_message_time: row.last_message_time,
+          unread_count: row.unread_count ?? 0,
+          status: row.status,
+        };
+      }),
     );
-
-    const unsubscribe = onSnapshot(chatsQuery, (snapshot) => {
-      const chatData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Chat[];
-      setChats(chatData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchChats();
+    const channel = supabase
+      .channel('support-chats-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_chats' }, fetchChats)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchChats]);
 
   useEffect(() => {
     if (!selectedChat) return;
 
-    const messagesQuery = query(
-      collection(db, 'support_messages'),
-      where('chatId', '==', selectedChat.id),
-      orderBy('timestamp', 'asc')
-    );
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('support_messages')
+        .select('*')
+        .eq('chat_id', selectedChat.id)
+        .order('created_at', { ascending: true });
+      setMessages((data ?? []) as Message[]);
 
-    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-      const messageData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
-      setMessages(messageData);
-      
-      // Mark messages as read
-      snapshot.docs.forEach(async (docSnapshot) => {
-        const message = docSnapshot.data() as Message;
-        if (message.senderType === 'customer' && !message.read) {
-          await updateDoc(doc(db, 'support_messages', docSnapshot.id), { read: true });
-        }
-      });
-    });
+      // Mark the customer's messages as read + clear the unread badge
+      await supabase
+        .from('support_messages')
+        .update({ read: true })
+        .eq('chat_id', selectedChat.id)
+        .eq('sender_type', 'customer')
+        .eq('read', false);
+      await supabase.from('support_chats').update({ unread_count: 0 }).eq('id', selectedChat.id);
+    };
 
-    return () => unsubscribe();
+    fetchMessages();
+    const channel = supabase
+      .channel(`support-messages-${selectedChat.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'support_messages', filter: `chat_id=eq.${selectedChat.id}` },
+        fetchMessages,
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [selectedChat]);
 
   useEffect(() => {
@@ -86,20 +111,26 @@ export default function Support() {
     if (!newMessage.trim() || !selectedChat) return;
 
     try {
-      await addDoc(collection(db, 'support_messages'), {
-        chatId: selectedChat.id,
-        senderId: 'admin',
-        senderType: 'admin',
-        message: newMessage.trim(),
-        timestamp: new Date(),
-        read: false
-      });
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) throw new Error('Not signed in to Supabase');
 
-      await updateDoc(doc(db, 'support_chats', selectedChat.id), {
-        lastMessage: newMessage.trim(),
-        lastMessageTime: new Date(),
-        unreadCount: 0
+      const { error } = await supabase.from('support_messages').insert({
+        chat_id: selectedChat.id,
+        sender_id: userData.user.id,
+        sender_type: 'admin',
+        message: newMessage.trim(),
+        read: false,
       });
+      if (error) throw error;
+
+      await supabase
+        .from('support_chats')
+        .update({
+          last_message: newMessage.trim(),
+          last_message_time: new Date().toISOString(),
+          unread_count: 0,
+        })
+        .eq('id', selectedChat.id);
 
       setNewMessage('');
     } catch (error) {
@@ -116,21 +147,10 @@ export default function Support() {
 
   const deleteChat = async (chatId: string) => {
     try {
-      // Delete all messages
-      const messagesQuery = query(
-        collection(db, 'support_messages'),
-        where('chatId', '==', chatId)
-      );
-      const messagesSnapshot = await getDocs(messagesQuery);
-      
-      const deletePromises = messagesSnapshot.docs.map(messageDoc => 
-        deleteDoc(messageDoc.ref)
-      );
-      await Promise.all(deletePromises);
-      
-      // Delete chat
-      await deleteDoc(doc(db, 'support_chats', chatId));
-      
+      // Messages cascade via the chat FK
+      const { error } = await supabase.from('support_chats').delete().eq('id', chatId);
+      if (error) throw error;
+
       if (selectedChat?.id === chatId) {
         setSelectedChat(null);
       }
@@ -179,16 +199,16 @@ export default function Support() {
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div 
+                    <div
                       onClick={() => setSelectedChat(chat)}
                       className="flex-1 cursor-pointer"
                     >
                       <h3 className="font-medium text-gray-900 truncate">{chat.customerName}</h3>
                     </div>
                     <div className="flex items-center space-x-2">
-                      {chat.unreadCount > 0 && (
+                      {chat.unread_count > 0 && (
                         <span className="bg-orange-600 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                          {chat.unreadCount}
+                          {chat.unread_count}
                         </span>
                       )}
                       <button
@@ -206,13 +226,13 @@ export default function Support() {
                       </button>
                     </div>
                   </div>
-                  <div 
+                  <div
                     onClick={() => setSelectedChat(chat)}
                     className="cursor-pointer"
                   >
-                    <p className="text-sm text-gray-600 truncate mb-1">{chat.lastMessage}</p>
+                    <p className="text-sm text-gray-600 truncate mb-1">{chat.last_message}</p>
                     <p className="text-xs text-gray-400">
-                      {moment(chat.lastMessageTime.seconds * 1000).fromNow()}
+                      {chat.last_message_time ? moment(chat.last_message_time).fromNow() : ''}
                     </p>
                   </div>
                 </div>
@@ -245,20 +265,20 @@ export default function Support() {
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${message.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.senderType === 'admin'
+                        message.sender_type === 'admin'
                           ? 'bg-orange-600 text-white'
                           : 'bg-gray-200 text-gray-900'
                       }`}
                     >
                       <p className="text-sm">{message.message}</p>
                       <p className={`text-xs mt-1 ${
-                        message.senderType === 'admin' ? 'text-orange-100' : 'text-gray-500'
+                        message.sender_type === 'admin' ? 'text-orange-100' : 'text-gray-500'
                       }`}>
-                        {moment(message.timestamp.seconds * 1000).format('h:mm A')}
+                        {moment(message.created_at).format('h:mm A')}
                       </p>
                     </div>
                   </div>
