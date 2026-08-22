@@ -1,78 +1,69 @@
-import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 import moment from 'moment';
 import Loader from '../components/Loader';
 
+// Scheduled orders are just orders rows with scheduled_for set — there is
+// no separate collection anymore (the old Firestore scheduled_orders one
+// stopped being written when order persistence moved to Supabase).
 interface ScheduledOrder {
   id: string;
-  orderNumber: string;
-  userId: string;
-  customerName?: string;
-  name?: string;
-  customer?: string;
-  items: any[];
-  pricing: {
-    total: number;
-    subtotal: number;
-    tax: number;
-    deliveryFee: number;
-    tip: number;
-  };
-  delivery: {
-    option: string;
-    fee: number;
-    address?: any;
-  };
-  payment: {
-    method: string;
-    status: string;
-    processedAt: string;
-  };
-  scheduledTime: { seconds: number };
+  order_number: string | null;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  order_type: 'delivery' | 'pickup' | null;
+  payment_method: string | null;
+  scheduled_for: string;
+  total: number;
+  order_items: { name: string | null; quantity: number }[];
+  profiles: { name: string | null; email: string | null } | { name: string | null; email: string | null }[] | null;
 }
+
+const STATUS_OPTIONS = [
+  'pending', 'confirmed', 'preparing', 'ready for pickup', 'on the way',
+  'delivered', 'picked up', 'completed', 'cancelled',
+];
 
 export default function ScheduledOrders() {
   const [orders, setOrders] = useState<ScheduledOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const ordersQuery = query(
-      collection(db, 'scheduled_orders'),
-      orderBy('scheduledTime', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
-      const orderData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ScheduledOrder[];
-      setOrders(orderData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+  const fetchOrders = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, order_number, status, order_type, payment_method, scheduled_for, total, order_items(name, quantity), profiles!user_id(name, email)')
+      .not('scheduled_for', 'is', null)
+      .order('scheduled_for', { ascending: true });
+    if (!error) setOrders((data ?? []) as ScheduledOrder[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+    const channel = supabase
+      .channel('scheduled-orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchOrders]);
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'scheduled_orders', orderId), {
-        status: newStatus
-      });
+      const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+      if (error) throw error;
     } catch (error) {
       console.error('Error updating order status:', error);
     }
   };
 
   const getCustomerName = (order: ScheduledOrder) => {
-    return order.customerName || order.name || order.customer || 'Unknown Customer';
+    const profile = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
+    return profile?.name || profile?.email?.split('@')[0] || 'Unknown Customer';
   };
 
   const showOrderDetails = (order: ScheduledOrder) => {
-    alert(`Order Details:\n\nOrder #: ${order.orderNumber || 'N/A'}\nCustomer: ${getCustomerName(order)}\nItems: ${order.items?.length || 0}\nTotal: $${order.pricing?.total?.toFixed(2) || '0.00'}\nPayment: ${order.payment?.method || 'N/A'} (${order.payment?.status || 'N/A'})\nScheduled: ${moment(order.scheduledTime?.seconds * 1000).format('MMM D, YYYY h:mm A')}`);
+    alert(`Order Details:\n\nOrder #: ${order.order_number || 'N/A'}\nCustomer: ${getCustomerName(order)}\nItems: ${order.order_items?.length || 0}\nTotal: $${Number(order.total ?? 0).toFixed(2)}\nPayment: ${order.payment_method || 'N/A'}\nScheduled: ${moment(order.scheduled_for).format('MMM D, YYYY h:mm A')}`);
   };
 
   if (loading) {
@@ -121,27 +112,23 @@ export default function ScheduledOrders() {
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                      #{order.orderNumber}
+                      #{order.order_number || order.id.slice(0, 8)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getCustomerName(order)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {moment(order.scheduledTime.seconds * 1000).format('MMM D, YYYY h:mm A')}
+                      {moment(order.scheduled_for).format('MMM D, YYYY h:mm A')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      ${order.pricing?.total?.toFixed(2) || '0.00'}
+                      ${Number(order.total ?? 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {order.delivery?.option === 'Pickup' ? '🏪 Pickup' : '🚚 Delivery'}
+                      {order.order_type === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        order.payment?.status === 'completed' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {order.payment?.status === 'completed' ? '✅ Paid' : '❌ Unpaid'}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {order.payment_method === 'cash' ? '💵 Cash' : '💳 Card'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -150,16 +137,15 @@ export default function ScheduledOrders() {
                         onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                         className="text-sm px-3 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500"
                       >
-                        <option value="scheduled">Scheduled</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="preparing">Preparing</option>
-                        <option value="ready">Ready</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
-                      <button 
+                      <button
                         className="hover:text-blue-800 mr-2"
                         onClick={() => showOrderDetails(order)}
                       >

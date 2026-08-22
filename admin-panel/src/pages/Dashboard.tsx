@@ -13,17 +13,8 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  doc,
-} from "firebase/firestore";
-import { useCollectionData, useDocumentData } from "react-firebase-hooks/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { db, auth } from "../firebase";
+import { auth } from "../firebase";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
@@ -50,8 +41,7 @@ interface Order {
 }
 
 interface User {
-  createdAt?: { seconds: number };
-  active?: boolean;
+  created_at?: string;
 }
 
 interface Meal {
@@ -100,23 +90,38 @@ export default function Dashboard() {
     };
   }, []);
 
-  const mealsQuery = query(collection(db, "meals"), where("active", "==", true));
-  const [meals, mealsLoading, mealsError] = useCollectionData(mealsQuery);
+  // Meals, customers, reviews, and the open/closed flag all come from
+  // Supabase now — same sources the rest of the admin panel uses.
+  const [meals, setMeals] = useState<Meal[] | undefined>(undefined);
+  const [users, setUsers] = useState<User[] | undefined>(undefined);
+  const [reviews, setReviews] = useState<Review[] | undefined>(undefined);
+  const [isRestaurantOpen, setIsRestaurantOpen] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<Error | null>(null);
 
-  const usersQuery = query(collection(db, "users"));
-  const [users, usersLoading, usersError] = useCollectionData(usersQuery);
-
-  const reviewsQuery = query(
-    collection(db, "order_reviews"),
-    orderBy("createdAt", "desc"),
-    limit(100)
-  );
-  const [reviews] = useCollectionData(reviewsQuery);
-
-  const [restaurantDoc, restaurantLoading, restaurantError] =
-    useDocumentData(doc(db, "settings", "restaurant"));
-
-  const isRestaurantOpen = restaurantDoc?.isOpen ?? true;
+  useEffect(() => {
+    (async () => {
+      try {
+        const [mealsRes, usersRes, reviewsRes, settingsRes] = await Promise.all([
+          supabase.from("meals").select("id, active"),
+          supabase.from("profiles").select("id, created_at"),
+          supabase.from("order_reviews").select("rating").order("created_at", { ascending: false }).limit(100),
+          supabase.from("settings").select("value").eq("key", "restaurant").maybeSingle(),
+        ]);
+        const firstError = mealsRes.error || usersRes.error || reviewsRes.error || settingsRes.error;
+        if (firstError) throw new Error(firstError.message);
+        setMeals((mealsRes.data ?? []) as Meal[]);
+        setUsers((usersRes.data ?? []) as User[]);
+        setReviews((reviewsRes.data ?? []) as Review[]);
+        const value = settingsRes.data?.value as { isOpen?: boolean } | null;
+        setIsRestaurantOpen(value?.isOpen ?? true);
+      } catch (e) {
+        setStatsError(e as Error);
+      } finally {
+        setStatsLoading(false);
+      }
+    })();
+  }, []);
 
   const getCustomer = (order: Order): ProfileRow | null => {
     if (!order.profiles) return null;
@@ -205,8 +210,8 @@ export default function Dashboard() {
   const recentOrders = allOrders.slice(0, orderCount);
   const hasMoreOrders = allOrders.length > orderCount;
 
-  const isLoading = userLoading || ordersLoading || mealsLoading || usersLoading || restaurantLoading;
-  const error = userError || ordersError || mealsError || usersError || restaurantError;
+  const isLoading = userLoading || ordersLoading || statsLoading;
+  const error = userError || ordersError || statsError;
 
   if (isLoading) {
     return (
@@ -272,11 +277,11 @@ export default function Dashboard() {
           <StatCard
             title="Active Meals"
             icon={<Utensils className="text-green-600" />}
-            value={meals?.length || 0}
+            value={(meals || []).filter((m: Meal) => m.active).length}
             link="/meals"
             color="green"
             change={`${
-              (meals as Meal[] || []).filter((m: Meal) => !m.active).length
+              (meals || []).filter((m: Meal) => !m.active).length
             } inactive`}
           />
           <StatCard
@@ -286,8 +291,8 @@ export default function Dashboard() {
             link="/users"
             color="purple"
             change={`${
-              (users as User[] || []).filter((u: User) =>
-                u.createdAt?.seconds && moment(u.createdAt.seconds * 1000).isSame(moment(), "month")
+              (users || []).filter((u: User) =>
+                u.created_at && moment(u.created_at).isSame(moment(), "month")
               ).length
             } this month`}
           />

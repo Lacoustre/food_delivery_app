@@ -1,7 +1,5 @@
-import { useState, useMemo } from "react";
-import { useCollection } from "react-firebase-hooks/firestore";
-import { collection, query, orderBy } from "firebase/firestore";
-import { db } from "../firebase";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Star } from "lucide-react";
@@ -9,38 +7,58 @@ import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Star } from "
 interface Order {
   id: string;
   status: string;
-  createdAt?: { seconds: number };
-  pricing?: { total?: number };
-  total?: number;
-  items?: Array<{ name?: string; mealName?: string; quantity?: number }>;
-  cartItems?: Array<{ name?: string; mealName?: string; quantity?: number }>;
+  createdAtMs: number | null;
+  total: number;
+  items: Array<{ name?: string; quantity?: number }>;
 }
 
 interface User {
   id: string;
-  createdAt?: { seconds: number };
+  createdAtMs: number | null;
 }
 
 export default function Analytics() {
   const [timeRange, setTimeRange] = useState("7d");
-  
-  const [ordersSnapshot, ordersLoading] = useCollection(
-    query(collection(db, "orders"), orderBy("createdAt", "desc"))
-  );
-  
-  const [usersSnapshot, usersLoading] = useCollection(
-    query(collection(db, "users"), orderBy("createdAt", "desc"))
-  );
 
-  const orders: Order[] = ordersSnapshot?.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Order[] || [];
-  
-  const users: User[] = usersSnapshot?.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as User[] || [];
+  // Orders and customers come from Supabase — the Firestore copies stopped
+  // being written when order persistence moved to /api/create-order.
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ordersRes, usersRes] = await Promise.all([
+          supabase
+            .from("orders")
+            .select("id, status, created_at, total, order_items(name, quantity)")
+            .order("created_at", { ascending: false }),
+          supabase.from("profiles").select("id, created_at").order("created_at", { ascending: false }),
+        ]);
+        setOrders(
+          (ordersRes.data ?? []).map((row) => ({
+            id: row.id,
+            status: row.status,
+            createdAtMs: row.created_at ? new Date(row.created_at).getTime() : null,
+            total: Number(row.total ?? 0),
+            items: (row.order_items ?? []).map((i: { name: string | null; quantity: number }) => ({
+              name: i.name ?? undefined,
+              quantity: i.quantity,
+            })),
+          })),
+        );
+        setUsers(
+          (usersRes.data ?? []).map((row) => ({
+            id: row.id,
+            createdAtMs: row.created_at ? new Date(row.created_at).getTime() : null,
+          })),
+        );
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const analytics = useMemo(() => {
     const now = moment();
@@ -62,12 +80,12 @@ export default function Analytics() {
 
     // Filter orders for current and previous periods
     const currentOrders = orders.filter(order => 
-      order.createdAt?.seconds && moment(order.createdAt.seconds * 1000).isAfter(startDate)
+      order.createdAtMs && moment(order.createdAtMs).isAfter(startDate)
     );
     
     const prevOrders = orders.filter(order => 
-      order.createdAt?.seconds && 
-      moment(order.createdAt.seconds * 1000).isBetween(prevStartDate, startDate)
+      order.createdAtMs && 
+      moment(order.createdAtMs).isBetween(prevStartDate, startDate)
     );
 
     const completedOrders = currentOrders.filter(order => 
@@ -80,11 +98,11 @@ export default function Analytics() {
 
     // Revenue calculations
     const currentRevenue = completedOrders.reduce((sum, order) => 
-      sum + (order.pricing?.total || order.total || 0), 0
+      sum + (order.total || 0), 0
     );
     
     const prevRevenue = prevCompletedOrders.reduce((sum, order) => 
-      sum + (order.pricing?.total || order.total || 0), 0
+      sum + (order.total || 0), 0
     );
 
     const revenueGrowth = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
@@ -95,12 +113,12 @@ export default function Analytics() {
 
     // Customer calculations
     const newCustomers = users.filter(user => 
-      user.createdAt?.seconds && moment(user.createdAt.seconds * 1000).isAfter(startDate)
+      user.createdAtMs && moment(user.createdAtMs).isAfter(startDate)
     ).length;
     
     const prevNewCustomers = users.filter(user => 
-      user.createdAt?.seconds && 
-      moment(user.createdAt.seconds * 1000).isBetween(prevStartDate, startDate)
+      user.createdAtMs && 
+      moment(user.createdAtMs).isBetween(prevStartDate, startDate)
     ).length;
 
     const customerGrowth = prevNewCustomers > 0 ? 
@@ -115,9 +133,9 @@ export default function Analytics() {
     // Popular items
     const itemCounts: { [key: string]: number } = {};
     completedOrders.forEach(order => {
-      const items = order.items || order.cartItems || [];
+      const items = order.items || [];
       items.forEach(item => {
-        const name = item.name || item.mealName || 'Unknown Item';
+        const name = item.name || 'Unknown Item';
         itemCounts[name] = (itemCounts[name] || 0) + (item.quantity || 1);
       });
     });
@@ -132,15 +150,15 @@ export default function Analytics() {
     for (let i = parseInt(timeRange.replace(/\D/g, '')) - 1; i >= 0; i--) {
       const date = now.clone().subtract(i, timeRange === "24h" ? "hours" : "days");
       const dayOrders = completedOrders.filter(order => {
-        if (!order.createdAt?.seconds) return false;
-        const orderDate = moment(order.createdAt.seconds * 1000);
+        if (!order.createdAtMs) return false;
+        const orderDate = moment(order.createdAtMs);
         return timeRange === "24h" ? 
           orderDate.isSame(date, "hour") : 
           orderDate.isSame(date, "day");
       });
       
       const revenue = dayOrders.reduce((sum, order) => 
-        sum + (order.pricing?.total || order.total || 0), 0
+        sum + (order.total || 0), 0
       );
       
       dailyRevenue.push({
@@ -164,7 +182,7 @@ export default function Analytics() {
     };
   }, [orders, users, timeRange]);
 
-  if (ordersLoading || usersLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-[70vh]">
         <Loader />
