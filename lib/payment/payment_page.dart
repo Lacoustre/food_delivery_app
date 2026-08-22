@@ -9,7 +9,6 @@ import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:african_cuisine/payment/confirmation_page.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
@@ -492,7 +491,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   // Cached settings
   Map<String, dynamic>? _cachedSettings;
   DateTime? _lastSettingsFetch;
-  StreamSubscription<DocumentSnapshot>? _restaurantStatusSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _restaurantStatusSubscription;
 
   // Controllers
   final TextEditingController _customTipController = TextEditingController();
@@ -511,14 +510,15 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
   }
 
   void _listenToRestaurantStatus() {
-    _restaurantStatusSubscription = FirebaseFirestore.instance
-        .collection('settings')
-        .doc('restaurant')
-        .snapshots()
-        .listen((snapshot) {
-          if (snapshot.exists && mounted) {
+    _restaurantStatusSubscription = Supabase.instance.client
+        .from('settings')
+        .stream(primaryKey: ['key'])
+        .eq('key', 'restaurant')
+        .listen((rows) {
+          if (rows.isNotEmpty && mounted) {
+            final value = rows.first['value'] as Map<String, dynamic>?;
             setState(() {
-              _isRestaurantOpen = snapshot.data()?['isOpen'] ?? true;
+              _isRestaurantOpen = value?['isOpen'] ?? true;
             });
           }
         });
@@ -536,13 +536,14 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('restaurant')
-          .get();
+      final row = await Supabase.instance.client
+          .from('settings')
+          .select('value')
+          .eq('key', 'restaurant')
+          .maybeSingle();
 
-      if (doc.exists && mounted) {
-        _cachedSettings = doc.data() ?? {};
+      if (row != null && mounted) {
+        _cachedSettings = (row['value'] as Map<String, dynamic>?) ?? {};
         _lastSettingsFetch = DateTime.now();
         setState(() {
           _taxRate =

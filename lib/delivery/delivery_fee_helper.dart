@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DeliveryCalculator {
   DeliveryCalculator._();
@@ -141,21 +141,22 @@ class DeliveryCalculator {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('restaurant')
-          .get();
+      final row = await Supabase.instance.client
+          .from('settings')
+          .select('value')
+          .eq('key', 'restaurant')
+          .maybeSingle();
 
-      if (doc.exists && doc.data() != null) {
-        _cachedSettings = doc.data()!;
+      if (row != null && row['value'] != null) {
+        _cachedSettings = Map<String, dynamic>.from(row['value'] as Map);
         _lastFetch = DateTime.now();
         return _cachedSettings!;
       }
     } catch (e) {
-      _logError('Firestore settings fetch failed', e);
+      _logError('Settings fetch failed', e);
     }
 
-    // Return defaults if Firestore unavailable
+    // Return defaults if settings unavailable
     return {
       'deliveryRadius': _defaultMaxDistance,
       'deliveryFee': _defaultBaseFee,
