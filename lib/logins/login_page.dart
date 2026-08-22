@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'sign_up_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -58,53 +57,44 @@ class _LoginPageState extends State<LoginPage>
     setState(() => _isLoading = true);
 
     try {
-      final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
-
-      final user = userCredential.user;
-      if (user == null) {
-        throw FirebaseAuthException(
-          code: 'internal-error',
-          message: 'Login failed.',
-        );
+      final res = await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      if (res.session == null) {
+        throw const AuthException('Login failed.');
       }
 
-      // 🟢 Supabase migration: mirror the session so Supabase-backed
-      // features have a signed-in user too. Best-effort — a Supabase
-      // hiccup should never block login on the still-Firebase-backed app.
+      // Ensure the profile row exists — covers accounts whose email was
+      // confirmed after signup (the signup screen couldn't create it then).
       try {
-        await Supabase.instance.client.auth.signInWithPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+        final uid = res.user!.id;
+        final supabase = Supabase.instance.client;
+        final existing = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', uid)
+            .maybeSingle();
+        if (existing == null) {
+          await supabase.from('profiles').upsert({
+            'id': uid,
+            'email': _emailController.text.trim(),
+            'role': 'customer',
+          });
+        }
       } catch (e) {
-        debugPrint('Supabase login mirror failed: $e');
+        debugPrint('Profile ensure failed: $e');
       }
 
       if (!mounted) return;
 
       Navigator.pushReplacementNamed(context, '/auth');
-    } on FirebaseAuthException catch (e) {
-      String message = "Login failed.";
-      switch (e.code) {
-        case 'user-not-found':
-          message = "No user found for that email.";
-          break;
-        case 'wrong-password':
-          message = "Incorrect password.";
-          break;
-        case 'user-disabled':
-          message = "Account has been disabled. Please contact support.";
-          break;
-        case 'invalid-credential':
-          message = "Invalid email or password.";
-          break;
-        default:
-          message = e.message ?? message;
-      }
+    } on AuthException catch (e) {
+      String message = e.message.contains('Invalid login credentials')
+          ? 'Invalid email or password.'
+          : e.message.contains('Email not confirmed')
+              ? 'Please confirm your email first — check your inbox.'
+              : e.message;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
@@ -146,13 +136,14 @@ class _LoginPageState extends State<LoginPage>
                 return;
               }
               try {
-                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                await Supabase.instance.client.auth
+                    .resetPasswordForEmail(email);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Password reset email sent')),
                 );
                 Navigator.pop(context);
-              } on FirebaseAuthException catch (e) {
+              } on AuthException catch (e) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
               }

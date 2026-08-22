@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -62,128 +60,86 @@ class _SignupPageState extends State<SignupPage>
   String _normalizePhone(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), '');
 
-  Future<void> _clearAuthCache() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-    } catch (e) {
-      // Ignore errors during sign out
-    }
-  }
-
   Future<void> signupUser() async {
     if (!_formKey.currentState!.validate()) return;
 
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
-    // Clear any cached auth state first
-    await _clearAuthCache();
-
-    User? createdUser;
-
     try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final phone = _normalizePhone(_phoneController.text);
+      final supabase = Supabase.instance.client;
+
+      final res = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      createdUser = cred.user;
+      final user = res.user;
+      if (user == null) {
+        throw const AuthException('User creation failed unexpectedly.');
+      }
 
-      if (createdUser == null) {
-        throw FirebaseAuthException(
-          code: 'internal-error',
-          message: 'User creation failed unexpectedly.',
+      if (res.session != null) {
+        // Signed in immediately — create the profile row (RLS needs the
+        // session) with the FCM token if one is available.
+        String? fcmToken;
+        try {
+          fcmToken = await FirebaseMessaging.instance.getToken();
+        } catch (_) {
+          // FCM token fetch failed - non-critical, continue
+        }
+        await supabase.from('profiles').upsert({
+          'id': user.id,
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phone': phone,
+          'role': 'customer',
+          if (fcmToken != null) 'fcm_token': fcmToken,
+        });
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Account created successfully!'),
+            backgroundColor: Colors.green,
+          ),
         );
-      }
-
-      final uid = createdUser.uid;
-      final db = FirebaseFirestore.instance;
-      final usersRef = db.collection('users').doc(uid);
-      final phone = _normalizePhone(_phoneController.text);
-
-      await usersRef.set({
-        'uid': uid,
-        'name': _nameController.text.trim(),
-        'email': createdUser.email,
-        'phone': phone,
-        'role': 'customer',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      try {
-        final fcmToken = await FirebaseMessaging.instance.getToken();
-        if (fcmToken != null) {
-          await usersRef.update({'fcmToken': fcmToken});
-        }
-      } catch (e) {
-        // FCM token save failed - non-critical, continue
-      }
-
-      // 🟢 Supabase migration: also create the account + profile row on
-      // Supabase, alongside the existing Firebase account. Best-effort so a
-      // Supabase hiccup never blocks signup while the rest of the app is
-      // still Firebase-backed.
-      try {
-        final supabaseRes = await Supabase.instance.client.auth.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-        final supabaseUser = supabaseRes.user;
-        if (supabaseUser != null) {
-          await Supabase.instance.client.from('profiles').upsert({
-            'id': supabaseUser.id,
-            'name': _nameController.text.trim(),
-            'email': createdUser.email,
-            'phone': phone,
-            'role': 'customer',
-          });
-        }
-      } catch (e) {
-        debugPrint('Supabase signup mirror failed: $e');
-      }
-
-      await createdUser.updateDisplayName(_nameController.text.trim());
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Account created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.pushReplacementNamed(context, '/auth');
-    } catch (e) {
-      String msg = 'Signup failed';
-      if (e is FirebaseAuthException) {
-        if (e.code == 'weak-password') {
-          msg = 'Password is too weak';
-        } else if (e.code == 'email-already-in-use') {
-          msg = 'Email is already registered';
-        } else if (e.code == 'invalid-email') {
-          msg = 'Invalid email address';
-        } else if (e.code == 'too-many-requests') {
-          msg = 'Too many attempts. Please try again later.';
-        } else {
-          msg = e.message ?? 'Signup failed';
-        }
-      } else if (e is FirebaseException) {
-        msg = e.code == 'permission-denied'
-            ? 'Permission denied by Firestore rules.'
-            : (e.message ?? 'Could not finish signup.');
+        Navigator.pushReplacementNamed(context, '/auth');
       } else {
-        msg = 'Network error: ${e.toString()}';
+        // Email confirmation is enabled on the project — the profile row
+        // gets created by auth_service on first login instead.
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('✅ Account created — check your email to confirm it.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+        );
       }
-
-      try {
-        await createdUser?.delete();
-      } catch (_) {
-        await FirebaseAuth.instance.signOut();
+    } on AuthException catch (e) {
+      String msg = e.message;
+      if (msg.contains('already registered')) {
+        msg = 'Email is already registered';
+      } else if (msg.toLowerCase().contains('password')) {
+        msg = 'Password is too weak';
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

@@ -4,12 +4,11 @@ import 'package:african_cuisine/orders/order_number_generator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:african_cuisine/payment/confirmation_page.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
 import 'package:african_cuisine/services/email_service.dart';
@@ -701,17 +700,15 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     debugPrint('   Delivery: \$${totals.deliveryFee.toStringAsFixed(2)}');
     debugPrint('   TOTAL: \$${totals.total.toStringAsFixed(2)}');
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       debugPrint('❌ No authenticated user');
       throw const PaymentException('User not authenticated');
     }
 
     debugPrint('👤 User details:');
-    debugPrint('   UID: ${user.uid}');
+    debugPrint('   UID: ${user.id}');
     debugPrint('   Email: ${user.email ?? 'No email'}');
-    debugPrint('   Display Name: ${user.displayName ?? 'No display name'}');
-    debugPrint('   Email Verified: ${user.emailVerified}');
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final deliveryProvider = Provider.of<DeliveryFeeProvider>(
@@ -738,7 +735,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         distanceMiles: deliveryProvider.deliveryDistance,
         tipAmount: totals.tip,
         orderId: orderId,
-        customerName: user.displayName ?? user.email ?? 'Customer',
+        customerName: user.email ?? 'Customer',
         itemsDescription: cartProvider.items
             .map((item) => '${item.name} x${item.quantity}')
             .join(', '),
@@ -775,7 +772,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         total: paymentIntent['total'] as double,
       );
       final orderData = await _createOrderData(
-        user.uid,
+        user.id,
         orderId,
         validatedTotals,
         validatedItems: paymentIntent['items'] as List<dynamic>?,
@@ -787,7 +784,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       try {
         await PushNotificationService.sendOrderReceivedNotification(
           orderId: orderId,
-          userId: user.uid,
+          userId: user.id,
         );
       } catch (e) {
         debugPrint('Push notification failed: $e');
@@ -848,11 +845,8 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       listen: false,
     );
     final nowIso = DateTime.now().toIso8601String();
-    final user = FirebaseAuth.instance.currentUser!;
-    final customerName =
-        user.displayName ??
-        (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
-            'Customer');
+    final user = Supabase.instance.client.auth.currentUser!;
+    final customerName = await _customerDisplayName(user);
 
     // Merge server-validated id/name/price (authoritative) with the
     // client's display-only fields (image/category/extras/instructions),
@@ -1679,10 +1673,24 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     );
   }
 
+  Future<String> _customerDisplayName(User user) async {
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+      final name = profile?['name'] as String?;
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {}
+    return user.email?.split('@').first.split(RegExp(r'[._]')).first ??
+        'Customer';
+  }
+
   Future<void> _processScheduledOrderPayment(PaymentTotals totals) async {
     debugPrint('🚀 === SCHEDULED ORDER PAYMENT FLOW STARTED ===');
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       throw const PaymentException('User not authenticated');
     }
@@ -1708,7 +1716,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         distanceMiles: deliveryProvider.deliveryDistance,
         tipAmount: totals.tip,
         orderId: orderId,
-        customerName: user.displayName ?? user.email ?? 'Customer',
+        customerName: user.email ?? 'Customer',
         itemsDescription: cartProvider.items
             .map((item) => '${item.name} x${item.quantity}')
             .join(', '),
@@ -1730,7 +1738,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         total: paymentIntent['total'] as double,
       );
       await _saveScheduledOrderWithPayment(
-        user.uid,
+        user.id,
         orderId,
         validatedTotals,
         validatedItems: paymentIntent['items'] as List<dynamic>?,
@@ -1801,11 +1809,8 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       }
     }
 
-    final user = FirebaseAuth.instance.currentUser!;
-    final customerName =
-        user.displayName ??
-        (user.email?.split('@').first.split(RegExp(r'[._]')).first ??
-            'Customer');
+    final user = Supabase.instance.client.auth.currentUser!;
+    final customerName = await _customerDisplayName(user);
 
     final orderData = OrderData(
       orderNumber: orderId,

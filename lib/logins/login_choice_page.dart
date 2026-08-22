@@ -93,18 +93,6 @@ class _LoginChoicePageState extends State<LoginChoicePage>
                   Navigator.pushNamed(context, '/login');
                 },
               ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.phone),
-                label: const Text("Sign in with Phone"),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  side: BorderSide(color: Colors.deepOrange),
-                ),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/phone-auth');
-                },
-              ),
               const SizedBox(height: 30),
               TextButton(
                 onPressed: () {

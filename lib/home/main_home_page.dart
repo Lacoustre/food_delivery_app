@@ -9,7 +9,6 @@ import 'package:african_cuisine/home/profile_page.dart';
 import 'package:african_cuisine/notification/notification_page.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -231,11 +230,11 @@ class _MainFoodPageState extends State<MainFoodPage> {
   }
 
   Future<void> _reloadUser() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await user.reload();
-      setState(() {});
-    }
+    // Refresh the Supabase session so profile edits show up
+    try {
+      await Supabase.instance.client.auth.refreshSession();
+    } catch (_) {}
+    if (mounted) setState(() {});
   }
 
   void _updateGreeting() {
@@ -246,24 +245,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
     if (mounted) setState(() => _greeting = greeting);
   }
 
-  String _getUserDisplayName() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return 'User';
-
-    if (user.displayName != null && user.displayName!.isNotEmpty) {
-      return user.displayName!.split(' ').first;
-    }
-
-    if (user.email != null && user.email!.isNotEmpty) {
-      final localPart = user.email!.split('@').first;
-      return localPart.split(RegExp(r'[._]')).first.capitalize();
-    }
-
-    return 'User';
-  }
-
   Widget _buildUserGreeting() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       return Text(
         '$_greeting, User 👋',
@@ -275,24 +258,19 @@ class _MainFoodPageState extends State<MainFoodPage> {
     }
 
     // Display name comes from the Supabase profile, falling back to the
-    // Firebase auth identity when the profile has no name yet.
-    final supabaseUser = Supabase.instance.client.auth.currentUser;
+    // account email when the profile has no name yet.
     return FutureBuilder<Map<String, dynamic>?>(
-      future: supabaseUser != null
-          ? Supabase.instance.client
-                .from('profiles')
-                .select('name')
-                .eq('id', supabaseUser.id)
-                .maybeSingle()
-          : Future.value(null),
+      future: Supabase.instance.client
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle(),
       builder: (context, snapshot) {
         String displayName = 'User';
 
         final profileName = snapshot.data?['name']?.toString();
         if (profileName != null && profileName.isNotEmpty) {
           displayName = profileName.split(' ').first;
-        } else if (user.displayName != null && user.displayName!.isNotEmpty) {
-          displayName = user.displayName!.split(' ').first;
         } else if (user.email != null && user.email!.isNotEmpty) {
           final localPart = user.email!.split('@').first;
           displayName = localPart.split(RegExp(r'[._]')).first.capitalize();
@@ -827,8 +805,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
           (query.isEmpty ||
               (m['name'] as String).toLowerCase().contains(query));
     }).toList();
-    final displayName = _getUserDisplayName();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Taste of African Cuisine'),

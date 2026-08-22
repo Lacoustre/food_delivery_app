@@ -23,9 +23,7 @@ import 'package:african_cuisine/logins/auth_gate.dart';
 import 'package:african_cuisine/logins/login_choice_page.dart';
 import 'package:african_cuisine/logins/login_page.dart';
 import 'package:african_cuisine/logins/sign_up_page.dart';
-import 'package:african_cuisine/logins/phone_auth_page.dart';
 
-import 'package:african_cuisine/logins/verify_account_page.dart';
 
 import 'package:african_cuisine/logins/onboarding_page.dart';
 import 'package:african_cuisine/payment/payment_page.dart';
@@ -36,7 +34,6 @@ import 'package:african_cuisine/orders/order_history_page.dart';
 import 'package:african_cuisine/orders/reorder_page.dart';
 import 'package:african_cuisine/support/call_support_page.dart';
 import 'package:african_cuisine/home/cart_page.dart';
-import 'package:african_cuisine/logins/link_phone_page.dart';
 import 'package:african_cuisine/notification/notification_page.dart';
 import 'package:african_cuisine/support/live_chat_support_page.dart';
 
@@ -133,12 +130,10 @@ class _MyAppState extends State<MyApp> {
         '/choice': (context) => const LoginChoicePage(),
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignupPage(),
-        '/verify-account': (context) => const VerifyAccountPage(),
         '/payment': (context) => const PaymentPage(),
         '/home': (context) => const MainFoodPage(),
         '/callSupport': (context) => const CallSupportPage(),
         '/cart': (context) => const CartPage(),
-        '/link-phone': (context) => const LinkPhonePage(),
         '/notifications': (context) => const NotificationPage(),
         '/support': (context) => const LiveChatSupportPage(),
         '/onboarding': (context) => const OnboardingPage(),

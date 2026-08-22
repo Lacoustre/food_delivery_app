@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -47,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen>
       setState(() => _statusText = 'Checking authentication...');
       
       // Check if user is already logged in
-      final user = FirebaseAuth.instance.currentUser;
+      final user = Supabase.instance.client.auth.currentUser;
       final prefs = await SharedPreferences.getInstance();
       final hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
       

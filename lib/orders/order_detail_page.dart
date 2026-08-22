@@ -9,7 +9,6 @@ import 'package:geocoding/geocoding.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:african_cuisine/services/order_adapter.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:african_cuisine/services/email_service.dart';
 
@@ -336,11 +335,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     if (confirmed != true) return;
 
     try {
-      // Ownership check against the Supabase user id — the order's
-      // userId/user_id is a Supabase UUID, not the Firebase uid.
-      final user = FirebaseAuth.instance.currentUser;
+      // Ownership check against the Supabase user id
       final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
-      if (user == null || supabaseUserId == null) {
+      if (supabaseUserId == null) {
         throw Exception('User not authenticated');
       }
 
@@ -364,8 +361,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       // wouldn't allow a non-admin customer to write admin_notifications
       // anyway.
 
-      final userEmail = user.email;
-      final userName = user.displayName ?? 'Customer';
+      final supaUser = Supabase.instance.client.auth.currentUser;
+      final userEmail = supaUser?.email;
+      String userName = 'Customer';
+      try {
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('name')
+            .eq('id', supabaseUserId)
+            .maybeSingle();
+        userName = (profile?['name'] as String?) ?? 'Customer';
+      } catch (_) {}
       if (userEmail != null) {
         await EmailService.sendOrderCompletionEmail(
           orderId: docId,

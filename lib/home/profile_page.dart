@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
@@ -14,8 +13,6 @@ import 'package:african_cuisine/support/live_chat_support_page.dart';
 import 'package:african_cuisine/support/call_support_page.dart';
 import 'package:african_cuisine/orders/order_history_page.dart';
 import 'package:african_cuisine/orders/scheduled_orders_page.dart';
-import 'package:african_cuisine/phone_number_update.dart';
-import 'package:african_cuisine/logins/link_phone_page.dart';
 import 'package:image_cropper/image_cropper.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -28,6 +25,8 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
   String? _profileImagePath;
+  String? _profileName;
+  String? _avatarUrl;
   final _displayNameController = TextEditingController();
   // ignore: unused_field
   bool _imageLoadError = false;
@@ -42,38 +41,35 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _loadDisplayName() {
-    final user = FirebaseAuth.instance.currentUser;
-    _displayNameController.text = user?.displayName ?? '';
+    _loadProfile();
   }
 
-  /// Check if user has a custom profile image — the Supabase profile's
-  /// avatar_url is authoritative; Firebase Auth photoURL covers photos
-  /// uploaded before the storage migration.
-  Future<void> _checkForCustomImage() async {
-    final user = FirebaseAuth.instance.currentUser;
+  /// Load display name + avatar from the Supabase profile.
+  Future<void> _loadProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
-
-    var hasCustom = user.photoURL != null && user.photoURL!.isNotEmpty;
     try {
-      final supabaseUser = Supabase.instance.client.auth.currentUser;
-      if (supabaseUser != null) {
-        final row = await Supabase.instance.client
-            .from('profiles')
-            .select('avatar_url')
-            .eq('id', supabaseUser.id)
-            .maybeSingle();
-        final avatarUrl = row?['avatar_url'] as String?;
-        if (avatarUrl != null && avatarUrl.isNotEmpty) hasCustom = true;
-      }
-    } catch (_) {
-      // fall back to the photoURL check alone
-    }
-    if (mounted) setState(() => _hasCustomImage = hasCustom);
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('name, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() {
+        _profileName = row?['name'] as String?;
+        _avatarUrl = row?['avatar_url'] as String?;
+        _displayNameController.text = _profileName ?? '';
+        _hasCustomImage = _avatarUrl != null && _avatarUrl!.isNotEmpty;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _checkForCustomImage() async {
+    // covered by _loadProfile
   }
 
   Future<void> _uploadAndSetProfileImage(File imageFile) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (Supabase.instance.client.auth.currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please sign in to upload profile picture'),
@@ -110,19 +106,15 @@ class _ProfilePageState extends State<ProfilePage> {
           '${supabase.storage.from('avatars').getPublicUrl(path)}'
           '?v=${DateTime.now().millisecondsSinceEpoch}';
 
-      // Firebase Auth photoURL stays the display source while auth is
-      // still Firebase; the profile row is what web/admin read.
-      await user.updatePhotoURL(downloadUrl);
       await supabase
           .from('profiles')
           .update({'avatar_url': downloadUrl}).eq('id', supabaseUser.id);
-
-      await user.reload();
 
       setState(() {
         _profileImagePath = null;
         _imageLoadError = false;
         _hasCustomImage = true;
+        _avatarUrl = downloadUrl;
         _isUploading = false;
       });
 
@@ -152,8 +144,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// Remove profile image and revert to default
   Future<void> _removeProfileImage() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (Supabase.instance.client.auth.currentUser == null) return;
 
     // Show confirmation dialog
     final shouldDelete = await showDialog<bool>(
@@ -199,15 +190,11 @@ class _ProfilePageState extends State<ProfilePage> {
         }
       }
 
-      // Clear the photoURL from Firebase Auth
-      await user.updatePhotoURL(null);
-
-      await user.reload();
-
       setState(() {
         _profileImagePath = null;
         _imageLoadError = false;
         _hasCustomImage = false;
+        _avatarUrl = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -227,8 +214,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _pickImage() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (Supabase.instance.client.auth.currentUser == null) return;
 
     try {
       final source = await showModalBottomSheet<ImageSource>(
@@ -304,8 +290,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _showEditProfileDialog() async {
-    final user = FirebaseAuth.instance.currentUser;
-    _displayNameController.text = user?.displayName ?? '';
+    _displayNameController.text = _profileName ?? '';
 
     await showDialog(
       context: context,
@@ -346,9 +331,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
                           setStateDialog(() => isLoading = true);
                           try {
-                            await user?.updateDisplayName(newName);
-                            await user?.reload();
-                            setState(() {});
+                            final supabaseUser =
+                                Supabase.instance.client.auth.currentUser;
+                            if (supabaseUser != null) {
+                              await Supabase.instance.client
+                                  .from('profiles')
+                                  .update({'name': newName})
+                                  .eq('id', supabaseUser.id);
+                            }
+                            setState(() => _profileName = newName);
                             Navigator.of(context).pop();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -403,7 +394,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _showEditEmailDialog() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     final emailController = TextEditingController(text: user?.email ?? '');
 
     await showDialog(
@@ -444,34 +435,27 @@ class _ProfilePageState extends State<ProfilePage> {
 
                           setStateDialog(() => isLoading = true);
                           try {
-                            await user?.updateEmail(newEmail);
-                            await user?.reload();
+                            // Supabase emails a confirmation link to the
+                            // new address; the change applies on confirm.
+                            await Supabase.instance.client.auth.updateUser(
+                              UserAttributes(email: newEmail),
+                            );
                             setState(() {});
                             Navigator.pop(context);
-
-                            // ✅ Email updated — send verification
-                            await user?.sendEmailVerification();
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Email updated! Verification sent.',
+                                  'Confirmation sent — check the new email to finish the change.',
                                 ),
                               ),
                             );
                           } catch (e) {
-                            // ✅ Handle re-authentication requirement
-                            if (e is FirebaseAuthException &&
-                                e.code == 'requires-recent-login') {
-                              Navigator.pop(context); // Close dialog first
-                              await _showReauthDialog(); // Show re-auth dialog
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed: ${e.toString()}'),
-                                ),
-                              );
-                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed: ${e.toString()}'),
+                              ),
+                            );
                           } finally {
                             setStateDialog(() => isLoading = false);
                           }
@@ -492,66 +476,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Future<void> _showReauthDialog() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final email = user?.email;
-    final passwordController = TextEditingController();
-
-    if (email == null) return;
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Re-authenticate'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Please enter your password to continue.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final credential = EmailAuthProvider.credential(
-                  email: email,
-                  password: passwordController.text.trim(),
-                );
-                await user?.reauthenticateWithCredential(credential);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Re-authenticated successfully!'),
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Re-authentication failed: ${e.toString()}'),
-                  ),
-                );
-              }
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Get the correct image provider with proper fallback
   ImageProvider _getProfileImageProvider() {
     // Show local image if we just picked one
@@ -559,13 +483,9 @@ class _ProfilePageState extends State<ProfilePage> {
       return FileImage(File(_profileImagePath!));
     }
 
-    final user = FirebaseAuth.instance.currentUser;
-
-    // If user has custom image and valid photoURL, try to show it
-    if (_hasCustomImage &&
-        user?.photoURL != null &&
-        user!.photoURL!.isNotEmpty) {
-      return NetworkImage(user.photoURL!);
+    // If user has a custom image with a valid URL, show it
+    if (_hasCustomImage && _avatarUrl != null && _avatarUrl!.isNotEmpty) {
+      return NetworkImage(_avatarUrl!);
     }
 
     // Default image
@@ -635,9 +555,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     final displayName =
-        user?.displayName ?? user?.email?.split('@').first ?? 'User';
+        _profileName ?? user?.email?.split('@').first ?? 'User';
     final email = user?.email ?? 'No email';
     final favoritesCount = Provider.of<FavoritesProvider>(
       context,
@@ -797,11 +717,10 @@ class _ProfilePageState extends State<ProfilePage> {
               icon: Icons.lock_outline,
               title: "Change Password",
               onTap: () {
-                final user = FirebaseAuth.instance.currentUser;
+                final user = Supabase.instance.client.auth.currentUser;
                 if (user?.email != null) {
-                  FirebaseAuth.instance.sendPasswordResetEmail(
-                    email: user!.email!,
-                  );
+                  Supabase.instance.client.auth
+                      .resetPasswordForEmail(user!.email!);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Password reset email sent.")),
                   );
@@ -835,12 +754,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   );
 
                   if (shouldSignOut == true) {
-                    await FirebaseAuth.instance.signOut();
-                    try {
-                      await Supabase.instance.client.auth.signOut();
-                    } catch (e) {
-                      debugPrint('Supabase sign-out mirror failed: $e');
-                    }
+                    await Supabase.instance.client.auth.signOut();
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const LoginPage()),
                       (_) => false,
@@ -922,9 +836,9 @@ class _ProfilePageState extends State<ProfilePage> {
               color: isLinked ? Colors.green : Colors.deepOrange,
             ),
             title: Text(isLinked ? 'Phone Number' : 'Add Phone Number'),
-            subtitle: isLinked 
-                ? Text(phoneNumber!) 
-                : const Text('Link your phone number for better security'),
+            subtitle: isLinked
+                ? Text(phoneNumber!)
+                : const Text('Add your phone number for order updates'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -948,26 +862,65 @@ class _ProfilePageState extends State<ProfilePage> {
                 const Icon(Icons.chevron_right),
               ],
             ),
-            onTap: () {
-              if (isLinked) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PhoneNumberUpdatePage(),
-                  ),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const LinkPhonePage(),
-                  ),
-                );
-              }
-            },
+            onTap: () => _showEditPhoneDialog(phoneNumber),
           ),
         );
       },
+    );
+  }
+
+  /// Phone is a plain profile field now — OTP verification went away with
+  /// Firebase phone auth (Supabase phone OTP would need a Twilio account).
+  void _showEditPhoneDialog(String? currentPhone) {
+    final controller = TextEditingController(text: currentPhone ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Phone Number'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: 'Phone number',
+            hintText: '+1 555 555 5555',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final phone =
+                  controller.text.trim().replaceAll(RegExp(r'\s+'), '');
+              final supabaseUser =
+                  Supabase.instance.client.auth.currentUser;
+              if (supabaseUser == null) return;
+              try {
+                await Supabase.instance.client
+                    .from('profiles')
+                    .update({'phone': phone.isEmpty ? null : phone})
+                    .eq('id', supabaseUser.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  setState(() {}); // refresh the phone section
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ Phone number saved')),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Failed to save: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 

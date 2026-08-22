@@ -1,5 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 class PushNotificationService {
@@ -120,12 +120,12 @@ class PushNotificationService {
   }
 
   static Future<void> testNotification() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     await sendOrderStatusNotification(
       orderId: 'TEST123',
-      userId: user.uid,
+      userId: user.id,
       status: 'test',
       title: '🧪 Test Notification',
       body: 'This is a test notification to verify push notifications are working.',
