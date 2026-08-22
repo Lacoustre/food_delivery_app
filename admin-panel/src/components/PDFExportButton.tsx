@@ -1,7 +1,6 @@
 // src/components/PDFExportButton.tsx
 import { useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../lib/supabase";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import dayjs from "dayjs";
@@ -16,25 +15,22 @@ export default function PDFExportButton() {
     const start = dayjs(`${year}-${month}-01`).startOf("month");
     const end = dayjs(start).endOf("month");
 
-    const ordersRef = collection(db, "orders");
-    const q = query(
-      ordersRef,
-      where("status", "==", "completed"),
-      where("createdAt", ">=", start.toDate()),
-      where("createdAt", "<=", end.toDate())
-    );
+    // Fulfilled orders come in three terminal statuses, not just "completed".
+    const { data } = await supabase
+      .from("orders")
+      .select("id, order_number, created_at, total, profiles!user_id(name, email)")
+      .in("status", ["completed", "delivered", "picked up"])
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString())
+      .order("created_at", { ascending: true });
 
-    const snapshot = await getDocs(q);
-
-    const orders = snapshot.docs.map(doc => {
-      const data = doc.data();
+    const orders = (data ?? []).map((row) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
       return {
-        orderId: data.orderId || doc.id,
-        customerName: data.customerName || "N/A",
-        total: data?.pricing?.total?.toFixed(2) || data?.total?.toFixed(2) || "0.00",
-        date: data?.createdAt?.toDate
-          ? dayjs(data.createdAt.toDate()).format("MMM D, YYYY")
-          : "—",
+        orderId: row.order_number || row.id.slice(0, 8),
+        customerName: profile?.name || profile?.email || "N/A",
+        total: Number(row.total ?? 0).toFixed(2),
+        date: row.created_at ? dayjs(row.created_at).format("MMM D, YYYY") : "—",
       };
     });
 

@@ -1,8 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bell, X, AlertCircle, ShoppingBag, Star, Clock, ExternalLink } from "lucide-react";
-import { useCollectionData } from "react-firebase-hooks/firestore";
-import { collection, query, orderBy, limit, where, Timestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
 import moment from "moment";
 
@@ -11,11 +9,16 @@ interface Notification {
   type: "order" | "review" | "alert" | "system";
   title: string;
   message: string;
-  createdAt: Timestamp;
+  createdAtMs: number;
   read: boolean;
   priority: "low" | "medium" | "high";
   orderId?: string;
   actionUrl?: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function profileOf(row: any): { name?: string | null; email?: string | null } | null {
+  return Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles;
 }
 
 export default function NotificationCenter() {
@@ -23,74 +26,68 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const navigate = useNavigate();
 
-  // Real-time queries for generating notifications
-  const [allOrders, , allOrdersError] = useCollectionData(
-    query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(20))
-  );
-  const [receivedOrders, , receivedOrdersError] = useCollectionData(
-    query(collection(db, "orders"), where("status", "==", "received"), orderBy("createdAt", "desc"), limit(10))
-  );
-  const [newReviews, , reviewsError] = useCollectionData(
-    query(collection(db, "reviews"), orderBy("createdAt", "desc"), limit(3))
-  );
-  const [lowStockMeals, , mealsError] = useCollectionData(
-    query(collection(db, "meals"), where("active", "==", false))
-  );
-
   // Track previous notification count for sound alerts
   const [prevNotificationCount, setPrevNotificationCount] = useState(0);
 
-  // Generate notifications from data
-  useEffect(() => {
-    // Handle Firestore errors gracefully
-    if (allOrdersError || receivedOrdersError || reviewsError || mealsError) {
-      console.warn('NotificationCenter: Firestore error (non-critical):', {
-        allOrdersError, receivedOrdersError, reviewsError, mealsError
-      });
-      // Don't generate notifications if there are permission errors
-      if (allOrdersError?.toString().includes('Missing or insufficient permissions') ||
-          receivedOrdersError?.toString().includes('Missing or insufficient permissions') ||
-          reviewsError?.toString().includes('Missing or insufficient permissions') ||
-          mealsError?.toString().includes('Missing or insufficient permissions')) {
-        console.log('Permission errors detected - skipping notification generation');
-        return;
-      }
-    }
-    
+  // Notifications are derived from Supabase: pending orders needing
+  // confirmation, recent orders, latest reviews, inactive meals.
+  const buildNotifications = useCallback(async () => {
+    const [ordersRes, pendingRes, reviewsRes, mealsRes] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("id, status, total, created_at, profiles!user_id(name, email)")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("orders")
+        .select("id, total, created_at, profiles!user_id(name, email)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("order_reviews")
+        .select("id, rating, created_at, profiles(name)")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase.from("meals").select("id").eq("active", false),
+    ]);
+
     const generatedNotifications: Notification[] = [];
 
-    // Priority 1: Received orders needing confirmation (immediate notification)
-    receivedOrders?.forEach((order, index) => {
-      if (index < 5) { // Show up to 5 received orders
+    // Priority 1: Pending orders needing confirmation
+    (pendingRes.data ?? []).forEach((order, index) => {
+      if (index < 5) {
+        const profile = profileOf(order);
         generatedNotifications.push({
           id: `received-${order.id}`,
           type: "order",
           title: "🚨 New Order - Needs Confirmation",
-          message: `URGENT: Order from ${order.customerName || order.name || order.customer || (order.userId ? 'Customer' : 'Unknown')} - $${(order.pricing?.total || order.total || 0).toFixed(2)}`,
-          createdAt: order.createdAt || Timestamp.now(),
+          message: `URGENT: Order from ${profile?.name || profile?.email || "Customer"} - $${Number(order.total ?? 0).toFixed(2)}`,
+          createdAtMs: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
           read: false,
           priority: "high",
           orderId: order.id,
-          actionUrl: "/orders?filter=received"
+          actionUrl: "/orders?filter=pending"
         });
       }
     });
 
     // Priority 2: Recent orders from last 30 minutes
     const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-    const recentOrders = allOrders?.filter(order => {
-      const orderTime = order.createdAt?.seconds ? order.createdAt.seconds * 1000 : 0;
-      return orderTime > thirtyMinutesAgo && order.status !== 'received'; // Exclude received (already shown above)
-    }) || [];
-    
+    const recentOrders = (ordersRes.data ?? []).filter(order => {
+      const orderTime = order.created_at ? new Date(order.created_at).getTime() : 0;
+      return orderTime > thirtyMinutesAgo && order.status !== 'pending'; // pending already shown above
+    });
+
     recentOrders.forEach((order, index) => {
-      if (index < 3) { // Show up to 3 recent non-pending orders
+      if (index < 3) {
+        const profile = profileOf(order);
         generatedNotifications.push({
           id: `recent-${order.id}`,
           type: "order",
           title: "Recent Order",
-          message: `Order from ${order.customerName || order.name || order.customer || 'Customer'} - $${(order.pricing?.total || order.total || 0).toFixed(2)} (${order.status})`,
-          createdAt: order.createdAt || Timestamp.now(),
+          message: `Order from ${profile?.name || profile?.email || 'Customer'} - $${Number(order.total ?? 0).toFixed(2)} (${order.status})`,
+          createdAtMs: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
           read: false,
           priority: "medium",
           orderId: order.id,
@@ -100,14 +97,15 @@ export default function NotificationCenter() {
     });
 
     // New review notifications
-    newReviews?.forEach((review, index) => {
-      if (index < 2) { // Only show last 2
+    (reviewsRes.data ?? []).forEach((review, index) => {
+      if (index < 2) {
+        const profile = profileOf(review);
         generatedNotifications.push({
           id: `review-${review.id}`,
           type: "review",
           title: "New Customer Review",
-          message: `${review.rating}⭐ from ${review.customerName || "Anonymous"}`,
-          createdAt: review.createdAt || Timestamp.now(),
+          message: `${review.rating}⭐ from ${profile?.name || "Anonymous"}`,
+          createdAtMs: review.created_at ? new Date(review.created_at).getTime() : Date.now(),
           read: false,
           priority: "medium"
         });
@@ -115,13 +113,14 @@ export default function NotificationCenter() {
     });
 
     // Low stock alerts
-    if (lowStockMeals && lowStockMeals.length > 0) {
+    const inactiveMeals = mealsRes.data ?? [];
+    if (inactiveMeals.length > 0) {
       generatedNotifications.push({
         id: "low-stock",
         type: "alert",
         title: "Inactive Menu Items",
-        message: `${lowStockMeals.length} menu items are currently inactive`,
-        createdAt: Timestamp.now(),
+        message: `${inactiveMeals.length} menu items are currently inactive`,
+        createdAtMs: Date.now(),
         read: false,
         priority: "medium"
       });
@@ -133,38 +132,55 @@ export default function NotificationCenter() {
       if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
         return priorityOrder[b.priority] - priorityOrder[a.priority];
       }
-      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+      return b.createdAtMs - a.createdAtMs;
     });
+    return generatedNotifications;
+  }, []);
 
-    const limitedNotifications = generatedNotifications.slice(0, 10);
-    
-    // Play sound if new notifications arrived
-    if (limitedNotifications.length > prevNotificationCount && prevNotificationCount > 0) {
-      // Create a simple beep sound using Web Audio API
-      try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-      } catch (error) {
-        console.log('Audio notification not available');
-      }
-    }
-    
-    setPrevNotificationCount(limitedNotifications.length);
-    setNotifications(limitedNotifications);
-  }, [allOrders, receivedOrders, newReviews, lowStockMeals, prevNotificationCount]);
+  useEffect(() => {
+    const refresh = async () => {
+      const generatedNotifications = await buildNotifications();
+      const limitedNotifications = generatedNotifications.slice(0, 10);
+
+      // Play sound if new notifications arrived
+      setPrevNotificationCount((prevCount) => {
+        if (limitedNotifications.length > prevCount && prevCount > 0) {
+          // Create a simple beep sound using Web Audio API
+          try {
+            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.type = 'sine';
+
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+          } catch (error) {
+            console.log('Audio notification not available');
+          }
+        }
+        return limitedNotifications.length;
+      });
+      setNotifications(limitedNotifications);
+    };
+
+    refresh();
+    const channel = supabase
+      .channel("notification-center")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_reviews" }, refresh)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [buildNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -279,8 +295,8 @@ export default function NotificationCenter() {
                       </p>
                       <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-gray-500">
-                          {notification.createdAt?.seconds 
-                            ? moment(notification.createdAt.seconds * 1000).fromNow()
+                          {notification.createdAtMs
+                            ? moment(notification.createdAtMs).fromNow()
                             : 'Just now'
                           }
                         </p>

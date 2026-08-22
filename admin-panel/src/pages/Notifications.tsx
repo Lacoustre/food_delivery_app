@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { Bell, AlertCircle, ShoppingBag, Star, Clock, Filter } from "lucide-react";
-import { useCollectionData } from "react-firebase-hooks/firestore";
-import { collection, query, orderBy, limit, where, Timestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
 import moment from "moment";
 
@@ -11,7 +9,7 @@ interface Notification {
   type: "order" | "review" | "alert" | "system";
   title: string;
   message: string;
-  createdAt: Timestamp;
+  createdAtMs: number;
   read: boolean;
   priority: "low" | "medium" | "high";
   orderId?: string;
@@ -23,75 +21,92 @@ export default function Notifications() {
   const [filter, setFilter] = useState<"all" | "unread" | "order" | "review" | "alert">("all");
   const navigate = useNavigate();
 
-  // Real-time queries for generating notifications
-  const [newOrders] = useCollectionData(
-    query(collection(db, "orders"), where("status", "==", "pending"), orderBy("createdAt", "desc"), limit(20))
-  );
-  const [newReviews] = useCollectionData(
-    query(collection(db, "reviews"), orderBy("createdAt", "desc"), limit(10))
-  );
-  const [lowStockMeals] = useCollectionData(
-    query(collection(db, "meals"), where("active", "==", false))
-  );
-
-  // Generate notifications from data
+  // Notifications are derived live from Supabase data: pending orders,
+  // latest reviews, and inactive meals.
   useEffect(() => {
-    const generatedNotifications: Notification[] = [];
+    const fetchAll = async () => {
+      const [ordersRes, reviewsRes, mealsRes] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("id, total, created_at, profiles!user_id(name, email)")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("order_reviews")
+          .select("id, rating, created_at, profiles(name)")
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase.from("meals").select("id").eq("active", false),
+      ]);
 
-    // New order notifications
-    newOrders?.forEach((order) => {
-      generatedNotifications.push({
-        id: `order-${order.id}`,
-        type: "order",
-        title: "New Order Received",
-        message: `Order from ${order.customerName || order.name || order.customer || "Customer"} - $${(order.pricing?.total || order.total || 0).toFixed(2)}`,
-        createdAt: order.createdAt || Timestamp.now(),
-        read: false,
-        priority: "high",
-        orderId: order.id,
-        actionUrl: "/orders"
+      const generatedNotifications: Notification[] = [];
+
+      (ordersRes.data ?? []).forEach((order) => {
+        const profile = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
+        generatedNotifications.push({
+          id: `order-${order.id}`,
+          type: "order",
+          title: "New Order Received",
+          message: `Order from ${profile?.name || profile?.email || "Customer"} - $${Number(order.total ?? 0).toFixed(2)}`,
+          createdAtMs: order.created_at ? new Date(order.created_at).getTime() : Date.now(),
+          read: false,
+          priority: "high",
+          orderId: order.id,
+          actionUrl: "/orders"
+        });
       });
-    });
 
-    // New review notifications
-    newReviews?.forEach((review) => {
-      generatedNotifications.push({
-        id: `review-${review.id}`,
-        type: "review",
-        title: "New Customer Review",
-        message: `${review.rating}⭐ from ${review.customerName || "Anonymous"}`,
-        createdAt: review.createdAt || Timestamp.now(),
-        read: false,
-        priority: "medium",
-        actionUrl: "/"
+      (reviewsRes.data ?? []).forEach((review) => {
+        const profile = Array.isArray(review.profiles) ? review.profiles[0] : review.profiles;
+        generatedNotifications.push({
+          id: `review-${review.id}`,
+          type: "review",
+          title: "New Customer Review",
+          message: `${review.rating}⭐ from ${profile?.name || "Anonymous"}`,
+          createdAtMs: review.created_at ? new Date(review.created_at).getTime() : Date.now(),
+          read: false,
+          priority: "medium",
+          actionUrl: "/reviews"
+        });
       });
-    });
 
-    // Low stock alerts
-    if (lowStockMeals && lowStockMeals.length > 0) {
-      generatedNotifications.push({
-        id: "low-stock",
-        type: "alert",
-        title: "Inactive Menu Items",
-        message: `${lowStockMeals.length} menu items are currently inactive`,
-        createdAt: Timestamp.now(),
-        read: false,
-        priority: "medium",
-        actionUrl: "/meals"
-      });
-    }
-
-    // Sort by priority and time
-    generatedNotifications.sort((a, b) => {
-      const priorityOrder = { high: 3, medium: 2, low: 1 };
-      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-        return priorityOrder[b.priority] - priorityOrder[a.priority];
+      const inactiveMeals = mealsRes.data ?? [];
+      if (inactiveMeals.length > 0) {
+        generatedNotifications.push({
+          id: "low-stock",
+          type: "alert",
+          title: "Inactive Menu Items",
+          message: `${inactiveMeals.length} menu items are currently inactive`,
+          createdAtMs: Date.now(),
+          read: false,
+          priority: "medium",
+          actionUrl: "/meals"
+        });
       }
-      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-    });
 
-    setNotifications(generatedNotifications);
-  }, [newOrders, newReviews, lowStockMeals]);
+      // Sort by priority and time
+      generatedNotifications.sort((a, b) => {
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+          return priorityOrder[b.priority] - priorityOrder[a.priority];
+        }
+        return b.createdAtMs - a.createdAtMs;
+      });
+
+      setNotifications(generatedNotifications);
+    };
+
+    fetchAll();
+    const channel = supabase
+      .channel("admin-notifications-page")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_reviews" }, fetchAll)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const filteredNotifications = notifications.filter(notification => {
     switch (filter) {
@@ -225,8 +240,8 @@ export default function Notifications() {
                     </p>
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-gray-500">
-                        {notification.createdAt?.seconds 
-                          ? moment(notification.createdAt.seconds * 1000).format("MMM D, YYYY [at] h:mm A")
+                        {notification.createdAtMs
+                          ? moment(notification.createdAtMs).format("MMM D, YYYY [at] h:mm A")
                           : 'Just now'
                         }
                       </p>
