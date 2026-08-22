@@ -17,7 +17,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
 import 'package:african_cuisine/provider/notification_provider.dart';
 import 'package:african_cuisine/home/map_picker_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:african_cuisine/widgets/review_reminder_banner.dart';
 import 'package:african_cuisine/config/env_config.dart';
@@ -275,21 +274,30 @@ class _MainFoodPageState extends State<MainFoodPage> {
       );
     }
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+    // Display name comes from the Supabase profile, falling back to the
+    // Firebase auth identity when the profile has no name yet.
+    final supabaseUser = Supabase.instance.client.auth.currentUser;
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: supabaseUser != null
+          ? Supabase.instance.client
+                .from('profiles')
+                .select('name')
+                .eq('id', supabaseUser.id)
+                .maybeSingle()
+          : Future.value(null),
       builder: (context, snapshot) {
         String displayName = 'User';
-        
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          displayName = userData['name']?.toString().split(' ').first ?? 'User';
+
+        final profileName = snapshot.data?['name']?.toString();
+        if (profileName != null && profileName.isNotEmpty) {
+          displayName = profileName.split(' ').first;
         } else if (user.displayName != null && user.displayName!.isNotEmpty) {
           displayName = user.displayName!.split(' ').first;
         } else if (user.email != null && user.email!.isNotEmpty) {
           final localPart = user.email!.split('@').first;
           displayName = localPart.split(RegExp(r'[._]')).first.capitalize();
         }
-        
+
         return Text(
           '$_greeting, $displayName 👋',
           style: const TextStyle(

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:african_cuisine/logins/auth_service.dart';
 
 class PhoneNumberUpdatePage extends StatefulWidget {
@@ -147,21 +147,20 @@ class _PhoneNumberUpdatePageState extends State<PhoneNumberUpdatePage> {
     try {
       await _authService.applyPhoneUpdate(_verificationId!, code);
 
-      // Save phone number to Firestore with timeout
+      // Mirror the verified phone onto the Supabase profile (used for the
+      // Uber dropoff contact and admin views); best-effort with timeout.
       final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
+      final supabaseUser = Supabase.instance.client.auth.currentUser;
+      if (user != null && supabaseUser != null) {
         try {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
-                'phoneNumber': user.phoneNumber,
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true))
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'phone': user.phoneNumber})
+              .eq('id', supabaseUser.id)
               .timeout(const Duration(seconds: 10));
         } catch (e) {
-          // Continue even if Firestore fails
-          print('Firestore update failed: $e');
+          // Continue even if the profile update fails
+          print('Profile phone update failed: $e');
         }
       }
 
