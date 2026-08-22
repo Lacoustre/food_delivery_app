@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ComplaintRefundPage extends StatefulWidget {
   const ComplaintRefundPage({super.key});
@@ -27,21 +26,20 @@ class _ComplaintRefundPageState extends State<ComplaintRefundPage> {
   Future<void> _submitComplaint() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('complaints')
-          .add({
-            'reason': _selectedReason,
-            'details': _detailsController.text.trim(),
-            'orderId': _orderIdController.text.trim(),
-            'timestamp': FieldValue.serverTimestamp(),
-            'status': 'Pending',
-          });
+      // Supabase complaints table: subject carries the reason + order ref,
+      // message carries the details.
+      final orderRef = _orderIdController.text.trim();
+      await Supabase.instance.client.from('complaints').insert({
+        'user_id': user.id,
+        'subject':
+            '${_selectedReason ?? 'Other'}${orderRef.isNotEmpty ? ' — order $orderRef' : ''}',
+        'message': _detailsController.text.trim(),
+        'status': 'open',
+      });
 
       Fluttertoast.showToast(
         msg: "✅ Complaint submitted successfully",
@@ -51,6 +49,7 @@ class _ComplaintRefundPageState extends State<ComplaintRefundPage> {
         textColor: Colors.white,
         fontSize: 14.0,
       );
+      if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
       Fluttertoast.showToast(
