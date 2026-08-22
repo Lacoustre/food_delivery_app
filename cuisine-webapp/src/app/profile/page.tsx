@@ -5,10 +5,7 @@ import { useRouter } from 'next/navigation'
 import { User, Mail, Phone, MapPin, Save, ArrowLeft, Camera, Upload, X } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/AuthContext'
-import { doc, updateDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '@/lib/firebase'
-import Image from 'next/image'
+import { authService } from '@/lib/auth'
 
 export default function ProfilePage() {
   const { user, userProfile } = useAuth()
@@ -62,11 +59,7 @@ export default function ProfilePage() {
 
     setUploadingPhoto(true)
     try {
-      const sanitizedName = selectedFile.name.replace(/[\r\n\t]/g, '').trim()
-      const photoRef = ref(storage, `profile-photos/${user.uid}/${Date.now()}_${sanitizedName}`)
-      await uploadBytes(photoRef, selectedFile)
-      const photoURL = await getDownloadURL(photoRef)
-      return photoURL
+      return await authService.uploadAvatar(selectedFile)
     } catch (error) {
       console.error('Photo upload error:', error)
       throw new Error('Failed to upload photo')
@@ -84,15 +77,14 @@ export default function ProfilePage() {
       let photoURL = userProfile?.photoURL
 
       if (selectedFile) {
-        photoURL = await uploadPhoto()
+        photoURL = (await uploadPhoto()) ?? undefined
       }
 
-      await updateDoc(doc(db, 'users', user.uid), {
+      await authService.updateProfile({
         name: formData.name,
         phone: formData.phone,
         address: formData.address,
         ...(photoURL && { photoURL }),
-        updatedAt: new Date()
       })
       
       setSuccess(true)

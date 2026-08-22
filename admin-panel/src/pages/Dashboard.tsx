@@ -13,8 +13,6 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
@@ -53,7 +51,7 @@ interface Review {
 }
 
 export default function Dashboard() {
-  const [, userLoading, userError] = useAuthState(auth);
+  // ProtectedRoute already guarantees an admin Supabase session here.
   const [showAllOrders, setShowAllOrders] = useState(false);
 
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -210,8 +208,8 @@ export default function Dashboard() {
   const recentOrders = allOrders.slice(0, orderCount);
   const hasMoreOrders = allOrders.length > orderCount;
 
-  const isLoading = userLoading || ordersLoading || statsLoading;
-  const error = userError || ordersError || statsError;
+  const isLoading = ordersLoading || statsLoading;
+  const error = ordersError || statsError;
 
   if (isLoading) {
     return (

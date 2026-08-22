@@ -6,8 +6,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, MapPin, Clock, Store, Navigation } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
-import { getDownloadURL, ref } from 'firebase/storage'
-import { storage } from '@/lib/firebase'
 
 interface CartItem {
   id: string
@@ -56,16 +54,12 @@ export default function CartPage() {
   // Load image URLs for cart items
   useEffect(() => {
     const loadImageUrls = async () => {
+      // Legacy Firebase Storage imagePath entries can't resolve anymore —
+      // meals carry full image_url strings now, so just fall back to the logo.
       const urls: Record<string, string> = {}
       for (const item of cartItems) {
         if (item.imagePath && !urls[item.id]) {
-          try {
-            const url = await getDownloadURL(ref(storage, item.imagePath))
-            urls[item.id] = url
-          } catch (error) {
-            console.error('Failed to load image for', item.name, error)
-            urls[item.id] = '/assets/images/logo.png'
-          }
+          urls[item.id] = '/assets/images/logo.png'
         }
       }
       setImageUrls(prev => ({ ...prev, ...urls }))
