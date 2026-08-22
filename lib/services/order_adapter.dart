@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Converts a Supabase `orders` row (with an embedded `order_items` list,
 /// from a `select('*, order_items(*)')` query) into the same map shape the
 /// old Firestore order docs had, so existing display code across the app
@@ -61,7 +59,7 @@ Map<String, dynamic> orderRowToLegacyMap(Map<String, dynamic> order) {
     'switchedToPickup': false,
     'scheduledTime': order['scheduled_for'],
     'createdAt': order['created_at'] != null
-        ? Timestamp.fromDate(DateTime.parse(order['created_at'] as String))
-        : Timestamp.now(),
+        ? DateTime.parse(order['created_at'] as String)
+        : DateTime.now(),
   };
 }

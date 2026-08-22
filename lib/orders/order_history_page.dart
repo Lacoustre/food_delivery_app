@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:intl/intl.dart';
 import 'package:african_cuisine/orders/order_detail_page.dart';
@@ -286,8 +285,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     Map<String, dynamic> data,
     String orderId,
   ) {
-    final createdAt =
-        (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final createdAt = (data['createdAt'] as DateTime?) ?? DateTime.now();
     final formattedDate = DateFormat('MMM d, y • h:mm a').format(createdAt);
     final pricing = data['pricing'] as Map<String, dynamic>?;
     final total = (pricing?['total'] ?? 0.0) as num;

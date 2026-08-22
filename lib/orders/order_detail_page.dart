@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User, MapType;
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
@@ -463,8 +462,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       (data['items'] ?? []) as List,
     );
     final pricing = (data['pricing'] as Map?)?.cast<String, dynamic>() ?? {};
-    final createdAt = (data['createdAt'] is Timestamp)
-        ? (data['createdAt'] as Timestamp).toDate()
+    final createdAt = data['createdAt'] is DateTime
+        ? data['createdAt'] as DateTime
         : null;
 
     final status = (data['deliveryStatus'] ?? data['status'] ?? 'pending')
