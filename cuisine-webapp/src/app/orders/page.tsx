@@ -211,6 +211,20 @@ export default function OrdersPage() {
                   </a>
                 </div>
               </div>
+              {order.orderType === 'delivery' && order.uberTrackingUrl && (
+                <a
+                  href={order.uberTrackingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-200 hover:border-purple-400 transition-colors"
+                >
+                  <Truck className="w-6 h-6 text-purple-500" />
+                  <div>
+                    <div className="font-bold text-gray-900">Live Courier Tracking</div>
+                    <span className="text-purple-600 font-bold">Follow your delivery on Uber →</span>
+                  </div>
+                </a>
+              )}
               {order.orderType === 'delivery' && order.deliveryAddress && (
                 <div className="flex items-start gap-4 p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl border border-green-200">
                   <MapPin className="w-6 h-6 text-green-500 mt-1" />
@@ -331,21 +345,13 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          {order.createdAt && typeof order.createdAt === 'object' && 'toDate' in order.createdAt 
-                            ? order.createdAt.toDate().toLocaleDateString('en-US', { 
-                                weekday: 'short', 
-                                month: 'short', 
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            : new Date(order.createdAt).toLocaleDateString('en-US', {
-                                weekday: 'short',
-                                month: 'short', 
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                          {new Date(order.createdAt).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </span>
                         <span className="flex items-center gap-1">
                           {order.orderType === 'delivery' ? (
