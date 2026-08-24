@@ -363,7 +363,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final t = message.data['type']?.toString().toLowerCase() ?? '';
   final isCritical = t.contains('cancelled') || t.contains('critical');
   try {
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       if (isCritical) {
         // Critical: Triple vibration pattern
         await Vibration.vibrate(pattern: [0, 300, 100, 300, 100, 300]);

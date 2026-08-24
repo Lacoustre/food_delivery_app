@@ -144,23 +144,4 @@ class OrderStatusService {
     }
   }
   
-  void _scheduleReviewPrompt(Map<String, dynamic> orderData) {
-    Timer(const Duration(minutes: 30), () {
-      _sendReviewPromptNotification(orderData);
-    });
-  }
-  
-  void _sendReviewPromptNotification(Map<String, dynamic> orderData) {
-    try {
-      final orderId = orderData['orderNumber'] as String;
-      final userId = orderData['userId'] as String;
-      
-      PushNotificationService.sendReviewPromptNotification(
-        orderId: orderId,
-        userId: userId,
-      );
-    } catch (e) {
-      debugPrint('Error sending review prompt: $e');
-    }
-  }
 }

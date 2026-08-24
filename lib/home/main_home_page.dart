@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +6,6 @@ import 'package:african_cuisine/home/cart_page.dart';
 import 'package:african_cuisine/home/favorites_page.dart';
 import 'package:african_cuisine/home/profile_page.dart';
 import 'package:african_cuisine/notification/notification_page.dart';
-import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:geolocator/geolocator.dart';
@@ -213,19 +211,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
           _popularLoading = false;
         });
       }
-    }
-  }
-
-  String _mapCategory(String mealName) {
-    final name = mealName.toLowerCase();
-    if (name.contains('sprite') || name.contains('coke') || name.contains('fanta') || 
-        name.contains('water') || name.contains('juice') || name.contains('malt') || 
-        name.contains('sobolo')) {
-      return 'Drinks';
-    } else if (name.contains('shito')) {
-      return 'Side Dishes';
-    } else {
-      return 'Main Dishes';
     }
   }
 
@@ -797,7 +782,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cartProvider = Provider.of<CartProvider>(context);
     final favoritesProvider = Provider.of<FavoritesProvider>(context);
     final query = _searchController.text.toLowerCase().trim();
     final filteredMeals = meals.where((m) {

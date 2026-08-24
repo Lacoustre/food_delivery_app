@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
-import 'package:african_cuisine/services/push_notification_service.dart';
 import 'package:african_cuisine/logins/login_page.dart';
 import 'package:african_cuisine/home/saved_addresses_page.dart';
 import 'package:african_cuisine/support/rate_orders_page.dart';

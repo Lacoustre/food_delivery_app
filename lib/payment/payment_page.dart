@@ -11,7 +11,6 @@ import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:african_cuisine/payment/confirmation_page.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
-import 'package:african_cuisine/services/email_service.dart';
 import 'package:african_cuisine/services/push_notification_service.dart';
 import 'package:intl/intl.dart';
 
