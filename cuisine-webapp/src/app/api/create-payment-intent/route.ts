@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { supabase } from '@/lib/supabase'
 import { computeOrderTotals } from '@/lib/pricing'
 import { promotionsService } from '@/lib/promotionsService'
+import { getUberQuote } from '@/lib/uberDirect'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-12-15.clover'
@@ -18,13 +19,15 @@ export async function POST(request: NextRequest) {
     const {
       items,
       orderType,
-      distanceMiles = 3,
+      deliveryAddress,
+      scheduledFor,
       promoCode,
       currency = 'usd'
     }: {
       items: CartItemInput[]
       orderType: 'delivery' | 'pickup'
-      distanceMiles?: number
+      deliveryAddress?: string
+      scheduledFor?: string
       promoCode?: string
       currency?: string
     } = await request.json()
@@ -71,10 +74,34 @@ export async function POST(request: NextRequest) {
       promoDiscount = promoResult.discount || 0
     }
 
+    // Delivery is priced by Uber. Re-quote here rather than trusting whatever
+    // the checkout page displayed — and never fall back to an estimate, since
+    // a guessed fee is charged as if it were real.
+    let deliveryFee = 0
+    if (orderType === 'delivery') {
+      if (!deliveryAddress) {
+        return NextResponse.json({ error: 'Delivery address is required' }, { status: 400 })
+      }
+      try {
+        const quote = await getUberQuote({
+          dropoffAddress: deliveryAddress,
+          pickupReadyDt: scheduledFor,
+          manifestTotalValue: Math.round(subtotal * 100)
+        })
+        deliveryFee = quote.fee
+      } catch (quoteError) {
+        console.error('Uber quote failed:', quoteError)
+        return NextResponse.json(
+          { error: 'Delivery is not available to that address right now.' },
+          { status: 422 }
+        )
+      }
+    }
+
     const { total } = computeOrderTotals({
       subtotal,
       orderType,
-      distanceMiles,
+      deliveryFee,
       promoDiscount
     })
 
@@ -86,7 +113,13 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ clientSecret: paymentIntent.client_secret, total })
+    // Return the quoted fee so checkout can reconcile its display with what
+    // is actually being charged.
+    return NextResponse.json({
+      clientSecret: paymentIntent.client_secret,
+      total,
+      deliveryFee
+    })
   } catch (error) {
     console.error('Error creating payment intent:', error)
     return NextResponse.json({ error: 'Payment failed' }, { status: 500 })

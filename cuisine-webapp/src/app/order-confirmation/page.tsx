@@ -17,7 +17,6 @@ export default function OrderConfirmationPage() {
     localStorage.removeItem('cart')
     localStorage.removeItem('orderType')
     localStorage.removeItem('deliveryAddress')
-    localStorage.removeItem('calculatedDistance')
   }, [])
 
   return (

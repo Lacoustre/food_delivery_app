@@ -190,31 +190,68 @@ function CheckoutContent() {
   }, [user, userProfile, router])
 
 
-  const [calculatedDistance, setCalculatedDistance] = useState<number>(3)
-
-  useEffect(() => {
-    const savedDistance = localStorage.getItem('calculatedDistance')
-    if (savedDistance) {
-      setCalculatedDistance(parseFloat(savedDistance))
-    }
-  }, [])
-
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
   const promoDiscount = appliedPromo?.discount || 0
-  // Display only — the charged amount is recomputed server-side.
+
+  // Delivery is priced by Uber, so the fee has to be fetched once there is an
+  // address to quote against. Display only — create-payment-intent re-quotes
+  // before charging.
+  const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<number>(0)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoting, setQuoting] = useState(false)
+
+  const quoteAddress =
+    orderData.orderType === 'delivery' ? orderData.deliveryAddress : undefined
+
+  useEffect(() => {
+    if (!quoteAddress) {
+      setQuotedDeliveryFee(0)
+      setQuoteError(null)
+      return
+    }
+    let cancelled = false
+    setQuoting(true)
+    setQuoteError(null)
+    fetch('/api/quote-delivery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryAddress: quoteAddress, subtotal })
+    })
+      .then(async (res) => {
+        const data = await res.json()
+        if (cancelled) return
+        if (!res.ok) {
+          setQuotedDeliveryFee(0)
+          setQuoteError(data.error || 'Delivery is not available to that address.')
+          return
+        }
+        setQuotedDeliveryFee(data.fee ?? 0)
+      })
+      .catch(() => {
+        if (!cancelled) setQuoteError('Unable to price delivery right now.')
+      })
+      .finally(() => {
+        if (!cancelled) setQuoting(false)
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteAddress])
+
   const { deliveryFee, tax, total } = computeOrderTotals({
     subtotal,
     orderType: orderData.orderType,
-    distanceMiles: calculatedDistance,
+    deliveryFee: quotedDeliveryFee,
     promoDiscount,
   })
 
   useEffect(() => {
-    if (total > 0) {
+    const readyToPay =
+      total > 0 && (orderData.orderType !== 'delivery' || (!!quoteAddress && !quoteError && !quoting))
+    if (readyToPay) {
       createPaymentIntent({
         items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
         orderType: orderData.orderType,
-        distanceMiles: calculatedDistance,
+        deliveryAddress: orderData.deliveryAddress,
         promoCode: appliedPromo?.promotion.code
       })
         .then(({ clientSecret }) => {
@@ -321,7 +358,6 @@ function CheckoutContent() {
       body: JSON.stringify({
         items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
         orderType: orderData.orderType,
-        distanceMiles: calculatedDistance,
         promoCode: appliedPromo?.promotion.code,
         customerInfo: orderData.customerInfo,
         deliveryAddress: orderData.deliveryAddress,
@@ -440,7 +476,6 @@ function CheckoutContent() {
       localStorage.removeItem('cart')
       localStorage.removeItem('orderType')
       localStorage.removeItem('deliveryAddress')
-      localStorage.removeItem('calculatedDistance')
       localStorage.removeItem('checkoutRedirect')
 
       setPaymentSuccess(true)
@@ -557,7 +592,6 @@ function CheckoutContent() {
       localStorage.removeItem('cart')
       localStorage.removeItem('orderType')
       localStorage.removeItem('deliveryAddress')
-      localStorage.removeItem('calculatedDistance')
 
       router.push('/order-confirmation')
     } catch (error) {

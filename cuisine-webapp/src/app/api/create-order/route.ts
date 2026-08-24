@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { computeOrderTotals } from '@/lib/pricing'
+import { getUberQuote } from '@/lib/uberDirect'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { createUberDelivery } from '@/lib/uberDirect'
@@ -20,7 +21,6 @@ export async function POST(request: NextRequest) {
     const {
       items,
       orderType,
-      distanceMiles = 3,
       promoCode,
       customerInfo,
       deliveryAddress,
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
     }: {
       items: CartItemInput[]
       orderType: 'delivery' | 'pickup'
-      distanceMiles?: number
       promoCode?: string
       customerInfo: { name: string; email: string; phone: string }
       deliveryAddress?: string
@@ -91,9 +90,6 @@ export async function POST(request: NextRequest) {
       promoDiscount = promoResult.discount || 0
     }
 
-    const totals = computeOrderTotals({ subtotal, orderType, distanceMiles, promoDiscount })
-    const orderNumber = String(Math.floor(Math.random() * 10000) + 1000)
-
     // Persist delayed delivery-time choices so the dispatch-due-orders cron
     // can send them to Uber at the right time — previously "1hour" etc. was
     // only echoed back to the client and lost.
@@ -102,6 +98,34 @@ export async function POST(request: NextRequest) {
     const scheduledFor = delayHours
       ? new Date(Date.now() + delayHours * 3600_000).toISOString()
       : null
+
+    // Uber prices the delivery; quote it here so the stored order matches what
+    // the payment intent charged.
+    let deliveryFee = 0
+    let uberQuoteId: string | null = null
+    if (orderType === 'delivery') {
+      if (!deliveryAddress) {
+        return NextResponse.json({ error: 'Delivery address is required' }, { status: 400 })
+      }
+      try {
+        const quote = await getUberQuote({
+          dropoffAddress: deliveryAddress,
+          pickupReadyDt: scheduledFor ?? undefined,
+          manifestTotalValue: Math.round(subtotal * 100)
+        })
+        deliveryFee = quote.fee
+        uberQuoteId = quote.quoteId
+      } catch (quoteError) {
+        console.error('Uber quote failed:', quoteError)
+        return NextResponse.json(
+          { error: 'Delivery is not available to that address right now.' },
+          { status: 422 }
+        )
+      }
+    }
+
+    const totals = computeOrderTotals({ subtotal, orderType, deliveryFee, promoDiscount })
+    const orderNumber = String(Math.floor(Math.random() * 10000) + 1000)
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -115,6 +139,7 @@ export async function POST(request: NextRequest) {
         scheduled_for: scheduledFor,
         subtotal: totals.subtotal,
         delivery_fee: totals.deliveryFee,
+        uber_quote_id: uberQuoteId,
         tax: totals.tax,
         total: totals.total
       })

@@ -5,7 +5,8 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 interface CreatePaymentIntentParams {
   items: { id: string; quantity: number }[]
   orderType: 'delivery' | 'pickup'
-  distanceMiles?: number
+  deliveryAddress?: string
+  scheduledFor?: string
   promoCode?: string
   currency?: string
 }
@@ -17,14 +18,15 @@ interface CreatePaymentIntentParams {
 export const createPaymentIntent = async ({
   items,
   orderType,
-  distanceMiles,
+  deliveryAddress,
+  scheduledFor,
   promoCode,
   currency = 'usd'
 }: CreatePaymentIntentParams) => {
   const response = await fetch('/api/create-payment-intent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, orderType, distanceMiles, promoCode, currency })
+    body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency })
   })
   return response.json()
 }

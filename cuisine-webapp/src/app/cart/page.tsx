@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, MapPin, Clock, Store, Navigation } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
+import { DEFAULT_TAX_RATE } from '@/lib/pricing'
 
 interface CartItem {
   id: string
@@ -26,7 +27,6 @@ export default function CartPage() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
   const [locationError, setLocationError] = useState('')
   const [deliveryAvailable, setDeliveryAvailable] = useState(true)
-  const [calculatedDistance, setCalculatedDistance] = useState<number>(0)
   const { user } = useAuth()
   const router = useRouter()
 
@@ -34,22 +34,6 @@ export default function CartPage() {
   const restaurantLocation = { lat: 41.82457, lng: -72.4978 }
   const maxDeliveryDistance = 15 // miles
 
-  const calculateDeliveryFee = (distance: number) => {
-    const baseTierMaxDistance = 3.0
-    const midTierMaxDistance = 10.0
-    const baseFee = 3.99
-    const midTierRatePerMile = 0.50
-    const extendedTierBase = 7.49
-    const extendedTierRatePerMile = 0.75
-
-    if (distance <= baseTierMaxDistance) {
-      return baseFee // Base tier: $3.99
-    } else if (distance <= midTierMaxDistance) {
-      return baseFee + (distance - baseTierMaxDistance) * midTierRatePerMile // Mid tier
-    } else {
-      return extendedTierBase + (distance - midTierMaxDistance) * extendedTierRatePerMile // Extended tier
-    }
-  }
 
   // Load image URLs for cart items
   useEffect(() => {
@@ -98,8 +82,9 @@ export default function CartPage() {
             setUserLocation({ lat: latitude, lng: longitude })
             
             try {
+              // Coarse radius pre-check only — Uber gives the real answer, and
+              // the price, once there's an address at checkout.
               const distance = await calculateDistance(latitude, longitude)
-              setCalculatedDistance(distance)
               
               if (distance > maxDeliveryDistance) {
                 setDeliveryAvailable(false)
@@ -204,9 +189,10 @@ export default function CartPage() {
   }
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const deliveryFee = orderType === 'delivery' ? calculateDeliveryFee(calculatedDistance) : 0
-  const tax = (subtotal + deliveryFee) * 0.0735
-  const total = subtotal + deliveryFee + tax
+  // Delivery is quoted by Uber against a real address, which the cart doesn't
+  // have yet — so the fee lands at checkout. Tax is on the subtotal only.
+  const tax = subtotal * DEFAULT_TAX_RATE
+  const total = subtotal + tax
 
   if (loading) {
     return (
@@ -288,7 +274,7 @@ export default function CartPage() {
                     }`} />
                     <div className="font-bold text-lg mb-1 text-gray-900">Delivery</div>
                     <div className="text-sm text-gray-700 font-medium">
-                      {deliveryAvailable ? `$${calculateDeliveryFee(calculatedDistance).toFixed(2)}` : 'Not Available'}
+                      {deliveryAvailable ? 'Quoted at checkout' : 'Not Available'}
                     </div>
                     {locationError && !deliveryAvailable && (
                       <div className="text-xs text-red-500 mt-2">{locationError}</div>
@@ -418,10 +404,8 @@ export default function CartPage() {
                   </div>
                   {orderType === 'delivery' && (
                     <div className="flex justify-between items-center py-2">
-                      <span className="text-gray-800 font-bold">
-                        Delivery Fee {calculatedDistance > 0 && `(${calculatedDistance.toFixed(1)} mi)`}
-                      </span>
-                      <span className="font-bold text-lg text-gray-900">${deliveryFee.toFixed(2)}</span>
+                      <span className="text-gray-800 font-bold">Delivery Fee</span>
+                      <span className="font-medium text-sm text-gray-600">Quoted at checkout</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center py-2">
@@ -439,7 +423,6 @@ export default function CartPage() {
                 <button 
                   onClick={() => {
                     localStorage.setItem('orderType', orderType)
-                    localStorage.setItem('calculatedDistance', calculatedDistance.toString())
                     router.push('/checkout')
                   }}
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg mb-4"
