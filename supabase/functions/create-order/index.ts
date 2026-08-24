@@ -33,7 +33,6 @@ Deno.serve(async (req) => {
     const {
       items,
       orderType,
-      distanceMiles = 0,
       tipAmount = 0,
       deliveryAddress,
       scheduledFor,
@@ -43,10 +42,11 @@ Deno.serve(async (req) => {
     // Never trust client-supplied items/pricing — same authoritative
     // lookup used for the payment intent, so the order that gets
     // fulfilled always matches what was actually charged.
-    const { subtotal, deliveryFee, tax, validatedItems } = await computeValidatedTotals(supabase, {
+    const { subtotal, deliveryFee, tax, validatedItems, uberQuoteId } = await computeValidatedTotals(supabase, {
       items,
       orderType,
-      distanceMiles,
+      deliveryAddress,
+      scheduledFor,
     });
     const safeTip = typeof tipAmount === "number" && tipAmount >= 0 ? tipAmount : 0;
     const total = subtotal + deliveryFee + tax + safeTip;
@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
         scheduled_for: scheduledFor || null,
         subtotal,
         delivery_fee: deliveryFee,
+        uber_quote_id: uberQuoteId,
         tax,
         tip: safeTip,
         total,

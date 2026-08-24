@@ -34,10 +34,11 @@ Deno.serve(async (req) => {
     const {
       items,
       orderType,
-      distanceMiles = 0,
       tipAmount = 0,
       orderId,
       customerName,
+      deliveryAddress,
+      scheduledFor,
       currency = "usd",
     } = await req.json();
 
@@ -49,7 +50,8 @@ Deno.serve(async (req) => {
     const { subtotal, deliveryFee, tax, validatedItems } = await computeValidatedTotals(supabase, {
       items,
       orderType,
-      distanceMiles,
+      deliveryAddress,
+      scheduledFor,
     });
     const total = subtotal + deliveryFee + tax + safeTip;
     const amountInCents = Math.round(total * 100);

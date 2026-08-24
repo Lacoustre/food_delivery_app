@@ -21,6 +21,14 @@ export const RESTAURANT_PICKUP = {
   lng: -72.4978,
 };
 
+export interface UberQuote {
+  quoteId: string;
+  fee: number; // dollars
+  currency: string;
+  durationMinutes: number | null;
+  expires: string | null;
+}
+
 export interface UberDispatchResult {
   deliveryId: string;
   trackingUrl: string | null;
@@ -97,5 +105,62 @@ export async function createUberDelivery(order: {
     status: data.status || "pending",
     // Uber returns fee in cents
     fee: typeof data.fee === "number" ? data.fee / 100 : null,
+  };
+}
+
+// Ask Uber what this delivery will cost. This is the authoritative delivery
+// fee — we charge the customer exactly what Uber quotes, so there is no
+// distance-tier table and no Google Routes dependency any more.
+//
+// Quotes expire after 15 minutes, so a scheduled order is quoted once at
+// checkout (with pickupReadyDt set to the scheduled time, which Uber accepts
+// up to 30 days out) and re-quoted at dispatch. The delta between the two is
+// recorded on the order rather than passed on to the customer.
+export async function getUberQuote(params: {
+  dropoffAddress: string;
+  dropoffPhone?: string | null;
+  pickupReadyDt?: string; // ISO 8601; omit for ASAP
+  manifestTotalValue?: number; // cents, for insurance/verification
+}): Promise<UberQuote> {
+  const customerId = Deno.env.get("UBER_DIRECT_CUSTOMER_ID");
+  if (!customerId) throw new Error("Uber Direct customer id not configured");
+
+  const token = await getAccessToken();
+
+  const body: Record<string, unknown> = {
+    pickup_address: RESTAURANT_PICKUP.address,
+    pickup_latitude: RESTAURANT_PICKUP.lat,
+    pickup_longitude: RESTAURANT_PICKUP.lng,
+    pickup_phone_number: RESTAURANT_PICKUP.phone,
+    dropoff_address: params.dropoffAddress,
+    dropoff_phone_number: params.dropoffPhone || RESTAURANT_PICKUP.phone,
+  };
+  if (params.pickupReadyDt) body.pickup_ready_dt = params.pickupReadyDt;
+  if (typeof params.manifestTotalValue === "number") {
+    body.manifest_total_value = Math.round(params.manifestTotalValue);
+  }
+
+  const res = await fetch(`${UBER_API_BASE}/${customerId}/delivery_quotes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Uber quote failed: ${res.status} ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  if (typeof data.fee !== "number") {
+    throw new Error("Uber quote response missing fee");
+  }
+  return {
+    quoteId: data.id,
+    fee: data.fee / 100, // Uber returns cents
+    currency: data.currency || "usd",
+    durationMinutes: typeof data.duration === "number" ? data.duration : null,
+    expires: data.expires || null,
   };
 }

@@ -145,7 +145,6 @@ class OrderData {
   final String updatedAt;
   final String? orderType;
   final String? deliveryMethod;
-  final double distanceMiles;
 
   const OrderData({
     required this.orderNumber,
@@ -160,7 +159,6 @@ class OrderData {
     required this.updatedAt,
     this.orderType,
     this.deliveryMethod,
-    this.distanceMiles = 0,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -176,7 +174,6 @@ class OrderData {
       'eta': null,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
-      'distanceMiles': distanceMiles,
       if (orderType != null) 'orderType': orderType,
       if (deliveryMethod != null) 'deliveryMethod': deliveryMethod,
     };
@@ -188,11 +185,12 @@ class PaymentService {
   static Future<Map<String, dynamic>> createPaymentIntent({
     required List<Map<String, dynamic>> items,
     required String orderType,
-    required double distanceMiles,
     required double tipAmount,
     required String orderId,
     required String customerName,
     required String itemsDescription,
+    String? deliveryAddress,
+    String? scheduledFor,
   }) async {
     debugPrint('🚀 PaymentService.createPaymentIntent called');
     debugPrint('   Order ID: $orderId');
@@ -216,9 +214,10 @@ class PaymentService {
       final requestData = {
         'items': items,
         'orderType': orderType,
-        'distanceMiles': distanceMiles,
         'tipAmount': tipAmount,
         'orderId': orderId.trim(),
+        if (deliveryAddress != null) 'deliveryAddress': deliveryAddress,
+        if (scheduledFor != null) 'scheduledFor': scheduledFor,
         'customerName':
             (customerName.isNotEmpty
                     ? customerName
@@ -359,7 +358,6 @@ class PaymentService {
                 })
             .toList(),
         'orderType': orderData.orderType ?? 'pickup',
-        'distanceMiles': orderData.distanceMiles,
         'tipAmount': orderData.pricing.tip,
         'deliveryAddress': deliveryAddress,
         'paymentMethod': 'card',
@@ -732,7 +730,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         orderType: deliveryProvider.deliveryOption == DeliveryOption.delivery
             ? 'delivery'
             : 'pickup',
-        distanceMiles: deliveryProvider.deliveryDistance,
+        deliveryAddress: deliveryProvider.deliveryOption == DeliveryOption.delivery
+            ? deliveryProvider.deliveryAddress
+            : null,
         tipAmount: totals.tip,
         orderId: orderId,
         customerName: user.email ?? 'Customer',
@@ -896,7 +896,6 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       },
       orderType: deliveryProvider.deliveryOption.displayName.toLowerCase(),
       deliveryMethod: deliveryProvider.deliveryOption.displayName.toLowerCase(),
-      distanceMiles: deliveryProvider.deliveryDistance,
       payment: {
         'method': _selectedPaymentMethod!.displayName,
         'methodId': _selectedPaymentMethod!.id,
@@ -1713,7 +1712,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         orderType: deliveryProvider.deliveryOption == DeliveryOption.delivery
             ? 'delivery'
             : 'pickup',
-        distanceMiles: deliveryProvider.deliveryDistance,
+        deliveryAddress: deliveryProvider.deliveryOption == DeliveryOption.delivery
+            ? deliveryProvider.deliveryAddress
+            : null,
         tipAmount: totals.tip,
         orderId: orderId,
         customerName: user.email ?? 'Customer',
@@ -1826,7 +1827,6 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
       },
       orderType: deliveryProvider.deliveryOption.displayName.toLowerCase(),
       deliveryMethod: deliveryProvider.deliveryOption.displayName.toLowerCase(),
-      distanceMiles: deliveryProvider.deliveryDistance,
       payment: {
         'method': _selectedPaymentMethod!.displayName,
         'methodId': _selectedPaymentMethod!.id,

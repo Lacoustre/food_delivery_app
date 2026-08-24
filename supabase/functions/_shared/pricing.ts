@@ -1,4 +1,5 @@
 import { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { getUberQuote } from "./uberDirect.ts";
 
 // Connecticut prepared-meals rate. This is the fallback only — the live rate
 // comes from settings/restaurant.taxRate (a percentage, e.g. 7.35) so the
@@ -24,21 +25,6 @@ export async function getTaxRate(supabase: SupabaseClient): Promise<number> {
   return DEFAULT_TAX_RATE;
 }
 
-export function calculateDeliveryFee(distanceMiles: number): number {
-  const baseFee = 3.99;
-  const baseTierMaxDistance = 3.0;
-  const midTierMaxDistance = 10.0;
-  const midTierRatePerMile = 0.5;
-  const extendedTierBase = 7.49;
-  const extendedTierRatePerMile = 0.75;
-
-  if (distanceMiles <= baseTierMaxDistance) return baseFee;
-  if (distanceMiles <= midTierMaxDistance) {
-    return baseFee + (distanceMiles - baseTierMaxDistance) * midTierRatePerMile;
-  }
-  return extendedTierBase + (distanceMiles - midTierMaxDistance) * extendedTierRatePerMile;
-}
-
 export interface CartItemInput {
   id?: string;
   name?: string;
@@ -59,6 +45,9 @@ export interface ValidatedTotals {
   deliveryFee: number;
   tax: number;
   validatedItems: ValidatedItem[];
+  // Uber quote this fee came from; null for pickup. Recorded on the order so
+  // the charged fee can be reconciled against what Uber actually bills.
+  uberQuoteId: string | null;
 }
 
 // Never trust client-supplied item prices — look up each item's
@@ -67,10 +56,12 @@ export interface ValidatedTotals {
 // subtotal/delivery fee/tax server-side.
 export async function computeValidatedTotals(
   supabase: SupabaseClient,
-  { items, orderType, distanceMiles }: {
+  { items, orderType, deliveryAddress, deliveryPhone, scheduledFor }: {
     items: CartItemInput[];
     orderType: "delivery" | "pickup";
-    distanceMiles: number;
+    deliveryAddress?: string | null;
+    deliveryPhone?: string | null;
+    scheduledFor?: string | null;
   },
 ): Promise<ValidatedTotals> {
   if (!Array.isArray(items) || items.length === 0) {
@@ -123,8 +114,24 @@ export async function computeValidatedTotals(
     });
   }
 
-  const deliveryFee = orderType === "delivery" ? calculateDeliveryFee(distanceMiles || 0) : 0;
+  // Delivery is priced by Uber, not by us: we charge exactly what they quote.
+  // A failed quote is a hard error — falling back to an estimate is how you
+  // end up silently charging the wrong fee on every order.
+  let deliveryFee = 0;
+  let uberQuoteId: string | null = null;
+  if (orderType === "delivery") {
+    if (!deliveryAddress) throw new Error("Delivery address is required");
+    const quote = await getUberQuote({
+      dropoffAddress: deliveryAddress,
+      dropoffPhone: deliveryPhone ?? null,
+      pickupReadyDt: scheduledFor ?? undefined,
+      manifestTotalValue: Math.round(subtotal * 100),
+    });
+    deliveryFee = quote.fee;
+    uberQuoteId = quote.quoteId;
+  }
+
   const tax = subtotal * (await getTaxRate(supabase));
 
-  return { subtotal, deliveryFee, tax, validatedItems };
+  return { subtotal, deliveryFee, tax, validatedItems, uberQuoteId };
 }

@@ -1,223 +1,112 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Delivery pricing is pass-through: Uber quotes the delivery and the customer
+/// is charged exactly that. There is no distance tier table and no driving
+/// distance lookup any more — the `quote-delivery` edge function wraps Uber's
+/// delivery_quotes endpoint.
+///
+/// This value is for display only. create-payment-intent re-quotes server-side,
+/// so what is actually charged never depends on the client.
 class DeliveryCalculator {
   DeliveryCalculator._();
 
-  static const double _restaurantLat = 41.82457;
-  static const double _restaurantLon = -72.4978;
-
-  /// Default delivery configuration
-  static const double _defaultMaxDistance = 15.0; // miles
-  static const double _defaultBaseFee = 3.99;
-  static const double _midTierRatePerMile = 0.50;
-  static const double _extendedTierBase = 7.49;
-  static const double _extendedTierRatePerMile = 0.75;
-
-  /// Distance tier thresholds
-  static const double _baseTierMaxDistance = 3.0;
-  static const double _midTierMaxDistance = 10.0;
-
-  /// Cache duration for Firestore settings
-  static const Duration _cacheExpiration = Duration(minutes: 5);
-
-  /// Earth radius in miles for Haversine formula
-  static const double _earthRadiusMiles = 3958.8;
-
-  static Map<String, dynamic>? _cachedSettings;
-  static DateTime? _lastFetch;
-
-  static Future<DeliveryFeeResult> calculateDeliveryFee(
-    double customerLat,
-    double customerLon,
-  ) async {
-    try {
-      final settings = await _getDeliverySettings();
-      final distance = await _getDrivingDistance(
-        customerLat: customerLat,
-        customerLon: customerLon,
-      );
-
-      final maxDistance = (settings['deliveryRadius'] ?? _defaultMaxDistance)
-          .toDouble();
-      final baseFee = (settings['deliveryFee'] ?? _defaultBaseFee).toDouble();
-
-      _logDebug('Distance: $distance mi, Max: $maxDistance mi, Available: ${distance < maxDistance}');
-
-      if (distance >= maxDistance) {
-        return DeliveryFeeResult(
-          fee: 0.0,
-          distance: distance,
-          isAvailable: false,
-          tier: DeliveryTier.unavailable,
-        );
-      }
-
-      final (fee, tier) = _calculateFee(distance, baseFee);
-
-      return DeliveryFeeResult(
-        fee: double.parse(fee.toStringAsFixed(2)),
-        distance: distance,
-        isAvailable: true,
-        tier: tier,
-      );
-    } catch (e) {
-      _logError('Delivery calculation failed', e);
-      return DeliveryFeeResult.error();
-    }
-  }
-
-  static Future<double> _getDrivingDistance({
-    required double customerLat,
-    required double customerLon,
-  }) async {
-    try {
-      final result = await Supabase.instance.client.functions.invoke(
-        'get-driving-distance',
-        body: {
-          'customerLat': customerLat,
-          'customerLon': customerLon,
-        },
-      );
-
-      final data = result.data as Map<String, dynamic>?;
-      if (data == null || data['distanceMiles'] == null) {
-        throw Exception('Invalid response from edge function');
-      }
-
-      final miles = (data['distanceMiles'] as num).toDouble();
-      _logDebug('Driving distance: ${miles.toStringAsFixed(2)} mi');
-
-      return miles;
-    } catch (e) {
-      _logError('Distance function failed, using fallback', e);
-      return _calculateStraightLineDistance(customerLat, customerLon);
-    }
-  }
-
-  static double _calculateStraightLineDistance(
-    double customerLat,
-    double customerLon,
-  ) {
-    final lat1Rad = _toRadians(_restaurantLat);
-    final lat2Rad = _toRadians(customerLat);
-    final dLatRad = _toRadians(customerLat - _restaurantLat);
-    final dLonRad = _toRadians(customerLon - _restaurantLon);
-
-    final a =
-        sin(dLatRad / 2) * sin(dLatRad / 2) +
-        cos(lat1Rad) * cos(lat2Rad) * sin(dLonRad / 2) * sin(dLonRad / 2);
-
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    final distance = _earthRadiusMiles * c;
-
-    _logDebug('Straight-line distance: ${distance.toStringAsFixed(2)} mi');
-    return distance;
-  }
-
-  static (double fee, DeliveryTier tier) _calculateFee(
-    double distance,
-    double baseFee,
-  ) {
-    if (distance <= _baseTierMaxDistance) {
-      return (baseFee, DeliveryTier.base);
-    } else if (distance <= _midTierMaxDistance) {
-      final fee =
-          baseFee + (distance - _baseTierMaxDistance) * _midTierRatePerMile;
-      return (fee, DeliveryTier.mid);
-    } else {
-      final fee =
-          _extendedTierBase +
-          (distance - _midTierMaxDistance) * _extendedTierRatePerMile;
-      return (fee, DeliveryTier.extended);
-    }
-  }
-
-  static Future<Map<String, dynamic>> _getDeliverySettings() async {
-    if (_isCacheValid()) {
-      return _cachedSettings!;
-    }
-
-    try {
-      final row = await Supabase.instance.client
-          .from('settings')
-          .select('value')
-          .eq('key', 'restaurant')
-          .maybeSingle();
-
-      if (row != null && row['value'] != null) {
-        _cachedSettings = Map<String, dynamic>.from(row['value'] as Map);
-        _lastFetch = DateTime.now();
-        return _cachedSettings!;
-      }
-    } catch (e) {
-      _logError('Settings fetch failed', e);
-    }
-
-    // Return defaults if settings unavailable
-    return {
-      'deliveryRadius': _defaultMaxDistance,
-      'deliveryFee': _defaultBaseFee,
-    };
-  }
-
-  /// Checks if cached settings are still valid
-  static bool _isCacheValid() {
-    return _cachedSettings != null &&
-        _lastFetch != null &&
-        DateTime.now().difference(_lastFetch!) < _cacheExpiration;
-  }
-
-  static double _toRadians(double degrees) => degrees * pi / 180;
-
   static void _logDebug(String message) {
-    if (kDebugMode) {
-      debugPrint('DeliveryCalculator: $message');
-    }
+    if (kDebugMode) debugPrint('🚚 $message');
   }
 
   static void _logError(String message, Object error) {
-    debugPrint('DeliveryCalculator: $message - $error');
+    if (kDebugMode) debugPrint('❌ $message: $error');
   }
 
-  static void clearCache() {
-    _cachedSettings = null;
-    _lastFetch = null;
-    _logDebug('Cache cleared');
+  /// Ask Uber what it will cost to deliver to [address].
+  ///
+  /// [scheduledFor] is an ISO-8601 pickup time for scheduled orders; Uber
+  /// accepts these up to 30 days out. Quotes expire after 15 minutes, so this
+  /// is re-quoted at checkout and again at dispatch.
+  static Future<DeliveryFeeResult> calculateDeliveryFee(
+    String address, {
+    String? scheduledFor,
+    double? subtotal,
+  }) async {
+    if (address.trim().isEmpty) {
+      return DeliveryFeeResult.unavailable('Enter a delivery address');
+    }
+
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'quote-delivery',
+        body: {
+          'dropoffAddress': address.trim(),
+          if (scheduledFor != null) 'scheduledFor': scheduledFor,
+          if (subtotal != null) 'subtotal': subtotal,
+        },
+      );
+
+      final data = response.data;
+      if (data is Map && data['error'] != null) {
+        // Uber declining is a real answer — usually out of range or an
+        // address it can't resolve. Don't invent a fee.
+        return DeliveryFeeResult.unavailable(data['error'].toString());
+      }
+      if (data is! Map || data['fee'] is! num) {
+        throw Exception('Malformed quote response');
+      }
+
+      final fee = (data['fee'] as num).toDouble();
+      final eta = (data['durationMinutes'] as num?)?.toInt();
+      _logDebug('Uber quote: \$${fee.toStringAsFixed(2)}'
+          '${eta != null ? ', ~$eta min' : ''}');
+
+      return DeliveryFeeResult(
+        fee: double.parse(fee.toStringAsFixed(2)),
+        isAvailable: true,
+        etaMinutes: eta,
+        quoteId: data['quoteId'] as String?,
+      );
+    } catch (e) {
+      _logError('Delivery quote failed', e);
+      return DeliveryFeeResult.error();
+    }
   }
 }
 
 class DeliveryFeeResult {
   final double fee;
-  final double distance;
   final bool isAvailable;
-  final DeliveryTier tier;
+  final int? etaMinutes;
+  final String? quoteId;
+
+  /// Why delivery isn't available, when [isAvailable] is false and this isn't
+  /// an outright failure. Safe to show to the customer.
+  final String? reason;
+
   final bool hasError;
 
   const DeliveryFeeResult({
     required this.fee,
-    required this.distance,
     required this.isAvailable,
-    required this.tier,
+    this.etaMinutes,
+    this.quoteId,
+    this.reason,
     this.hasError = false,
   });
 
+  factory DeliveryFeeResult.unavailable(String reason) => DeliveryFeeResult(
+    fee: 0,
+    isAvailable: false,
+    reason: reason,
+  );
+
   factory DeliveryFeeResult.error() => const DeliveryFeeResult(
     fee: 0,
-    distance: 0,
     isAvailable: false,
-    tier: DeliveryTier.unavailable,
+    reason: 'Unable to price delivery right now. Please try again.',
     hasError: true,
   );
 
   @override
   String toString() =>
-      'DeliveryFeeResult('
-      'fee: \$$fee, '
-      'distance: ${distance.toStringAsFixed(2)} mi, '
-      'available: $isAvailable, '
-      'tier: ${tier.name})';
+      'DeliveryFeeResult(fee: \$$fee, available: $isAvailable, '
+      'eta: ${etaMinutes ?? "-"} min)';
 }
-
-enum DeliveryTier { base, mid, extended, unavailable }

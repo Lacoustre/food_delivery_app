@@ -6,7 +6,7 @@ import 'package:african_cuisine/delivery/delivery_fee_helper.dart';
 
 class DeliveryFeeProvider extends ChangeNotifier {
   double _deliveryFee = 0.0;
-  double _deliveryDistance = 0.0;
+  int? _deliveryEtaMinutes;
   bool _deliveryAvailable = true;
   bool _deliveryWithinRange = true;
   bool _isCalculating = false;
@@ -14,10 +14,9 @@ class DeliveryFeeProvider extends ChangeNotifier {
   Position? _deliveryLocation;
   String? _deliveryAddress;
   String? _lastError;
-  DeliveryTier _deliveryTier = DeliveryTier.base;
 
   double get deliveryFee => _deliveryFee;
-  double get deliveryDistance => _deliveryDistance;
+  int? get deliveryEtaMinutes => _deliveryEtaMinutes;
   bool get deliveryAvailable => _deliveryAvailable;
   bool get deliveryWithinRange => _deliveryWithinRange;
   bool get isCalculating => _isCalculating;
@@ -25,16 +24,17 @@ class DeliveryFeeProvider extends ChangeNotifier {
   Position? get deliveryLocation => _deliveryLocation;
   String? get deliveryAddress => _deliveryAddress;
   String? get lastError => _lastError;
-  DeliveryTier get deliveryTier => _deliveryTier;
 
   String get deliveryInfo {
     if (!_deliveryAvailable) {
       return 'Delivery not available';
     }
-    if (_deliveryDistance == 0) {
+    if (_deliveryAddress == null || _deliveryFee == 0) {
       return 'Enter delivery address';
     }
-    return '${_deliveryDistance.toStringAsFixed(1)} mi • \$${_deliveryFee.toStringAsFixed(2)}';
+    final eta = _deliveryEtaMinutes;
+    final fee = '\$${_deliveryFee.toStringAsFixed(2)}';
+    return eta != null ? '~$eta min • $fee' : fee;
   }
 
   Future<void> updateDeliveryFee(Position position) async {
@@ -43,43 +43,39 @@ class DeliveryFeeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await DeliveryCalculator.calculateDeliveryFee(
-        position.latitude,
-        position.longitude,
-      );
+      // Uber prices by address, so it has to be resolved before quoting —
+      // this used to run fire-and-forget after the fee was computed.
+      final address = await _getAddressFromPosition(position);
+      if (address == null) {
+        throw Exception('Could not resolve delivery address');
+      }
+      _deliveryAddress = address;
+      _deliveryLocation = position;
+
+      final result = await DeliveryCalculator.calculateDeliveryFee(address);
 
       if (result.hasError) {
-        throw Exception('Failed to calculate delivery distance');
+        throw Exception(result.reason ?? 'Failed to price delivery');
       }
 
-      _deliveryDistance = result.distance;
       _deliveryWithinRange = result.isAvailable;
-      _deliveryTier = result.tier;
+      _deliveryEtaMinutes = result.etaMinutes;
 
       if (!result.isAvailable) {
         _deliveryAvailable = false;
         _deliveryOption = DeliveryOption.pickup;
         _deliveryFee = 0.0;
-        _lastError =
-            'Location outside delivery area (${result.distance.toStringAsFixed(1)} miles)';
+        _lastError = result.reason ?? 'Delivery not available to that address';
       } else {
         _deliveryAvailable = true;
         _deliveryFee = result.fee;
-        _deliveryLocation = position;
-
-        _getAddressFromPosition(position).then((address) {
-          if (address != null) {
-            _deliveryAddress = address;
-            notifyListeners();
-          }
-        });
       }
     } catch (e) {
       _deliveryAvailable = false;
       _deliveryWithinRange = false;
       _deliveryOption = DeliveryOption.pickup;
       _deliveryFee = 0.0;
-      _deliveryDistance = 0.0;
+      _deliveryEtaMinutes = null;
       _lastError = 'Unable to calculate delivery fee. Please try again.';
 
       debugPrint(' Delivery fee calculation failed: $e');
@@ -112,7 +108,7 @@ class DeliveryFeeProvider extends ChangeNotifier {
     _deliveryLocation = null;
     _deliveryAddress = null;
     _deliveryFee = 0.0;
-    _deliveryDistance = 0.0;
+    _deliveryEtaMinutes = null;
     _deliveryOption = DeliveryOption.pickup;
     _deliveryAvailable = true;
     _deliveryWithinRange = true;
@@ -154,8 +150,7 @@ class DeliveryFeeProvider extends ChangeNotifier {
       '''
 Delivery Fee Provider State:
   - Fee: \$$_deliveryFee
-  - Distance: $_deliveryDistance mi
-  - Tier: ${_deliveryTier.name}
+  - ETA: ${_deliveryEtaMinutes ?? "-"} min
   - Available: $_deliveryAvailable
   - Within Range: $_deliveryWithinRange
   - Option: ${_deliveryOption.name}
