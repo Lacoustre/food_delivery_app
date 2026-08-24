@@ -116,19 +116,6 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing }: {
 }
 
 function CheckoutContent() {
-  // Function to decode HTML entities in URLs
-  const decodeImageUrl = (url: string) => {
-    if (!url) return '/assets/images/logo.png'
-    // Decode HTML entities - handle double encoding
-    let decoded = url
-      .replace(/&amp;amp;/g, '&')  // Handle double encoding first
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-    return decoded
-  }
-
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)

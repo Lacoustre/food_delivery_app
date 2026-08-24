@@ -53,21 +53,16 @@ export default function AfricanCuisineWebsite() {
     if (!meal.imageUrl) {
       return '/assets/images/logo.png'
     }
-    
-    // If it's a Firebase Storage URL, use it directly
-    if (meal.imageUrl.startsWith('https://firebasestorage.googleapis.com')) {
-      return meal.imageUrl.replace(/&amp;/g, '&')
+    // Remote URL (Supabase Storage) — use as-is
+    if (meal.imageUrl.startsWith('http')) {
+      return meal.imageUrl
     }
     // If it's a local asset path, use it
     if (meal.imageUrl.startsWith('/assets/')) {
       return meal.imageUrl
     }
     // If it's just a filename, assume it's a local asset
-    if (!meal.imageUrl.startsWith('http')) {
-      return `/assets/images/${meal.imageUrl}`
-    }
-    // Fallback to logo
-    return '/assets/images/logo.png'
+    return `/assets/images/${meal.imageUrl}`
   }
 
   const heroImages = [

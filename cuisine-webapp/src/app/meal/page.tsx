@@ -50,48 +50,21 @@ export default function MealDetailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // Function to get image URL with proper Firebase Storage handling
+  // Function to get image URL from database with local fallback
   const getImageUrl = (meal: Meal) => {
-    // If it's a Firebase Storage URL, use it directly with domain fix
-    if (meal.imageUrl && meal.imageUrl.startsWith('https://firebasestorage.googleapis.com')) {
-      return meal.imageUrl.replace('.firebasestorage.app', '.appspot.com').replace(/&amp;/g, '&')
+    if (!meal.imageUrl) {
+      return '/assets/images/logo.png'
     }
-    // If it's a local asset path, use it
-    if (meal.imageUrl && meal.imageUrl.startsWith('/assets/')) {
+    // Remote URL (Supabase Storage) — use as-is
+    if (meal.imageUrl.startsWith('http')) {
       return meal.imageUrl
     }
-    // Fallback to logo
-    return '/assets/images/logo.png'
-  }
-  
-  // Function to decode HTML entities in URLs
-  const decodeImageUrl = (url: string) => {
-    if (!url) return '/assets/images/logo.png'
-    // Decode HTML entities and fix any URL issues
-    let decoded = url
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-    
-    // Test if this is a Firebase Storage URL and try to access it
-    if (decoded.includes('firebasestorage.googleapis.com')) {
-      console.log('Testing Firebase Storage URL access...')
-      fetch(decoded, { method: 'HEAD' })
-        .then(response => {
-          console.log('Firebase Storage URL status:', response.status)
-          if (!response.ok) {
-            console.log('Firebase Storage URL is not accessible:', response.statusText)
-          }
-        })
-        .catch(error => {
-          console.log('Firebase Storage URL fetch error:', error)
-        })
+    // If it's a local asset path, use it
+    if (meal.imageUrl.startsWith('/assets/')) {
+      return meal.imageUrl
     }
-    
-    console.log('Meal detail - Original URL:', url)
-    console.log('Meal detail - Decoded URL:', decoded)
-    return decoded
+    // If it's just a filename, assume it's a local asset
+    return `/assets/images/${meal.imageUrl}`
   }
   
   useEffect(() => {
