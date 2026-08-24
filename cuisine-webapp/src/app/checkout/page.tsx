@@ -13,6 +13,7 @@ import PromoCode from '@/components/PromoCode'
 import { promotionsService, type Promotion } from '@/lib/promotionsService'
 import { createPaymentIntent, stripePromise } from '@/lib/stripeService'
 import { getAuthHeaders } from '@/lib/authHeaders'
+import { computeOrderTotals } from '@/lib/pricing'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -188,22 +189,6 @@ function CheckoutContent() {
     setLoading(false)
   }, [user, userProfile, router])
 
-  const calculateDeliveryFee = (distance: number = 3) => {
-    const baseFee = 3.99
-    const baseTierMaxDistance = 3.0
-    const midTierMaxDistance = 10.0
-    const midTierRatePerMile = 0.50
-    const extendedTierBase = 7.49
-    const extendedTierRatePerMile = 0.75
-
-    if (distance <= baseTierMaxDistance) {
-      return baseFee
-    } else if (distance <= midTierMaxDistance) {
-      return baseFee + (distance - baseTierMaxDistance) * midTierRatePerMile
-    } else {
-      return extendedTierBase + (distance - midTierMaxDistance) * extendedTierRatePerMile
-    }
-  }
 
   const [calculatedDistance, setCalculatedDistance] = useState<number>(3)
 
@@ -215,10 +200,14 @@ function CheckoutContent() {
   }, [])
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const deliveryFee = orderData.orderType === 'delivery' ? calculateDeliveryFee(calculatedDistance) : 0
   const promoDiscount = appliedPromo?.discount || 0
-  const tax = (subtotal + deliveryFee - promoDiscount) * 0.0735
-  const total = subtotal + deliveryFee + tax - promoDiscount
+  // Display only — the charged amount is recomputed server-side.
+  const { deliveryFee, tax, total } = computeOrderTotals({
+    subtotal,
+    orderType: orderData.orderType,
+    distanceMiles: calculatedDistance,
+    promoDiscount,
+  })
 
   useEffect(() => {
     if (total > 0) {

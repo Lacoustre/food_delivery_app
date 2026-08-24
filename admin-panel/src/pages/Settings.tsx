@@ -38,7 +38,7 @@ const defaultSettings: RestaurantSettings = {
   },
   deliveryFee: 3.99,
   deliveryRadius: 10,
-  taxRate: 6.35,
+  taxRate: 7.35,
 };
 
 export default function Settings() {

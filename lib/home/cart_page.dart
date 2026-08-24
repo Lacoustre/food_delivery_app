@@ -83,6 +83,7 @@ class _CartPageState extends State<CartPage> {
     final cartItems = cartProvider.cartItems;
 
     final subtotal = cartProvider.totalPrice;
+    // Estimate only — checkout and the server are authoritative (CT 7.35%).
     final tax = subtotal * 0.0735;
     final total = subtotal + tax;
     final canCheckout = allRequiredExtrasSelected() && cartItems.isNotEmpty;

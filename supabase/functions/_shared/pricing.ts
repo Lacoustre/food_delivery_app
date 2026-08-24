@@ -1,9 +1,28 @@
 import { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-// Mobile's own tax rate (Connecticut) — kept as-is; note this differs from
-// the webapp's 7.35%, a pre-existing cross-app inconsistency, not fixed
-// here since it's a business/pricing question, not a security one.
-export const TAX_RATE = 0.0635;
+// Connecticut prepared-meals rate. This is the fallback only — the live rate
+// comes from settings/restaurant.taxRate (a percentage, e.g. 7.35) so the
+// admin panel's tax field actually governs what customers are charged.
+export const DEFAULT_TAX_RATE = 0.0735;
+
+// Tax applies to the food subtotal only — never the delivery fee.
+export async function getTaxRate(supabase: SupabaseClient): Promise<number> {
+  try {
+    const { data } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "restaurant")
+      .maybeSingle();
+
+    const raw = (data?.value as Record<string, unknown> | null)?.taxRate;
+    const pct = typeof raw === "number" ? raw : Number(raw);
+    // Stored as a percentage; reject nonsense rather than charging 0.
+    if (Number.isFinite(pct) && pct > 0 && pct < 100) return pct / 100;
+  } catch {
+    // fall through to the default
+  }
+  return DEFAULT_TAX_RATE;
+}
 
 export function calculateDeliveryFee(distanceMiles: number): number {
   const baseFee = 3.99;
@@ -105,7 +124,7 @@ export async function computeValidatedTotals(
   }
 
   const deliveryFee = orderType === "delivery" ? calculateDeliveryFee(distanceMiles || 0) : 0;
-  const tax = subtotal * TAX_RATE;
+  const tax = subtotal * (await getTaxRate(supabase));
 
   return { subtotal, deliveryFee, tax, validatedItems };
 }

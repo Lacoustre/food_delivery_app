@@ -16,7 +16,7 @@ import 'package:intl/intl.dart';
 
 // ===== CONSTANTS =====
 class PaymentConstants {
-  static const double defaultTaxRate = 0.0635; // Default CT tax rate
+  static const double defaultTaxRate = 0.0735; // CT prepared-meals rate
   static const double minimumPaymentAmount = 0.50;
   static const double maxDeliveryDistance = 15.0;
   static const double maxTipAmount = 999.99;
@@ -528,7 +528,8 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         _lastSettingsFetch != null &&
         DateTime.now().difference(_lastSettingsFetch!).inMinutes < 5) {
       _taxRate =
-          (_cachedSettings!['taxRate'] ?? PaymentConstants.defaultTaxRate) /
+          (_cachedSettings!['taxRate'] ??
+              PaymentConstants.defaultTaxRate * 100) /
           100;
       return;
     }

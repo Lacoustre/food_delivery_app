@@ -1,4 +1,6 @@
-export const TAX_RATE = 0.0735
+// Connecticut prepared-meals rate. Fallback only — the authoritative rate
+// lives in settings/restaurant.taxRate and is applied server-side.
+export const DEFAULT_TAX_RATE = 0.0735
 
 /**
  * Tiered delivery fee, distance in miles. Single source of truth so the
@@ -34,14 +36,19 @@ export function computeOrderTotals({
   orderType,
   distanceMiles,
   promoDiscount = 0,
+  taxRate = DEFAULT_TAX_RATE,
 }: {
   subtotal: number
   orderType: 'delivery' | 'pickup'
   distanceMiles: number
   promoDiscount?: number
+  taxRate?: number
 }): OrderTotals {
   const deliveryFee = orderType === 'delivery' ? calculateDeliveryFee(distanceMiles) : 0
-  const tax = (subtotal + deliveryFee - promoDiscount) * TAX_RATE
+  // Tax applies to the food subtotal only — not the delivery fee, and not
+  // reduced by the promo. Must match _shared/pricing.ts, which is what the
+  // customer is actually charged.
+  const tax = subtotal * taxRate
   const total = subtotal + deliveryFee + tax - promoDiscount
   return { subtotal, deliveryFee, tax, total }
 }
