@@ -32,7 +32,10 @@ export default function CartPage() {
 
   // Restaurant location - 200 Hartford Turnpike, Vernon, CT (matches mobile app)
   const restaurantLocation = { lat: 41.82457, lng: -72.4978 }
-  const maxDeliveryDistance = 15 // miles
+  // Uber stops quoting past ~10 road miles (their rate card tops out at the
+  // 7-10 mi band). This is a coarse straight-line pre-filter only — the quote
+  // at checkout is the authority on whether an address is deliverable.
+  const maxDeliveryDistance = 10 // miles
 
 
   // Load image URLs for cart items

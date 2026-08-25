@@ -18,7 +18,6 @@ import 'package:intl/intl.dart';
 class PaymentConstants {
   static const double defaultTaxRate = 0.0735; // CT prepared-meals rate
   static const double minimumPaymentAmount = 0.50;
-  static const double maxDeliveryDistance = 15.0;
   static const double maxTipAmount = 999.99;
   static const int paymentIntentTimeoutSeconds = 30;
   static const int maxRetryAttempts = 1;

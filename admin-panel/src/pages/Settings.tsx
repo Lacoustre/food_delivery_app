@@ -14,7 +14,6 @@ interface RestaurantSettings {
   businessHours: {
     [key: string]: { open: string; close: string; closed: boolean };
   };
-  deliveryFee: number;
   deliveryRadius: number;
   taxRate: number;
 }
@@ -36,7 +35,6 @@ const defaultSettings: RestaurantSettings = {
     saturday: { open: "11:00", close: "20:00", closed: false },
     sunday: { open: "12:00", close: "20:00", closed: true },
   },
-  deliveryFee: 3.99,
   deliveryRadius: 10,
   taxRate: 7.35,
 };
@@ -258,17 +256,11 @@ export default function Settings() {
       {/* Delivery Settings */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Delivery Settings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Fee ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={settings.deliveryFee}
-              onChange={(e) => setSettings(prev => ({ ...prev, deliveryFee: parseFloat(e.target.value) || 0 }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Delivery fees are set by Uber Direct and quoted per order — there is no
+          fee to configure here.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Radius (miles)</label>
             <input
