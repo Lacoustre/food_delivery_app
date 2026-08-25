@@ -4,6 +4,7 @@ import 'package:african_cuisine/home/meal_detail_page.dart';
 import 'package:african_cuisine/provider/favorites_provider.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:african_cuisine/widgets/meal_image.dart';
 
 class FavoritesPage extends StatelessWidget {
   const FavoritesPage({super.key});
@@ -122,11 +123,10 @@ class FavoritesPage extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    meal['image'],
+                  child: MealImage(
+                    meal['image'] as String?,
                     width: 70,
                     height: 70,
-                    fit: BoxFit.cover,
                   ),
                 ),
                 const SizedBox(width: 12),

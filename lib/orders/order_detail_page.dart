@@ -11,6 +11,7 @@ import 'package:african_cuisine/services/order_adapter.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 import 'package:african_cuisine/services/email_service.dart';
+import 'package:african_cuisine/widgets/meal_image.dart';
 
 class OrderDetailPage extends StatefulWidget {
   /// Preferred: open with an orderId and the page will live-stream the doc.
@@ -579,12 +580,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       leading: item['image'] != null && item['image'].toString().isNotEmpty
           ? ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                item['image'],
+              child: MealImage(
+                item['image'] as String?,
                 width: 50,
                 height: 50,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.fastfood),
               ),
             )
           : const Icon(Icons.fastfood, size: 40),
