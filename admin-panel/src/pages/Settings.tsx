@@ -21,11 +21,11 @@ interface RestaurantSettings {
 const defaultSettings: RestaurantSettings = {
   isOpen: true,
   name: "Taste of African Cuisine",
-  address: "32 Kenwood Dr, Vernon, CT, 06066",
+  address: "200 Hartford Turnpike, Vernon, CT 06066",
   phone: "9294563215",
   email: "tasteofafricancuisine01@gmail.com",
-  latitude: 41.8323,
-  longitude: -72.500336,
+  latitude: 41.82457,
+  longitude: -72.4978,
   businessHours: {
     monday: { open: "11:00", close: "20:00", closed: true },
     tuesday: { open: "11:00", close: "20:00", closed: false },
