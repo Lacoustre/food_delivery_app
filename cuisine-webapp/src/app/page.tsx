@@ -1059,7 +1059,7 @@ export default function AfricanCuisineWebsite() {
               <h4 className="text-xl font-bold mb-6 text-orange-400">Hours & Social</h4>
               <div className="space-y-3 mb-6">
                 <div className="text-gray-300">
-                  <span className="font-medium text-white">Tue–Sat:</span> 11:00 AM – 8:00 PM
+                  <span className="font-medium text-white">Tue–Sat:</span> 11:00 AM – 9:00 PM<br /><span className="text-gray-400 text-sm">Friday until 8:00 PM</span>
                 </div>
                 <div className="text-gray-300">
                   <span className="font-medium text-white">Sun & Mon:</span> <span className="text-red-400">Closed</span>

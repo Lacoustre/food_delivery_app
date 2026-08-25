@@ -2021,7 +2021,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Business Hours: Tue-Sat 11:00 AM - 8:00 PM',
+                  'Business Hours: Tue-Sat 11:00 AM - 9:00 PM (Fri to 8:00 PM)',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],

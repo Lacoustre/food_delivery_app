@@ -1495,14 +1495,14 @@ class _MainFoodPageState extends State<MainFoodPage> {
                               ),
                             ),
                             const Text(
-                              'Tuesday - Saturday: 11:00 AM - 8:00 PM',
+                              'Tuesday - Saturday: 11:00 AM - 9:00 PM',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey,
                               ),
                             ),
                             const Text(
-                              'Sunday & Monday: Closed',
+                              'Friday closes at 8:00 PM · Sunday & Monday: Closed',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey,

@@ -314,7 +314,7 @@ export default function CartPage() {
                         <div className="font-bold text-lg text-gray-800">Taste of African Cuisine</div>
                         <div className="text-gray-700 mb-2">200 Hartford Turnpike, Vernon, CT</div>
                         <div className="text-sm text-gray-600 bg-white/50 rounded-lg px-3 py-2 inline-block">
-                          Open: Tue-Sat 11:00 AM - 8:00 PM
+                          Open: Tue-Sat 11:00 AM - 9:00 PM (Fri to 8:00 PM)
                         </div>
                       </div>
                     </div>

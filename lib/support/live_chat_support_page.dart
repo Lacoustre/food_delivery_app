@@ -222,7 +222,7 @@ class _LiveChatSupportPageState extends State<LiveChatSupportPage> {
           const Padding(
             padding: EdgeInsets.all(12),
             child: Text(
-              'Business Hours: 12 PM – 8 PM (Closed on Mondays)',
+              'Business Hours: Tue-Sat 11 AM – 9 PM (Fri to 8 PM)',
               style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ),

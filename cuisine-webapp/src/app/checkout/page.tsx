@@ -780,7 +780,7 @@ function CheckoutContent() {
                         <div className="font-bold text-lg text-gray-900">Taste of African Cuisine</div>
                         <div className="text-gray-800 font-bold mb-2">200 Hartford Turnpike, Vernon, CT</div>
                         <div className="text-sm text-gray-700 font-bold bg-white/50 rounded-lg px-3 py-2 inline-block">
-                          Open: Tue-Sat 11:00 AM - 8:00 PM
+                          Open: Tue-Sat 11:00 AM - 9:00 PM (Fri to 8:00 PM)
                         </div>
                       </div>
                     </div>
