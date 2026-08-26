@@ -981,36 +981,36 @@ export default function AfricanCuisineWebsite() {
 
                             <div className="flex flex-col flex-1 p-5">
                               <h4 className="font-display text-xl text-ink leading-tight">{active.baseName}</h4>
-                              {active.description && (
-                                <p className="mt-1.5 text-sm text-sand-700 line-clamp-2">{active.description}</p>
-                              )}
+                              <p className="mt-1.5 text-sm text-sand-700 line-clamp-2 min-h-[2.5rem]">
+                                {active.description}
+                              </p>
 
-                              {variants.length > 1 && (
-                                <div className="mt-4">
-                                  <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-sand-500 mb-2">
-                                    {HEADINGS[active.variantType ?? 'protein'] ?? 'Choose an option'}
-                                  </p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {variants.map(v => {
-                                      const on = v.id === active.id
-                                      return (
-                                        <button
-                                          key={v.id}
-                                          onClick={() => setSelectedVariant(prev => ({ ...prev, [slug]: v.id }))}
-                                          className={`px-2.5 py-1.5 rounded-control text-xs font-medium border transition-colors ${
-                                            on
-                                              ? 'bg-ink text-sand-50 border-ink'
-                                              : 'bg-sand-50 text-ink-soft border-sand-200 hover:border-sand-300'
-                                          }`}
-                                        >
-                                          {v.variantLabel}
-                                          {v.isVegetarian && <span className="ml-1 text-kente-300">·</span>}
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )}
+                              {/* A wrapped grid of chips made cards with many
+                                  options far taller than those with none, and
+                                  grid stretches a whole row to its tallest
+                                  card. One control keeps every card the same
+                                  height whether it has eight options or one. */}
+                              <div className="mt-3 min-h-[62px]">
+                                {variants.length > 1 && (
+                                  <>
+                                    <label htmlFor={`v-${slug}`} className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-sand-500 mb-1.5">
+                                      {HEADINGS[active.variantType ?? 'protein'] ?? 'Choose an option'}
+                                    </label>
+                                    <select
+                                      id={`v-${slug}`}
+                                      value={active.id}
+                                      onChange={(e) => setSelectedVariant(prev => ({ ...prev, [slug]: e.target.value }))}
+                                      className="w-full px-2.5 py-2 rounded-control border border-sand-200 bg-sand-50 text-ink text-sm focus:outline-none focus:border-gold"
+                                    >
+                                      {variants.map(v => (
+                                        <option key={v.id} value={v.id}>
+                                          {v.variantLabel}{v.isVegetarian ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </>
+                                )}
+                              </div>
 
                               <div className="mt-auto pt-5 flex items-end justify-between gap-3">
                                 <div>
