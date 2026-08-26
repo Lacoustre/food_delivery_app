@@ -33,6 +33,32 @@ function rowToProfile(row: any): UserProfile {
   }
 }
 
+/**
+ * Welcome email. Only ever call this with a live session: /api/send-email
+ * verifies a Supabase access token, so calling it unauthenticated is a
+ * guaranteed 401 rather than a delivery failure worth retrying.
+ */
+async function sendWelcomeEmail(email: string, name: string): Promise<void> {
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) return
+
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({
+        type: 'welcome',
+        welcomeData: { customerEmail: email, customerName: name },
+      }),
+    })
+    if (!response.ok) {
+      console.error('Welcome email failed:', response.status, await response.json().catch(() => null))
+    }
+  } catch (error) {
+    console.error('Welcome email failed:', error)
+  }
+}
+
 export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, name: string): Promise<UserProfile> {
@@ -52,29 +78,10 @@ export const authService = {
       })
     }
 
-    // Send welcome email
-    try {
-      console.log('Attempting to send welcome email to:', email)
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
-        body: JSON.stringify({
-          type: 'welcome',
-          welcomeData: {
-            customerEmail: email,
-            customerName: name
-          }
-        })
-      })
-
-      const result = await response.json()
-      if (response.ok) {
-        console.log('Welcome email sent successfully to:', email)
-      } else {
-        console.error('Welcome email API error:', result)
-      }
-    } catch (error) {
-      console.error('Failed to send welcome email:', error)
+    // Only when signup returned a session. With email confirmation enabled it
+    // does not, and first sign-in sends the welcome instead.
+    if (data.session) {
+      await sendWelcomeEmail(email, name)
     }
 
     return {
@@ -103,6 +110,8 @@ export const authService = {
         .maybeSingle()
       if (!existing) {
         await supabase.from('profiles').upsert({ id: user.id, email, role: 'customer' })
+        // First confirmed sign-in — the signup call had no session to send with.
+        await sendWelcomeEmail(email, email.split('@')[0])
       }
     } catch (e) {
       console.error('Profile ensure failed:', e)
