@@ -646,7 +646,7 @@ function CheckoutContent() {
       <div className="relative z-10">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-md shadow-lg border-b border-orange-100">
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="page-shell px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/cart" className="p-3 hover:bg-orange-100 rounded-full transition-all duration-200">
               <ArrowLeft className="w-6 h-6 text-orange-600" />
@@ -661,7 +661,7 @@ function CheckoutContent() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="page-shell px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Forms */}
           <div className="lg:col-span-2 space-y-6">

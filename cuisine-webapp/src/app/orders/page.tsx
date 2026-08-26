@@ -102,7 +102,7 @@ function OrdersContent() {
           />
         </div>
         
-        <div className="relative z-10 max-w-2xl mx-auto px-4 py-8">
+        <div className="relative z-10 page-shell px-4 py-8">
           <div className="mb-6">
             <button 
               onClick={() => {
@@ -252,7 +252,7 @@ function OrdersContent() {
         />
       </div>
       
-      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+      <div className="relative z-10 page-shell px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
             <Link href="/" className="p-3 hover:bg-orange-100 rounded-full transition-all duration-200">

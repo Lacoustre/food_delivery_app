@@ -21,7 +21,7 @@ export default function OrderConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100">
-      <div className="max-w-2xl mx-auto px-4 py-16">
+      <div className="page-shell-narrow px-4 py-16">
         <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8 text-center">
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
           

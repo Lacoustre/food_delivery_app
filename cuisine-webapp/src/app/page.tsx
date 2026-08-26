@@ -331,7 +331,7 @@ export default function AfricanCuisineWebsite() {
               floating in the middle of a centred container. The controls stay
               grouped on the right so the gap between reads as deliberate
               rather than as three scattered clusters. */}
-          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+          <div className="w-full px-4 sm:px-6 lg:px-10">
             <div className="flex items-center gap-3 lg:gap-8 h-16">
             {/* Brand. The full name is two lines of text next to a 48px mark —
                 far too wide to share a 375px row with a search field, which is
@@ -717,7 +717,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* Features */}
       <section className="py-20 bg-sand-100">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="page-shell">
           {/* Left-aligned to share the edge the header and hero sit on —
               centred headings above left-aligned content read as misaligned. */}
           <div className="mb-14 max-w-2xl">
@@ -770,7 +770,7 @@ export default function AfricanCuisineWebsite() {
           backgroundPosition: 'center'
         }}></div>
         
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10">
+        <div className="page-shell relative z-10">
           <div className="mb-12 max-w-2xl">
             <div className="inline-flex items-center gap-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
               <span className="text-2xl">🔥</span>
@@ -860,7 +860,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* Menu Section */}
       <section id="menu" className="py-20 bg-sand-50">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="page-shell">
           <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
             <div className="max-w-xl">
               <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">The menu</p>
@@ -1047,7 +1047,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* About Section */}
       <section id="about" className="py-20 bg-ink text-sand-100">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="page-shell">
           <div className="mb-14 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 mb-3">Our story</p>
             <h2 className="font-display text-4xl sm:text-5xl text-sand-50 leading-[1.05]">
@@ -1118,7 +1118,7 @@ export default function AfricanCuisineWebsite() {
           backgroundPosition: 'center'
         }}></div>
         
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 relative z-10">
+        <div className="page-shell relative z-10">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
               <span className="text-2xl">⭐</span>
@@ -1224,7 +1224,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* Footer */}
       <footer id="contact" className="bg-gray-800 text-white py-16">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+        <div className="page-shell">
           <div className="grid md:grid-cols-3 gap-12">
             <div>
               <div className="flex items-center space-x-3 mb-6">

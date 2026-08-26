@@ -232,7 +232,7 @@ export default function CartPage() {
       <div className="relative z-10">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-md shadow-lg border-b border-orange-100">
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="page-shell px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/" className="p-3 hover:bg-orange-100 rounded-full transition-all duration-200">
               <ArrowLeft className="w-6 h-6 text-orange-600" />
@@ -247,7 +247,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="page-shell px-4 py-8">
         {cartItems.length === 0 ? (
           <div className="text-center py-20">
             <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-orange-200">
