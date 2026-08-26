@@ -59,7 +59,7 @@ export default function OrderConfirmationPage() {
               <p className="text-gray-800 font-bold">200 Hartford Turnpike, Vernon, CT</p>
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-orange-500" />
-                <span className="text-gray-800 font-bold">(860) 123-4567</span>
+                <span className="text-gray-800 font-bold">(860) 805-5121</span>
               </div>
             </div>
           </div>

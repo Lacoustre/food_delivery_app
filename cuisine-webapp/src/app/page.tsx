@@ -1197,8 +1197,8 @@ export default function AfricanCuisineWebsite() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-orange-400" />
-                  <a href="tel:(929) 456-3215" className="text-gray-300 hover:text-orange-400 transition-colors font-medium underline decoration-dotted">
-                    (929) 456-3215
+                  <a href="tel:+18608055121" className="text-gray-300 hover:text-orange-400 transition-colors font-medium underline decoration-dotted">
+                    (860) 805-5121
                   </a>
                 </div>
                 <div className="flex items-start gap-3">

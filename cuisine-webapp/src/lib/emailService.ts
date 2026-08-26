@@ -86,7 +86,7 @@ export const emailService = {
             
             <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
               <p style="margin: 0; text-align: center;"><strong>📍 Visit Us:</strong> 200 Hartford Turnpike, Vernon, CT</p>
-              <p style="margin: 5px 0 0 0; text-align: center;"><strong>📞 Call:</strong> (929) 456-3215</p>
+              <p style="margin: 5px 0 0 0; text-align: center;"><strong>📞 Call:</strong> (860) 805-5121</p>
             </div>
             
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">

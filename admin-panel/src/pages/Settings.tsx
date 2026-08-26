@@ -22,7 +22,7 @@ const defaultSettings: RestaurantSettings = {
   isOpen: true,
   name: "Taste of African Cuisine",
   address: "200 Hartford Turnpike, Vernon, CT 06066",
-  phone: "9294563215",
+  phone: "8608055121",
   email: "tasteofafricancuisine01@gmail.com",
   latitude: 41.82457,
   longitude: -72.4978,

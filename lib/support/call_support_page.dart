@@ -6,7 +6,7 @@ class CallSupportPage extends StatelessWidget {
   const CallSupportPage({super.key});
 
   void _launchPhoneDialer() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: '9294563215');
+    final Uri phoneUri = Uri(scheme: 'tel', path: '8608055121');
     if (await canLaunchUrl(phoneUri)) {
       await launchUrl(phoneUri);
     } else {
@@ -61,7 +61,7 @@ class CallSupportPage extends StatelessWidget {
                 onPressed: _launchPhoneDialer,
                 icon: const Icon(Icons.phone, size: 24),
                 label: const Text(
-                  'Call 9294563215',
+                  'Call 8608055121',
                   style: TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(

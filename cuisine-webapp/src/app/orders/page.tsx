@@ -206,8 +206,8 @@ function OrdersContent() {
                 <Phone className="w-6 h-6 text-blue-500" />
                 <div>
                   <div className="font-bold text-gray-900">Call Us Directly</div>
-                  <a href="tel:(929) 456-3215" className="text-blue-600 font-bold hover:text-blue-700 text-lg">
-                    (929) 456-3215
+                  <a href="tel:+18608055121" className="text-blue-600 font-bold hover:text-blue-700 text-lg">
+                    (860) 805-5121
                   </a>
                 </div>
               </div>
