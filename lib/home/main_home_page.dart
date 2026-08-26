@@ -668,6 +668,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
             );
           }
 
+          if (!mounted) return;
           final deliveryProvider = Provider.of<DeliveryFeeProvider>(
             context,
             listen: false,
@@ -721,6 +722,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
         );
       }
 
+      if (!mounted) return;
       final deliveryProvider = Provider.of<DeliveryFeeProvider>(
         context,
         listen: false,
@@ -769,6 +771,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
           );
         }
 
+        if (!mounted) return;
         final deliveryProvider = Provider.of<DeliveryFeeProvider>(
           context,
           listen: false,

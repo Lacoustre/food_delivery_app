@@ -101,6 +101,7 @@ class NotificationDetailPage extends StatelessWidget {
           .eq('id', orderId as String)
           .maybeSingle();
 
+      if (!context.mounted) return;
       Navigator.pop(context);
 
       if (row == null) {
@@ -115,7 +116,6 @@ class NotificationDetailPage extends StatelessWidget {
 
       // Navigate to order detail
       // (Make sure OrderDetailPage just needs the map)
-      // ignore: use_build_context_synchronously
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -126,10 +126,12 @@ class NotificationDetailPage extends StatelessWidget {
       // If delivered, show rating dialog
       if (status == 'delivered') {
         Future.delayed(const Duration(milliseconds: 500), () {
+          if (!context.mounted) return;
           _showRatingDialog(context, orderId!);
         });
       }
     } catch (e) {
+      if (!context.mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(
         context,
@@ -201,10 +203,12 @@ class NotificationDetailPage extends StatelessWidget {
                   'user_id': user.id,
                 }, onConflict: 'order_id,user_id');
 
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Thanks for your feedback!")),
                 );
               } catch (e) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text("Failed to submit review: $e")),
                 );

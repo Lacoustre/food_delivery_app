@@ -138,13 +138,13 @@ class _LoginPageState extends State<LoginPage>
               try {
                 await Supabase.instance.client.auth
                     .resetPasswordForEmail(email);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Password reset email sent')),
                 );
                 Navigator.pop(context);
               } on AuthException catch (e) {
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.message}')));
               }
             },

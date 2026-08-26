@@ -230,7 +230,7 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
                       );
                     }
 
-                    if (mounted) Navigator.pop(ctx);
+                    if (ctx.mounted) Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.save),
                   label: Text(address == null ? 'Add Address' : 'Save Changes'),

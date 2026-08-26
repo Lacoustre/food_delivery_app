@@ -93,15 +93,20 @@ class _MyAppState extends State<MyApp> {
 
     // 🧠 Wait for widget tree to be built before using context
     Future.delayed(Duration.zero, () async {
-      final context = navigatorKey.currentContext!;
+      // navigatorKey.currentContext is null until the first frame is built,
+      // and the app can be torn down between the awaits below — so re-read it
+      // rather than holding one context across the whole sequence.
+      final startContext = navigatorKey.currentContext;
+      if (startContext == null || !startContext.mounted) return;
+
       // 🛎️ Start listening to notifications
       Provider.of<NotificationProvider>(
-        context,
+        startContext,
         listen: false,
       ).startListeningToNotifications();
 
       // 🔔 Initialize FCM or notification logic
-      await NotificationService.init(context);
+      await NotificationService.init(startContext);
 
       // 🕒 Start restaurant hours auto-schedule
       RestaurantHoursService().startAutoSchedule();
@@ -110,7 +115,9 @@ class _MyAppState extends State<MyApp> {
       OrderStatusService().startListening();
 
       // ⭐ Check for review notifications
-      ReviewNotificationService.checkForReviewNotifications(context);
+      final reviewContext = navigatorKey.currentContext;
+      if (reviewContext == null || !reviewContext.mounted) return;
+      ReviewNotificationService.checkForReviewNotifications(reviewContext);
     });
   }
 

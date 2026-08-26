@@ -37,6 +37,7 @@ class _ReorderPageState extends State<ReorderPage> {
 
       final cartItems = List<Map<String, dynamic>>.from(row['order_items'] ?? []);
 
+      if (!mounted) return;
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       cartProvider.clearCart();
 

@@ -97,6 +97,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         _hasMore = false;
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Failed to load orders: $e")));

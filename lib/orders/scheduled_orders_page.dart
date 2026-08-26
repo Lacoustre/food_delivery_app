@@ -210,12 +210,12 @@ class _ScheduledOrdersPageState extends State<ScheduledOrdersPage> {
 
         await _fetchScheduledOrders();
 
-        if (!mounted) return;
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Scheduled order cancelled')),
         );
       } catch (e) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error cancelling order: $e')));

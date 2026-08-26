@@ -53,6 +53,7 @@ class _LocationSelectorBarState extends State<LocationSelectorBar> {
       // Notify about coordinates update if callback exists
       widget.onCoordinatesUpdated?.call(position.latitude, position.longitude);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
@@ -159,8 +160,10 @@ class _LocationSelectorBarState extends State<LocationSelectorBar> {
                             position.longitude,
                           );
 
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx, formatted);
                         } catch (e) {
+                          if (!ctx.mounted) return;
                           ScaffoldMessenger.of(ctx).showSnackBar(
                             SnackBar(content: Text('Error: ${e.toString()}')),
                           );

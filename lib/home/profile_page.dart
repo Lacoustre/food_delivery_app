@@ -196,6 +196,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _avatarUrl = null;
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Profile picture removed. Using default image.'),
@@ -203,6 +204,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to remove image: ${e.toString()}'),
@@ -282,6 +284,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await _uploadAndSetProfileImage(croppedImage);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Image selection failed: ${e.toString()}')),
       );
@@ -338,6 +341,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   .update({'name': newName})
                                   .eq('id', supabaseUser.id);
                             }
+                            if (!context.mounted) return;
                             setState(() => _profileName = newName);
                             Navigator.of(context).pop();
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -346,6 +350,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             );
                           } catch (e) {
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Update failed: ${e.toString()}'),
@@ -439,6 +444,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             await Supabase.instance.client.auth.updateUser(
                               UserAttributes(email: newEmail),
                             );
+                            if (!context.mounted) return;
                             setState(() {});
                             Navigator.pop(context);
 
@@ -450,6 +456,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             );
                           } catch (e) {
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Failed: ${e.toString()}'),
@@ -754,6 +761,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   if (shouldSignOut == true) {
                     await Supabase.instance.client.auth.signOut();
+                    if (!context.mounted) return;
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const LoginPage()),
                       (_) => false,

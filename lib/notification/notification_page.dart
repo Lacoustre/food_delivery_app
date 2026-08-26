@@ -32,6 +32,7 @@ class NotificationPage extends StatelessWidget {
                     .eq('read', false)
                     .limit(1);
 
+                if (!context.mounted) return;
                 if (unread.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -47,12 +48,14 @@ class NotificationPage extends StatelessWidget {
                     .eq('user_id', user.id)
                     .eq('read', false);
 
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text("All notifications marked as read."),
                   ),
                 );
               } catch (_) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text("Failed to mark notifications as read."),
@@ -73,6 +76,7 @@ class NotificationPage extends StatelessWidget {
                     .select('id')
                     .eq('user_id', user.id)
                     .limit(1);
+                if (!context.mounted) return;
                 if (snap.isEmpty) {
                   _showCustomDialog(
                     context,
@@ -112,10 +116,12 @@ class NotificationPage extends StatelessWidget {
                     .delete()
                     .eq('user_id', user.id);
 
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("All notifications cleared.")),
                 );
               } catch (_) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text("Failed to clear notifications."),
@@ -197,12 +203,14 @@ class NotificationPage extends StatelessWidget {
                                 .from('user_notifications')
                                 .delete()
                                 .eq('id', id);
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text("Notification deleted."),
                               ),
                             );
                           } catch (_) {
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text("Failed to delete notification."),
@@ -220,6 +228,7 @@ class NotificationPage extends StatelessWidget {
                                     .eq('id', id);
                               }
 
+                              if (!context.mounted) return;
                               if (type == 'order' ||
                                   type.toLowerCase().contains('order')) {
                                 Navigator.pushNamed(context, '/orderHistory');
@@ -235,6 +244,7 @@ class NotificationPage extends StatelessWidget {
                                 );
                               }
                             } catch (_) {
+                              if (!context.mounted) return;
                               _showNotificationBottomSheet(
                                 context,
                                 title,
