@@ -604,6 +604,11 @@ export default function AfricanCuisineWebsite() {
               <MapPin className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
               <span>200 Hartford Turnpike<br /><span className="text-sand-500 font-normal text-sm">Vernon, CT 06066</span></span>
             </a>
+            <a href="mailto:tasteofafricancuisine01@gmail.com"
+              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              <Mail className="w-4 h-4 text-sand-500 shrink-0" />
+              <span className="break-all text-[15px]">tasteofafricancuisine01@gmail.com</span>
+            </a>
             <div className="flex items-start gap-3 py-3.5 text-sand-700">
               <Clock className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
               <span className="text-sm">
