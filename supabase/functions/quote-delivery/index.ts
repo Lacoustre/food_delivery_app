@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : "Quote failed";
     console.error("quote-delivery failed:", message);
     return new Response(
-      JSON.stringify({ error: "We could not quote delivery to that address. Check it includes the street, city and ZIP — we deliver within about 10 miles of Vernon." }),
+      JSON.stringify({ error: "Check the address includes a street number, town and ZIP. We deliver up to about 10 miles from Vernon." }),
       { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

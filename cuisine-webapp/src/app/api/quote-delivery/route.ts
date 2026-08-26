@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // and one that is genuinely out of range, so the message has to cover both.
     console.error('quote-delivery failed:', error)
     return NextResponse.json(
-      { error: 'We could not quote delivery to that address. Check it includes the street, city and ZIP — we deliver within about 10 miles of Vernon.' },
+      { error: 'Check the address includes a street number, town and ZIP. We deliver up to about 10 miles from Vernon.' },
       { status: 422 }
     )
   }
