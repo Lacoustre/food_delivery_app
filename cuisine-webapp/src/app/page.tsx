@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -232,9 +232,28 @@ export default function AfricanCuisineWebsite() {
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const filteredMeals = meals.filter(meal => 
-    meal.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Match category and description too — searching "drinks" or "vegetarian"
+  // returned nothing when only the dish name was considered.
+  const filteredMeals = (() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return meals
+    return meals.filter(meal =>
+      meal.name?.toLowerCase().includes(q) ||
+      meal.category?.toLowerCase().includes(q) ||
+      meal.description?.toLowerCase().includes(q)
+    )
+  })()
+
+  // Typing in the header filtered a section far below the fold, so it looked
+  // like search did nothing. Jump to the menu when a query first appears.
+  const hadQuery = useRef(false)
+  useEffect(() => {
+    const has = searchQuery.trim().length > 0
+    if (has && !hadQuery.current) {
+      document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    hadQuery.current = has
+  }, [searchQuery])
 
   // Get popular items (hardcoded favorites)
   const getPopularItems = () => {
@@ -793,13 +812,13 @@ export default function AfricanCuisineWebsite() {
           ) : searchQuery && filteredMeals.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-xl text-gray-600 mb-4">No meals found for &ldquo;{searchQuery}&rdquo;</p>
-              <p className="text-gray-500">Try searching for a different dish name.</p>
+              <p className="text-gray-500">Try a dish, a category like &ldquo;drinks&rdquo;, or an ingredient.</p>
             </div>
           ) : (
             <div className="space-y-16">
               {/* Group meals by category dynamically */}
               {(() => {
-                const mealsToShow = searchQuery ? filteredMeals : meals
+                const mealsToShow = filteredMeals
                 const categorizedMeals = mealsToShow.reduce((acc, meal) => {
                   const category = meal.category || 'Main Dishes'
                   if (!acc[category]) acc[category] = []
