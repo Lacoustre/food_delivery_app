@@ -47,20 +47,14 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-sand-100 flex items-center justify-center px-4">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `url('/assets/images/logo.png')`,
-          backgroundSize: '100px 100px',
-          backgroundRepeat: 'repeat',
-          backgroundPosition: 'center'
-        }}></div>
       </div>
 
       <div className="relative max-w-md w-full">
         {/* Main Card */}
-        <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20">
+        <div className="bg-white/80 backdrop-blur-lg rounded-card shadow-2xl p-8 border border-white/20">
           {/* Logo & Header */}
           <div className="text-center mb-8">
             <div className="relative mx-auto w-20 h-20 mb-6">
@@ -72,13 +66,13 @@ export default function RegisterPage() {
                 unoptimized
               />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Join Us Today!</h1>
-            <p className="text-gray-600">Create your account to start ordering</p>
+            <h1 className="font-display text-3xl text-ink mb-2">Join Us Today!</h1>
+            <p className="text-sand-700">Create your account to start ordering</p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+            <div className="mb-6 p-4 bg-clay-50 border border-clay-50 text-clay rounded-xl">
               {error}
             </div>
           )}
@@ -86,57 +80,57 @@ export default function RegisterPage() {
           {/* Register Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <label className="block text-sm font-semibold text-sand-700 mb-3">
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-500" />
+                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full pl-12 pr-4 py-5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white backdrop-blur text-gray-900 placeholder-gray-500"
+                  className="w-full pl-12 pr-4 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Enter your full name"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <label className="block text-sm font-semibold text-sand-700 mb-3">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-500" />
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-12 pr-4 py-5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white backdrop-blur text-gray-900 placeholder-gray-500"
+                  className="w-full pl-12 pr-4 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Enter your email"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <label className="block text-sm font-semibold text-sand-700 mb-3">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-500" />
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-12 pr-12 py-5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white backdrop-blur text-gray-900 placeholder-gray-500"
+                  className="w-full pl-12 pr-12 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Create a password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-sand-500 hover:text-sand-700 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -144,17 +138,17 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <label className="block text-sm font-semibold text-sand-700 mb-3">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-500" />
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full pl-12 pr-4 py-5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white backdrop-blur text-gray-900 placeholder-gray-500"
+                  className="w-full pl-12 pr-4 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Confirm your password"
                 />
               </div>
@@ -163,7 +157,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+              className="w-full bg-gold text-white py-4 rounded-xl font-semibold hover:bg-gold-600 transition-all shadow-card disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -178,19 +172,19 @@ export default function RegisterPage() {
 
           {/* Divider */}
           <div className="my-8 flex items-center">
-            <div className="flex-1 border-t border-gray-200"></div>
-            <span className="px-4 text-sm text-gray-500 bg-white rounded-full">or</span>
-            <div className="flex-1 border-t border-gray-200"></div>
+            <div className="flex-1 border-t border-sand-200"></div>
+            <span className="px-4 text-sm text-sand-500 bg-white rounded-full">or</span>
+            <div className="flex-1 border-t border-sand-200"></div>
           </div>
 
           {/* Sign In Link */}
           <div className="text-center">
-            <p className="text-gray-600 mb-4">
+            <p className="text-sand-700 mb-4">
               Already have an account?
             </p>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold transition-colors"
+              className="inline-flex items-center gap-2 text-gold-600 hover:text-gold-600 font-semibold transition-colors"
             >
               Sign In
               <ArrowRight className="w-4 h-4" />
@@ -200,7 +194,7 @@ export default function RegisterPage() {
 
         {/* Back to Home */}
         <div className="mt-6 text-center">
-          <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm transition-colors">
+          <Link href="/" className="text-sand-500 hover:text-sand-700 text-sm transition-colors">
             ← Back to Home
           </Link>
         </div>

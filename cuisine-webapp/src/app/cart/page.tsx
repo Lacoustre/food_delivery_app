@@ -212,14 +212,14 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500"></div>
+      <div className="min-h-screen bg-sand-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gold"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 relative overflow-hidden">
+    <div className="min-h-screen bg-sand-100 relative overflow-hidden">
       {/* Background Logo */}
       <div className="fixed inset-0 flex items-center justify-center opacity-5 pointer-events-none z-0">
         <img 
@@ -231,17 +231,17 @@ export default function CartPage() {
       
       <div className="relative z-10">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md shadow-lg border-b border-orange-100">
+      <div className="bg-white/80 backdrop-blur-md shadow-card border-b border-gold-50">
         <div className="page-shell px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/" className="p-3 hover:bg-orange-100 rounded-full transition-all duration-200">
-              <ArrowLeft className="w-6 h-6 text-orange-600" />
+            <Link href="/" className="p-3 hover:bg-gold-50 rounded-full transition-all duration-200">
+              <ArrowLeft className="w-6 h-6 text-gold-600" />
             </Link>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+              <h1 className="font-display text-3xl bg-gold-600 bg-clip-text text-transparent">
                 Your Cart
               </h1>
-              <p className="text-gray-700 font-medium">Review your order</p>
+              <p className="text-sand-700 font-medium">Review your order</p>
             </div>
           </div>
         </div>
@@ -250,13 +250,13 @@ export default function CartPage() {
       <div className="page-shell px-4 py-8">
         {cartItems.length === 0 ? (
           <div className="text-center py-20">
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-orange-200">
-              <ShoppingBag className="w-20 h-20 text-orange-400 mx-auto mb-6" />
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Your cart is empty</h2>
-              <p className="text-gray-700 mb-8 text-lg font-medium">Add some delicious meals to get started!</p>
+            <div className="bg-white/60 backdrop-blur-sm rounded-card p-12 shadow-card border border-gold-300">
+              <ShoppingBag className="w-20 h-20 text-gold-300 mx-auto mb-6" />
+              <h2 className="font-display text-3xl text-ink mb-4">Your cart is empty</h2>
+              <p className="text-sand-700 mb-8 text-lg font-medium">Add some delicious meals to get started!</p>
               <Link
                 href="/#menu"
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 text-white px-8 py-4 rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg"
+                className="inline-flex items-center gap-3 bg-gold text-white px-8 py-4 rounded-card font-semibold hover:bg-gold-600 transition-all shadow-card"
               >
                 <ShoppingBag className="w-6 h-6" />
                 Browse Menu
@@ -268,65 +268,65 @@ export default function CartPage() {
             {/* Left Column */}
             <div className="lg:col-span-2 space-y-6">
               {/* Order Type Selection */}
-              <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                  <Navigation className="w-6 h-6 text-orange-500" />
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+                <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
+                  <Navigation className="w-6 h-6 text-gold" />
                   Order Type
                 </h3>
                 <div className="grid grid-cols-2 gap-6">
                   <button
                     onClick={() => deliveryAvailable && setOrderType('delivery')}
                     disabled={!deliveryAvailable}
-                    className={`p-6 rounded-2xl border-3 transition-all transform hover:scale-105 ${
+                    className={`p-6 rounded-card border-3 transition-all  ${
                       orderType === 'delivery'
-                        ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-red-50 shadow-lg'
+                        ? 'border-gold bg-sand-100 shadow-card'
                         : deliveryAvailable
-                        ? 'border-gray-200 hover:border-orange-300 bg-white'
-                        : 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed'
+                        ? 'border-sand-200 hover:border-gold-300 bg-white'
+                        : 'border-sand-200 bg-sand-100 opacity-50 cursor-not-allowed'
                     }`}
                   >
                     <MapPin className={`w-8 h-8 mx-auto mb-3 ${
-                      orderType === 'delivery' ? 'text-orange-500' : 'text-gray-400'
+                      orderType === 'delivery' ? 'text-gold' : 'text-sand-500'
                     }`} />
-                    <div className="font-bold text-lg mb-1 text-gray-900">Delivery</div>
-                    <div className="text-sm text-gray-700 font-medium">
+                    <div className="font-bold text-lg mb-1 text-ink">Delivery</div>
+                    <div className="text-sm text-sand-700 font-medium">
                       {deliveryAvailable ? 'Quoted at checkout' : 'Not Available'}
                     </div>
                     {locationError && !deliveryAvailable && (
-                      <div className="text-xs text-red-500 mt-2">{locationError}</div>
+                      <div className="text-xs text-clay mt-2">{locationError}</div>
                     )}
                   </button>
                   <button
                     onClick={() => setOrderType('pickup')}
-                    className={`p-6 rounded-2xl border-3 transition-all transform hover:scale-105 ${
+                    className={`p-6 rounded-card border-3 transition-all  ${
                       orderType === 'pickup'
-                        ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-red-50 shadow-lg'
-                        : 'border-gray-200 hover:border-orange-300 bg-white'
+                        ? 'border-gold bg-sand-100 shadow-card'
+                        : 'border-sand-200 hover:border-gold-300 bg-white'
                     }`}
                   >
                     <Store className={`w-8 h-8 mx-auto mb-3 ${
-                      orderType === 'pickup' ? 'text-orange-500' : 'text-gray-400'
+                      orderType === 'pickup' ? 'text-gold' : 'text-sand-500'
                     }`} />
-                    <div className="font-bold text-lg mb-1 text-gray-900">Pickup</div>
-                    <div className="text-sm text-gray-700 font-medium">Free</div>
+                    <div className="font-bold text-lg mb-1 text-ink">Pickup</div>
+                    <div className="text-sm text-sand-700 font-medium">Free</div>
                   </button>
                 </div>
               </div>
 
               {/* Pickup Location */}
               {orderType === 'pickup' && (
-                <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                    <Store className="w-6 h-6 text-orange-500" />
+                <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+                  <h3 className="font-display text-2xl text-ink-soft mb-6 flex items-center gap-3">
+                    <Store className="w-6 h-6 text-gold" />
                     Pickup Location
                   </h3>
-                  <div className="bg-gradient-to-r from-orange-100 to-red-100 rounded-2xl p-6 border border-orange-200">
+                  <div className="bg-sand-200 rounded-card p-6 border border-gold-300">
                     <div className="flex items-start gap-4">
-                      <MapPin className="w-6 h-6 text-orange-600 mt-1" />
+                      <MapPin className="w-6 h-6 text-gold-600 mt-1" />
                       <div>
-                        <div className="font-bold text-lg text-gray-800">Taste of African Cuisine</div>
-                        <div className="text-gray-700 mb-2">200 Hartford Turnpike, Vernon, CT</div>
-                        <div className="text-sm text-gray-600 bg-white/50 rounded-lg px-3 py-2 inline-block">
+                        <div className="font-bold text-lg text-ink-soft">Taste of African Cuisine</div>
+                        <div className="text-sand-700 mb-2">200 Hartford Turnpike, Vernon, CT</div>
+                        <div className="text-sm text-sand-700 bg-white/50 rounded-lg px-3 py-2 inline-block">
                           Open: Tue-Sat 11:00 AM - 9:00 PM (Fri to 8:00 PM)
                         </div>
                       </div>
@@ -336,12 +336,12 @@ export default function CartPage() {
               )}
 
               {/* Cart Items */}
-              <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
                 <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900">Your Items ({cartItems.length})</h2>
+                  <h2 className="font-display text-2xl text-ink">Your Items ({cartItems.length})</h2>
                   <button
                     onClick={clearCart}
-                    className="text-red-500 hover:text-red-700 font-medium transition-colors bg-red-50 hover:bg-red-100 px-4 py-2 rounded-xl"
+                    className="text-clay hover:text-clay font-medium transition-colors bg-clay-50 hover:bg-clay-50 px-4 py-2 rounded-xl"
                   >
                     Clear All
                   </button>
@@ -349,9 +349,9 @@ export default function CartPage() {
 
                 <div className="space-y-6">
                   {cartItems.map((item) => (
-                    <div key={item.id} className="bg-white/80 rounded-2xl p-6 shadow-lg border border-orange-100 hover:shadow-xl transition-all">
+                    <div key={item.id} className="bg-white/80 rounded-card p-6 shadow-card border border-gold-50 hover:shadow-card transition-all">
                       <div className="flex gap-6">
-                        <div className="relative w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-md">
+                        <div className="relative w-20 h-20 rounded-card overflow-hidden flex-shrink-0 shadow-card">
                           <img
                             src={item.imageUrl?.replace(/&amp;/g, '&') || '/assets/images/logo.png'}
                             alt={item.name}
@@ -363,42 +363,42 @@ export default function CartPage() {
                         </div>
                         
                         <div className="flex-1">
-                          <h3 className="font-bold text-xl text-gray-900 mb-2">{item.name}</h3>
-                          <p className="text-orange-600 font-bold mb-3">{item.category}</p>
-                          <p className="text-2xl font-bold text-orange-600">${item.price.toFixed(2)}</p>
+                          <h3 className="font-bold text-xl text-ink mb-2">{item.name}</h3>
+                          <p className="text-gold-600 font-bold mb-3">{item.category}</p>
+                          <p className="font-display text-2xl text-gold-600">${item.price.toFixed(2)}</p>
                         </div>
 
                         <div className="flex flex-col items-end gap-4">
                           <button
                             onClick={() => removeItem(item.id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                            className="p-2 text-clay hover:bg-clay-50 rounded-xl transition-colors"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
                           
-                          <div className="flex items-center gap-3 bg-orange-100 rounded-2xl p-1">
+                          <div className="flex items-center gap-3 bg-gold-50 rounded-card p-1">
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="p-3 hover:bg-orange-200 rounded-xl transition-colors"
+                              className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
                             >
-                              <Minus className="w-4 h-4 text-orange-600" />
+                              <Minus className="w-4 h-4 text-gold-600" />
                             </button>
-                            <span className="px-4 py-2 font-bold text-lg min-w-[3rem] text-center text-gray-900">
+                            <span className="px-4 py-2 font-bold text-lg min-w-[3rem] text-center text-ink">
                               {item.quantity}
                             </span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="p-3 hover:bg-orange-200 rounded-xl transition-colors"
+                              className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
                             >
-                              <Plus className="w-4 h-4 text-orange-600" />
+                              <Plus className="w-4 h-4 text-gold-600" />
                             </button>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="mt-6 pt-4 border-t border-orange-200 flex justify-between items-center">
-                        <span className="text-gray-700 font-bold">Item Total:</span>
-                        <span className="font-bold text-xl text-gray-900">
+                      <div className="mt-6 pt-4 border-t border-gold-300 flex justify-between items-center">
+                        <span className="text-sand-700 font-bold">Item Total:</span>
+                        <span className="font-bold text-xl text-ink">
                           ${(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
@@ -410,28 +410,28 @@ export default function CartPage() {
 
             {/* Order Summary */}
             <div className="lg:col-span-1">
-              <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8 sticky top-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-8">Order Summary</h3>
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8 sticky top-8">
+                <h3 className="font-display text-2xl text-ink mb-8">Order Summary</h3>
                 
                 <div className="space-y-4 mb-8">
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-gray-800 font-bold">Subtotal</span>
-                    <span className="font-bold text-lg text-gray-900">${subtotal.toFixed(2)}</span>
+                    <span className="text-ink-soft font-bold">Subtotal</span>
+                    <span className="font-bold text-lg text-ink">${subtotal.toFixed(2)}</span>
                   </div>
                   {orderType === 'delivery' && (
                     <div className="flex justify-between items-center py-2">
-                      <span className="text-gray-800 font-bold">Delivery Fee</span>
-                      <span className="font-medium text-sm text-gray-600">Quoted at checkout</span>
+                      <span className="text-ink-soft font-bold">Delivery Fee</span>
+                      <span className="font-medium text-sm text-sand-700">Quoted at checkout</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-gray-800 font-bold">Tax (7.35%)</span>
-                    <span className="font-bold text-lg text-gray-900">${tax.toFixed(2)}</span>
+                    <span className="text-ink-soft font-bold">Tax (7.35%)</span>
+                    <span className="font-bold text-lg text-ink">${tax.toFixed(2)}</span>
                   </div>
-                  <div className="border-t-2 border-orange-200 pt-4">
+                  <div className="border-t-2 border-gold-300 pt-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-xl font-bold text-gray-900">Total</span>
-                      <span className="text-2xl font-bold text-orange-600">${total.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-ink">Total</span>
+                      <span className="font-display text-2xl text-gold-600">${total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -441,14 +441,14 @@ export default function CartPage() {
                     localStorage.setItem('orderType', orderType)
                     router.push('/checkout')
                   }}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg mb-4"
+                  className="w-full bg-gold text-white py-4 rounded-card font-bold text-lg hover:bg-gold-600 transition-all shadow-card mb-4"
                 >
                   Proceed to Checkout
                 </button>
                 
                 <Link
                   href="/#menu"
-                  className="w-full block text-center border-2 border-orange-500 text-orange-600 py-4 rounded-2xl font-bold hover:bg-orange-50 transition-colors"
+                  className="w-full block text-center border-2 border-gold text-gold-600 py-4 rounded-card font-bold hover:bg-gold-50 transition-colors"
                 >
                   Continue Shopping
                 </Link>

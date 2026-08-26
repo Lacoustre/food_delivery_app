@@ -85,8 +85,8 @@ function MealDetailContent() {
 
   if (loading || !meal) {
     return (
-      <div className="min-h-screen bg-amber-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500"></div>
+      <div className="min-h-screen bg-sand-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gold"></div>
       </div>
     )
   }
@@ -215,20 +215,14 @@ function MealDetailContent() {
   }
 
   return (
-    <div className="min-h-screen bg-amber-50 relative">
+    <div className="min-h-screen bg-sand-100 relative">
       {/* Logo Background Pattern */}
-      <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-        backgroundImage: `url('/assets/images/logo.png')`,
-        backgroundSize: '150px 150px',
-        backgroundRepeat: 'repeat',
-        backgroundPosition: 'center'
-      }}></div>
       
       {/* Header */}
       <div className="bg-white shadow-sm border-b relative z-10">
         <div className="page-shell px-4 py-4">
           <div className="flex items-center h-16">
-            <Link href="/" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <Link href="/" className="p-2 hover:bg-sand-100 rounded-full transition-colors">
               <ArrowLeft className="w-5 h-5 text-black" />
             </Link>
             <div className="flex items-center space-x-3 ml-3">
@@ -241,10 +235,10 @@ function MealDetailContent() {
                 unoptimized
               />
               <div>
-                <h1 className="text-lg font-bold italic text-gray-900">
+                <h1 className="text-lg font-bold italic text-ink">
                   Taste of African Cuisine
                 </h1>
-                <p className="text-xs italic text-orange-600">
+                <p className="text-xs italic text-gold-600">
                   Authentic Ghanaian Food
                 </p>
               </div>
@@ -272,11 +266,11 @@ function MealDetailContent() {
           </div>
 
           {/* Details */}
-          <div className="space-y-6 bg-white p-6 rounded-xl shadow-lg">
+          <div className="space-y-6 bg-white p-6 rounded-xl shadow-card">
             <div>
-              <h2 className="text-3xl font-bold text-black mb-2">{meal.name}</h2>
+              <h2 className="font-display text-3xl text-black mb-2">{meal.name}</h2>
               <p className="text-black mb-4">{meal.description}</p>
-              <p className="text-2xl font-bold text-orange-600">${meal.price.toFixed(2)}</p>
+              <p className="font-display text-2xl text-gold-600">${meal.price.toFixed(2)}</p>
             </div>
 
             {/* Extras */}
@@ -294,8 +288,8 @@ function MealDetailContent() {
                       onClick={() => handleExtraToggle(extra)}
                       className={`px-4 py-2 rounded-full border transition-colors ${
                         selectedExtras[extra.name]
-                          ? 'bg-orange-500 text-white border-orange-500'
-                          : 'bg-white text-black border-gray-300 hover:border-orange-500'
+                          ? 'bg-gold text-white border-gold'
+                          : 'bg-white text-black border-sand-200 hover:border-gold'
                       }`}
                     >
                       {extra.price > 0 ? `${extra.name} +$${extra.price.toFixed(2)}` : extra.name}
@@ -312,7 +306,7 @@ function MealDetailContent() {
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder="e.g. No onions, sauce on the side"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none text-black"
+                className="w-full p-3 border border-sand-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none text-black"
                 rows={3}
               />
             </div>
@@ -323,14 +317,14 @@ function MealDetailContent() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="p-2 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
                 >
                   <Minus className="w-4 h-4 text-black" />
                 </button>
                 <span className="text-xl font-semibold px-4 text-black">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="p-2 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
                 >
                   <Plus className="w-4 h-4 text-black" />
                 </button>
@@ -339,13 +333,13 @@ function MealDetailContent() {
 
             {/* Total & Add to Cart */}
             <div className="space-y-4 pt-6 border-t">
-              <div className="text-2xl font-bold text-black">
+              <div className="font-display text-2xl text-black">
                 Total: ${totalPrice.toFixed(2)}
               </div>
               <button
                 onClick={addToCart}
                 disabled={!meal.available || addingToCart}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                className="w-full bg-gold text-white py-4 rounded-xl font-semibold hover:bg-gold-600 transition-all shadow-card disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
               >
                 {addingToCart ? (
                   <>
@@ -363,8 +357,8 @@ function MealDetailContent() {
       
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-20 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transform transition-all duration-300 ${
-          toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        <div className={`fixed top-20 right-4 z-50 px-6 py-4 rounded-lg shadow-card transform transition-all duration-300 ${
+          toast.type === 'success' ? 'bg-kente text-white' : 'bg-clay text-white'
         }`}>
           <div className="flex items-center gap-2">
             <span className="text-lg">{toast.type === 'success' ? '✅' : '❌'}</span>

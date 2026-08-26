@@ -87,18 +87,18 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing }: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-6 border-2 border-orange-200 rounded-2xl bg-white/80">
+      <div className="p-6 border-2 border-gold-300 rounded-card bg-white/80">
         <PaymentElement />
       </div>
       {error && (
-        <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
+        <div className="text-clay text-sm bg-clay-50 p-3 rounded-lg border border-clay-50">
           {error}
         </div>
       )}
       <button
         type="submit"
         disabled={!stripe || isProcessing || processing}
-        className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+        className="w-full bg-gold text-white py-4 rounded-card font-bold text-lg hover:bg-gold-600 transition-all shadow-card disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
       >
         {(isProcessing || processing) ? (
           <>
@@ -608,8 +608,8 @@ function CheckoutContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500"></div>
+      <div className="min-h-screen bg-sand-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gold"></div>
       </div>
     )
   }
@@ -617,23 +617,23 @@ function CheckoutContent() {
   // Show success state if payment completed
   if (paymentSuccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center">
-        <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8 text-center max-w-md">
-          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-screen bg-sand-100 flex items-center justify-center">
+        <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8 text-center max-w-md">
+          <div className="w-16 h-16 bg-kente rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
-          <p className="text-gray-700 mb-4">Your order has been confirmed. Redirecting...</p>
-          <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-orange-500 mx-auto"></div>
+          <h2 className="font-display text-2xl text-ink mb-2">Payment Successful!</h2>
+          <p className="text-sand-700 mb-4">Your order has been confirmed. Redirecting...</p>
+          <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-gold mx-auto"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 relative overflow-hidden">
+    <div className="min-h-screen bg-sand-100 relative overflow-hidden">
       {/* Background Logo */}
       <div className="fixed inset-0 flex items-center justify-center opacity-5 pointer-events-none z-0">
         <img 
@@ -645,17 +645,17 @@ function CheckoutContent() {
       
       <div className="relative z-10">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md shadow-lg border-b border-orange-100">
+      <div className="bg-white/80 backdrop-blur-md shadow-card border-b border-gold-50">
         <div className="page-shell px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/cart" className="p-3 hover:bg-orange-100 rounded-full transition-all duration-200">
-              <ArrowLeft className="w-6 h-6 text-orange-600" />
+            <Link href="/cart" className="p-3 hover:bg-gold-50 rounded-full transition-all duration-200">
+              <ArrowLeft className="w-6 h-6 text-gold-600" />
             </Link>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+              <h1 className="font-display text-3xl bg-gold-600 bg-clip-text text-transparent">
                 Checkout
               </h1>
-              <p className="text-gray-700 font-bold">Complete your order</p>
+              <p className="text-sand-700 font-bold">Complete your order</p>
             </div>
           </div>
         </div>
@@ -666,14 +666,14 @@ function CheckoutContent() {
           {/* Left Column - Forms */}
           <div className="lg:col-span-2 space-y-6">
             {/* Customer Information */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                <User className="w-6 h-6 text-orange-500" />
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+              <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
+                <User className="w-6 h-6 text-gold" />
                 Customer Information
               </h3>
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-2">Full Name *</label>
+                  <label className="block text-sm font-bold text-ink-soft mb-2">Full Name *</label>
                   <input
                     type="text"
                     value={orderData.customerInfo.name}
@@ -681,13 +681,13 @@ function CheckoutContent() {
                       ...prev,
                       customerInfo: { ...prev.customerInfo, name: e.target.value }
                     }))}
-                    className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 h-14 text-gray-900 font-bold"
+                    className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 h-14 text-ink font-bold"
                     placeholder="Enter your full name"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-2">Phone Number *</label>
+                  <label className="block text-sm font-bold text-ink-soft mb-2">Phone Number *</label>
                   <input
                     type="tel"
                     value={orderData.customerInfo.phone}
@@ -695,13 +695,13 @@ function CheckoutContent() {
                       ...prev,
                       customerInfo: { ...prev.customerInfo, phone: e.target.value }
                     }))}
-                    className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 h-14 text-gray-900 font-bold"
+                    className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 h-14 text-ink font-bold"
                     placeholder="(555) 123-4567"
                     required
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-800 mb-2">Email Address *</label>
+                  <label className="block text-sm font-bold text-ink-soft mb-2">Email Address *</label>
                   <input
                     type="email"
                     value={orderData.customerInfo.email}
@@ -709,7 +709,7 @@ function CheckoutContent() {
                       ...prev,
                       customerInfo: { ...prev.customerInfo, email: e.target.value }
                     }))}
-                    className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 h-14 text-gray-900 font-bold"
+                    className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 h-14 text-ink font-bold"
                     placeholder="your@email.com"
                     required
                   />
@@ -718,9 +718,9 @@ function CheckoutContent() {
             </div>
 
             {/* Delivery Information */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                <MapPin className="w-6 h-6 text-orange-500" />
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+              <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
+                <MapPin className="w-6 h-6 text-gold" />
                 {orderData.orderType === 'delivery' ? 'Delivery' : 'Pickup'} Information
               </h3>
               
@@ -728,12 +728,12 @@ function CheckoutContent() {
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-bold text-gray-800">Delivery Address *</label>
+                      <label className="block text-sm font-bold text-ink-soft">Delivery Address *</label>
                       <button
                         type="button"
                         onClick={getCurrentLocation}
                         disabled={locationLoading}
-                        className="flex items-center gap-2 px-3 py-1 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-3 py-1 text-sm bg-gold text-white rounded-lg hover:bg-gold-600 transition-colors disabled:opacity-50"
                       >
                         {locationLoading ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
@@ -746,22 +746,22 @@ function CheckoutContent() {
                     <textarea
                       value={orderData.deliveryAddress || ''}
                       onChange={(e) => setOrderData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                      className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 min-h-[120px] text-gray-900 font-bold"
+                      className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 min-h-[120px] text-ink font-bold"
                       rows={4}
                       placeholder="Enter your complete delivery address or click 'Use Current Location' to auto-detect"
                       required
                     />
-                    <p className="text-xs text-gray-600 mt-2">
+                    <p className="text-xs text-sand-700 mt-2">
                       💡 Click "Use Current Location" to automatically detect and fill your address
                     </p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-bold text-gray-800 mb-2">Preferred Delivery Time</label>
+                    <label className="block text-sm font-bold text-ink-soft mb-2">Preferred Delivery Time</label>
                     <select
                       value={orderData.deliveryTime || ''}
                       onChange={(e) => setOrderData(prev => ({ ...prev, deliveryTime: e.target.value }))}
-                      className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 h-14 text-gray-900 font-bold"
+                      className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 h-14 text-ink font-bold"
                     >
                       <option value="">Select delivery time</option>
                       <option value="asap">As soon as possible (30-45 mins)</option>
@@ -773,13 +773,13 @@ function CheckoutContent() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="bg-gradient-to-r from-orange-100 to-red-100 rounded-2xl p-6 border border-orange-200">
+                  <div className="bg-sand-200 rounded-card p-6 border border-gold-300">
                     <div className="flex items-start gap-4">
-                      <MapPin className="w-6 h-6 text-orange-600 mt-1" />
+                      <MapPin className="w-6 h-6 text-gold-600 mt-1" />
                       <div>
-                        <div className="font-bold text-lg text-gray-900">Taste of African Cuisine</div>
-                        <div className="text-gray-800 font-bold mb-2">200 Hartford Turnpike, Vernon, CT</div>
-                        <div className="text-sm text-gray-700 font-bold bg-white/50 rounded-lg px-3 py-2 inline-block">
+                        <div className="font-bold text-lg text-ink">Taste of African Cuisine</div>
+                        <div className="text-ink-soft font-bold mb-2">200 Hartford Turnpike, Vernon, CT</div>
+                        <div className="text-sm text-sand-700 font-bold bg-white/50 rounded-lg px-3 py-2 inline-block">
                           Open: Tue-Sat 11:00 AM - 9:00 PM (Fri to 8:00 PM)
                         </div>
                       </div>
@@ -787,11 +787,11 @@ function CheckoutContent() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-bold text-gray-800 mb-2">Preferred Pickup Time</label>
+                    <label className="block text-sm font-bold text-ink-soft mb-2">Preferred Pickup Time</label>
                     <select
                       value={orderData.deliveryTime || ''}
                       onChange={(e) => setOrderData(prev => ({ ...prev, deliveryTime: e.target.value }))}
-                      className="w-full p-4 border-2 border-orange-200 rounded-2xl focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none bg-white/80 h-14 text-gray-900 font-bold"
+                      className="w-full p-4 border-2 border-gold-300 rounded-card focus:ring-4 focus:ring-orange-100 focus:border-gold outline-none bg-white/80 h-14 text-ink font-bold"
                     >
                       <option value="">Select pickup time</option>
                       <option value="asap">As soon as possible (15-20 mins)</option>
@@ -805,9 +805,9 @@ function CheckoutContent() {
             </div>
 
             {/* Payment Method */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                <CreditCard className="w-6 h-6 text-orange-500" />
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+              <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
+                <CreditCard className="w-6 h-6 text-gold" />
                 Payment Method
               </h3>
               
@@ -825,28 +825,28 @@ function CheckoutContent() {
                 <button
                   type="button"
                   onClick={() => setOrderData(prev => ({ ...prev, paymentMethod: 'card' }))}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
+                  className={`p-4 rounded-card border-2 transition-all ${
                     orderData.paymentMethod === 'card'
-                      ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-red-50'
-                      : 'border-orange-200 hover:border-orange-400 bg-white'
+                      ? 'border-gold bg-sand-100'
+                      : 'border-gold-300 hover:border-gold-300 bg-white'
                   }`}
                 >
-                  <CreditCard className="w-6 h-6 mx-auto mb-2 text-orange-500" />
-                  <div className="font-bold text-gray-900">Card Payment</div>
-                  <div className="text-xs text-gray-600 mt-1">Credit, Debit, Amazon Pay, Klarna & more</div>
+                  <CreditCard className="w-6 h-6 mx-auto mb-2 text-gold" />
+                  <div className="font-bold text-ink">Card Payment</div>
+                  <div className="text-xs text-sand-700 mt-1">Credit, Debit, Amazon Pay, Klarna & more</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderData(prev => ({ ...prev, paymentMethod: 'cash' }))}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
+                  className={`p-4 rounded-card border-2 transition-all ${
                     orderData.paymentMethod === 'cash'
-                      ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-red-50'
-                      : 'border-orange-200 hover:border-orange-400 bg-white'
+                      ? 'border-gold bg-sand-100'
+                      : 'border-gold-300 hover:border-gold-300 bg-white'
                   }`}
                 >
-                  <div className="w-6 h-6 mx-auto mb-2 text-orange-500 font-bold text-lg">$</div>
-                  <div className="font-bold text-gray-900">Cash Payment</div>
-                  <div className="text-xs text-gray-600 mt-1">Pay on {orderData.orderType === 'delivery' ? 'delivery' : 'pickup'}</div>
+                  <div className="w-6 h-6 mx-auto mb-2 text-gold font-bold text-lg">$</div>
+                  <div className="font-bold text-ink">Cash Payment</div>
+                  <div className="text-xs text-sand-700 mt-1">Pay on {orderData.orderType === 'delivery' ? 'delivery' : 'pickup'}</div>
                 </button>
               </div>
 
@@ -860,13 +860,13 @@ function CheckoutContent() {
                     />
                   </Elements>
                 ) : (
-                  <div className="text-center py-4 text-gray-800 font-bold">Loading payment form...</div>
+                  <div className="text-center py-4 text-ink-soft font-bold">Loading payment form...</div>
                 )
               ) : (
                 <button
                   onClick={handleCashOrder}
                   disabled={processing || !orderData.customerInfo.name || !orderData.customerInfo.phone || (orderData.orderType === 'delivery' && !orderData.deliveryAddress)}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-2xl font-bold text-lg hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                  className="w-full bg-gold text-white py-4 rounded-card font-bold text-lg hover:bg-gold-600 transition-all shadow-card disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
                 >
                   {processing ? (
                     <>
@@ -886,8 +886,8 @@ function CheckoutContent() {
 
           {/* Right Column - Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl shadow-xl border border-orange-200 p-8 sticky top-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-8">Order Summary</h3>
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8 sticky top-8">
+              <h3 className="font-display text-2xl text-ink mb-8">Order Summary</h3>
               
               {/* Items */}
               <div className="space-y-4 mb-6">
@@ -904,10 +904,10 @@ function CheckoutContent() {
                       />
                     </div>
                     <div className="flex-1">
-                      <div className="font-medium text-gray-800">{item.name}</div>
-                      <div className="text-sm text-gray-600">Qty: {item.quantity}</div>
+                      <div className="font-medium text-ink-soft">{item.name}</div>
+                      <div className="text-sm text-sand-700">Qty: {item.quantity}</div>
                     </div>
-                    <div className="font-bold text-gray-800">
+                    <div className="font-bold text-ink-soft">
                       ${(item.price * item.quantity).toFixed(2)}
                     </div>
                   </div>
@@ -915,36 +915,36 @@ function CheckoutContent() {
               </div>
 
               {/* Totals */}
-              <div className="space-y-3 mb-8 border-t border-orange-200 pt-6">
+              <div className="space-y-3 mb-8 border-t border-gold-300 pt-6">
                 <div className="flex justify-between">
-                  <span className="text-gray-800 font-bold">Subtotal</span>
-                  <span className="font-bold text-gray-900">${subtotal.toFixed(2)}</span>
+                  <span className="text-ink-soft font-bold">Subtotal</span>
+                  <span className="font-bold text-ink">${subtotal.toFixed(2)}</span>
                 </div>
                 {orderData.orderType === 'delivery' && (
                   <div className="flex justify-between">
-                    <span className="text-gray-800 font-bold">Delivery Fee</span>
-                    <span className="font-bold text-gray-900">${deliveryFee.toFixed(2)}</span>
+                    <span className="text-ink-soft font-bold">Delivery Fee</span>
+                    <span className="font-bold text-ink">${deliveryFee.toFixed(2)}</span>
                   </div>
                 )}
                 {appliedPromo && (
                   <div className="flex justify-between">
-                    <span className="text-gray-800 font-bold">Discount ({appliedPromo.promotion.code})</span>
-                    <span className="font-bold text-green-600">-${appliedPromo.discount.toFixed(2)}</span>
+                    <span className="text-ink-soft font-bold">Discount ({appliedPromo.promotion.code})</span>
+                    <span className="font-bold text-kente">-${appliedPromo.discount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-800 font-bold">Tax (7.35%)</span>
-                  <span className="font-bold text-gray-900">${tax.toFixed(2)}</span>
+                  <span className="text-ink-soft font-bold">Tax (7.35%)</span>
+                  <span className="font-bold text-ink">${tax.toFixed(2)}</span>
                 </div>
-                <div className="border-t border-orange-200 pt-3">
+                <div className="border-t border-gold-300 pt-3">
                   <div className="flex justify-between text-xl font-bold">
-                    <span className="text-gray-900">Total</span>
-                    <span className="text-orange-600">${total.toFixed(2)}</span>
+                    <span className="text-ink">Total</span>
+                    <span className="text-gold-600">${total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
               
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-sand-500 text-center">
                 Your payment information is secure and encrypted
               </p>
             </div>
