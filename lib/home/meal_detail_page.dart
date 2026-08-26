@@ -131,7 +131,7 @@ class _MealDetailPageState extends State<MealDetailPage> {
                 if (isUnavailable)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       child: const Center(
                         child: Text(
                           'UNAVAILABLE',
@@ -216,7 +216,7 @@ class _MealDetailPageState extends State<MealDetailPage> {
                           ),
                         ),
                         selected: isSelected,
-                        selectedColor: Colors.deepOrange.withOpacity(0.3),
+                        selectedColor: Colors.deepOrange.withValues(alpha: 0.3),
                         onSelected: (selected) {
                           setState(() {
                             if (extra['required'] == true &&

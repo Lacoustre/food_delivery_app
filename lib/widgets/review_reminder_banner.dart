@@ -116,7 +116,7 @@ class ReviewReminderBanner extends StatelessWidget {
           .update({'read': true})
           .eq('id', notificationId);
     } catch (e) {
-      print('Error dismissing notification: $e');
+      debugPrint('Error dismissing notification: $e');
     }
   }
 }

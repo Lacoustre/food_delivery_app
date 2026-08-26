@@ -141,7 +141,7 @@ class NotificationPage extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return ListView.builder(
                       itemCount: 6,
-                      itemBuilder: (_, __) => _buildShimmerCard(),
+                      itemBuilder: (_, _) => _buildShimmerCard(),
                     );
                   }
 
@@ -165,7 +165,7 @@ class NotificationPage extends StatelessWidget {
                   return ListView.separated(
                     padding: const EdgeInsets.all(12),
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final data = rows[index];
                       final id = data['id'] as String;
@@ -253,12 +253,12 @@ class NotificationPage extends StatelessWidget {
                               border: Border.all(
                                 color: read
                                     ? Colors.grey[200]!
-                                    : Colors.deepOrange.withOpacity(0.2),
+                                    : Colors.deepOrange.withValues(alpha: 0.2),
                                 width: read ? 1 : 2,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),

@@ -156,7 +156,7 @@ class NotificationDetailPage extends StatelessWidget {
               direction: Axis.horizontal,
               itemCount: 5,
               itemSize: 30,
-              itemBuilder: (_, __) =>
+              itemBuilder: (_, _) =>
                   const Icon(Icons.star, color: Colors.amber),
               onRatingUpdate: (newRating) => rating = newRating,
             ),

@@ -295,7 +295,7 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: rows.length,
-            separatorBuilder: (_, __) => const Divider(),
+            separatorBuilder: (_, _) => const Divider(),
             itemBuilder: (context, i) {
               final addr = Address.fromRow(rows[i]);
 

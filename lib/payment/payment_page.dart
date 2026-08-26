@@ -1426,7 +1426,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 4,
             offset: const Offset(0, 2),
@@ -1523,7 +1523,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                           }
                         });
                       },
-                      selectedColor: Colors.deepOrange.withOpacity(0.2),
+                      selectedColor: Colors.deepOrange.withValues(alpha: 0.2),
                       backgroundColor: isDark
                           ? Colors.grey[800]
                           : Colors.grey[200],
@@ -1551,7 +1551,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                         _customTipController.clear();
                       });
                     },
-                    selectedColor: Colors.deepOrange.withOpacity(0.2),
+                    selectedColor: Colors.deepOrange.withValues(alpha: 0.2),
                     backgroundColor: isDark
                         ? Colors.grey[800]
                         : Colors.grey[200],
@@ -1636,7 +1636,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.deepOrange.withOpacity(0.1)
+              ? Colors.deepOrange.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -1893,7 +1893,7 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
                         });
                       }
                     : null,
-                activeColor: Colors.deepOrange,
+                activeThumbColor: Colors.deepOrange,
               ),
             ],
           ),
@@ -1902,9 +1902,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: const Text(
                 '🏪 Restaurant is currently closed. Orders will be scheduled automatically.',
@@ -1990,9 +1990,9 @@ class _PaymentPageState extends State<PaymentPage> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
+        color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withOpacity(0.3)),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

@@ -178,14 +178,14 @@ class _ProfilePageState extends State<ProfilePage> {
               .from('avatars')
               .remove(['${supabaseUser.id}/profile.jpg']);
         } catch (e) {
-          print('Avatar deletion failed: $e');
+          debugPrint('Avatar deletion failed: $e');
         }
         try {
           await supabase
               .from('profiles')
               .update({'avatar_url': null}).eq('id', supabaseUser.id);
         } catch (e) {
-          print('Profile avatar clear failed: $e');
+          debugPrint('Profile avatar clear failed: $e');
         }
       }
 

@@ -205,7 +205,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
         }
       }
     } catch (e) {
-      print('Error loading popular meals: $e');
+      debugPrint('Error loading popular meals: $e');
       if (mounted) {
         setState(() {
           _popularLoading = false;
@@ -1311,7 +1311,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
                                             Positioned.fill(
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.6),
+                                                  color: Colors.black.withValues(alpha: 0.6),
                                                   borderRadius: const BorderRadius.vertical(
                                                     top: Radius.circular(12),
                                                   ),
@@ -1424,7 +1424,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
             ),
             if (!_isRestaurantOpen && _showClosedDialog)
               Container(
-                color: Colors.black.withOpacity(0.8),
+                color: Colors.black.withValues(alpha: 0.8),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
@@ -1439,7 +1439,7 @@ class _MainFoodPageState extends State<MainFoodPage> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 10,
                             offset: const Offset(0, 5),
                           ),

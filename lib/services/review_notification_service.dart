@@ -31,7 +31,9 @@ class ReviewNotificationService {
 
         if (deliveredTime == null ||
             deliveredTime.isBefore(sevenDaysAgo) ||
-            deliveredTime.isAfter(oneDayAgo)) continue;
+            deliveredTime.isAfter(oneDayAgo)) {
+          continue;
+        }
 
         final review = await Supabase.instance.client
             .from('order_reviews')
@@ -49,7 +51,7 @@ class ReviewNotificationService {
         _showReviewPrompt(context, unratedOrders.length);
       }
     } catch (e) {
-      print('Error checking review notifications: $e');
+      debugPrint('Error checking review notifications: $e');
     }
   }
 
@@ -120,7 +122,7 @@ class ReviewNotificationService {
         'read': false,
       });
     } catch (e) {
-      print('Error creating review reminder: $e');
+      debugPrint('Error creating review reminder: $e');
     }
   }
 

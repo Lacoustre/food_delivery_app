@@ -137,7 +137,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         .catchError((_) {
           if (!mounted) return;
           setState(() => _isLiveLoading = false);
-          if (_order == null) _order = {};
+          _order ??= {};
         });
 
     _orderSub = Supabase.instance.client
@@ -343,8 +343,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       }
 
       final orderUserId = (order['userId'] ?? '').toString();
-      if (orderUserId != supabaseUserId)
+      if (orderUserId != supabaseUserId) {
         throw Exception('You can only cancel your own orders');
+      }
 
       await Supabase.instance.client.from('orders').update({
         'status': 'cancelled',
@@ -752,9 +753,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.primaryColor.withOpacity(0.1),
+                color: theme.primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.primaryColor.withOpacity(0.3)),
+                border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [

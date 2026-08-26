@@ -93,7 +93,7 @@ class _ComplaintRefundPageState extends State<ComplaintRefundPage> {
               child: Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    value: _selectedReason,
+                    initialValue: _selectedReason,
                     hint: const Text("Select Reason"),
                     decoration: const InputDecoration(
                       labelText: "Reason",

@@ -87,7 +87,7 @@ class _RatePastOrdersPageState extends State<RatePastOrdersPage> {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _orders!.length,
-      separatorBuilder: (_, __) => const Divider(),
+      separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, i) {
         final order = _orders![i];
         final orderId = order['id'] as String;
@@ -162,7 +162,7 @@ class _RatePastOrdersPageState extends State<RatePastOrdersPage> {
                 minRating: 1,
                 allowHalfRating: true,
                 itemCount: 5,
-                itemBuilder: (_, __) =>
+                itemBuilder: (_, _) =>
                     const Icon(Icons.star, color: Colors.amber),
                 onRatingUpdate: (r) => rating = r,
               ),
