@@ -931,7 +931,6 @@ export default function AfricanCuisineWebsite() {
                   <div key={section}>
                     <div className="flex items-baseline gap-3 mb-7">
                       <h3 className="font-display text-3xl sm:text-4xl text-ink">{section}</h3>
-                      <span className="text-sm text-sand-500">{bySection.get(section)!.length}</span>
                       <div className="flex-1 h-px bg-sand-200" />
                     </div>
 
