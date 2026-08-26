@@ -339,9 +339,8 @@ export default function AfricanCuisineWebsite() {
                 unoptimized
               />
               <div className="min-w-0">
-                <span className={`block font-display leading-none tracking-tight text-[17px] sm:text-xl ${scrolled ? 'text-ink' : 'text-sand-50'}`}>
-                  <span className="sm:hidden">Taste of Africa</span>
-                  <span className="hidden sm:inline">Taste of African Cuisine</span>
+                <span className={`block font-display tracking-tight leading-[1.05] text-[15px] sm:text-xl ${scrolled ? 'text-ink' : 'text-sand-50'}`}>
+                  Taste of African Cuisine
                 </span>
                 {/* When closed, the banner directly above already says so —
                     repeating it here just crowds the mark. */}
