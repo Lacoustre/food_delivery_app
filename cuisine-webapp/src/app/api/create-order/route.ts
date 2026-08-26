@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { computeOrderTotals } from '@/lib/pricing'
 import { getUberQuote } from '@/lib/uberDirect'
+import { getOpenState } from '@/lib/hours'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { createUberDelivery } from '@/lib/uberDirect'
@@ -98,6 +99,17 @@ export async function POST(request: NextRequest) {
     const scheduledFor = delayHours
       ? new Date(Date.now() + delayHours * 3600_000).toISOString()
       : null
+
+    // Closed means closed — the banner on the site is presentation, this holds.
+    if (!scheduledFor) {
+      const state = await getOpenState()
+      if (!state.open) {
+        return NextResponse.json(
+          { error: state.reason || 'The restaurant is closed.' },
+          { status: 409 }
+        )
+      }
+    }
 
     // Uber prices the delivery; quote it here so the stored order matches what
     // the payment intent charged.

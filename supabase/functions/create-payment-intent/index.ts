@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@18";
 import { computeValidatedTotals } from "../_shared/pricing.ts";
+import { getOpenState } from "../_shared/hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,18 @@ Deno.serve(async (req) => {
 
     if (!orderId || typeof orderId !== "string") {
       throw new Error("Invalid orderId");
+    }
+
+    // Refuse before taking money, not after — a customer charged for an order
+    // create-order will then reject is the worst ordering of these two checks.
+    if (!scheduledFor) {
+      const state = await getOpenState(supabase);
+      if (!state.open) {
+        return new Response(
+          JSON.stringify({ error: state.reason ?? "The restaurant is closed." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const safeTip = typeof tipAmount === "number" && tipAmount >= 0 ? tipAmount : 0;

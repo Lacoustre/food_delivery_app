@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeValidatedTotals } from "../_shared/pricing.ts";
 import { createUberDelivery } from "../_shared/uberDirect.ts";
+import { getOpenState } from "../_shared/hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +39,19 @@ Deno.serve(async (req) => {
       scheduledFor,
       paymentMethod = "card",
     } = await req.json();
+
+    // Closed means closed. The apps push customers towards scheduling when
+    // shut, but that is presentation — this is the check that holds.
+    // Scheduled orders are exempt: booking ahead while closed is the point.
+    if (!scheduledFor) {
+      const state = await getOpenState(supabase);
+      if (!state.open) {
+        return new Response(
+          JSON.stringify({ error: state.reason ?? "The restaurant is closed." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // Never trust client-supplied items/pricing — same authoritative
     // lookup used for the payment intent, so the order that gets

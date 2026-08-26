@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { computeOrderTotals } from '@/lib/pricing'
 import { promotionsService } from '@/lib/promotionsService'
 import { getUberQuote } from '@/lib/uberDirect'
+import { getOpenState } from '@/lib/hours'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-12-15.clover'
@@ -34,6 +35,17 @@ export async function POST(request: NextRequest) {
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
+    }
+
+    // Refuse before taking money. Scheduled orders are exempt.
+    if (!scheduledFor) {
+      const state = await getOpenState()
+      if (!state.open) {
+        return NextResponse.json(
+          { error: state.reason || 'The restaurant is closed.' },
+          { status: 409 }
+        )
+      }
     }
     if (orderType !== 'delivery' && orderType !== 'pickup') {
       return NextResponse.json({ error: 'Invalid order type' }, { status: 400 })

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, MapPin, Clock, Store, Navigation } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { DEFAULT_TAX_RATE } from '@/lib/pricing'
+import { supabase } from '@/lib/supabase'
 
 interface CartItem {
   id: string
@@ -32,10 +33,22 @@ export default function CartPage() {
 
   // Restaurant location - 200 Hartford Turnpike, Vernon, CT (matches mobile app)
   const restaurantLocation = { lat: 41.82457, lng: -72.4978 }
-  // Uber stops quoting past ~10 road miles (their rate card tops out at the
-  // 7-10 mi band). This is a coarse straight-line pre-filter only — the quote
-  // at checkout is the authority on whether an address is deliverable.
-  const maxDeliveryDistance = 10 // miles
+  // Coarse straight-line pre-filter only — the Uber quote at checkout is the
+  // authority on whether an address is deliverable. Uber stops quoting past
+  // ~10 road miles, which is the default when no radius is configured.
+  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState<number>(10)
+
+  useEffect(() => {
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'restaurant')
+      .maybeSingle()
+      .then(({ data }: { data: { value?: { deliveryRadius?: number } } | null }) => {
+        const r = data?.value?.deliveryRadius
+        if (typeof r === 'number' && r > 0) setMaxDeliveryDistance(r)
+      })
+  }, [])
 
 
   // Load image URLs for cart items
