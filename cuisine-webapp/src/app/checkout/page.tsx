@@ -300,27 +300,20 @@ function CheckoutContent() {
         console.log('Nominatim failed, trying backup service')
       }
       
-      // Fallback: BigDataCloud
+      // No BigDataCloud fallback: its reverse geocode returns only locality,
+      // region and postcode, so it produced addresses like
+      // "Vernon, Connecticut 06066" with no street. Uber rejects those, which
+      // is where the 422 at checkout came from — better to ask than to fill
+      // the field with something that cannot be delivered to.
       if (!address) {
-        const response = await fetch(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-        )
-        
-        if (response.ok) {
-          const data = await response.json()
-          address = `${data.locality || ''}, ${data.principalSubdivision || ''} ${data.postcode || ''}, ${data.countryName || ''}`.replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '')
-        }
-      }
-      
-      if (!address) {
-        throw new Error('Could not determine address from location')
+        throw new Error('Could not determine your street address')
       }
       
       setOrderData(prev => ({ ...prev, deliveryAddress: address }))
       localStorage.setItem('deliveryAddress', address)
     } catch (error) {
       console.error('Location error:', error)
-      let errorMessage = 'Unable to get your location. '
+      let errorMessage = 'Could not fill in your address. Please type it below. '
       if (error instanceof GeolocationPositionError) {
         switch (error.code) {
           case error.PERMISSION_DENIED:
