@@ -285,21 +285,26 @@ export default function AfricanCuisineWebsite() {
   }
 
   return (
-    <div className="min-h-screen bg-amber-50">
-      {/* Restaurant Status Banner */}
-      {!restaurantStatus.isOpen && (
-        <div className="bg-clay-700 text-sand-50 py-2.5 px-4 text-center text-sm">
-          <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
-          {restaurantStatus.message || 'You can still schedule an order for later.'}
-        </div>
-      )}
-      
-      {/* Navigation */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/70 to-transparent'
-      }`}>
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 h-16">
+    <div className="min-h-screen bg-sand-50">
+      {/* Banner and nav share one fixed stack. Previously the banner sat in
+          normal flow while the nav was fixed on top of it, so the closed
+          notice rendered straight through the middle of the header. */}
+      <header className="fixed top-0 left-0 right-0 z-50">
+        {!restaurantStatus.isOpen && (
+          <div className="bg-clay-700 text-sand-50 py-2 px-4 text-center text-[13px]">
+            <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
+            {restaurantStatus.message || 'You can still schedule an order for later.'}
+          </div>
+        )}
+
+        <nav className={`transition-colors duration-300 ${
+          scrolled ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/80 via-ink/40 to-transparent'
+        }`}>
+          {/* Capped and centred — the header previously ran the full width of
+              the viewport, which spread the controls to the far edges on a
+              wide display. */}
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3 lg:gap-6 h-16">
             {/* Brand. The full name is two lines of text next to a 48px mark —
                 far too wide to share a 375px row with a search field, which is
                 what broke the mobile header. Below sm it becomes the mark plus
@@ -318,17 +323,21 @@ export default function AfricanCuisineWebsite() {
                   <span className="sm:hidden">Taste of Africa</span>
                   <span className="hidden sm:inline">Taste of African Cuisine</span>
                 </span>
-                <span className={`hidden sm:flex items-center gap-1.5 mt-1 text-[11px] tracking-wide uppercase ${scrolled ? 'text-sand-500' : 'text-sand-200/80'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${restaurantStatus.isOpen ? 'bg-kente-300' : 'bg-clay-300'}`}></span>
-                  {restaurantStatus.isOpen ? 'Open now' : 'Closed'} · Ghanaian kitchen
-                </span>
+                {/* When closed, the banner directly above already says so —
+                    repeating it here just crowds the mark. */}
+                {restaurantStatus.isOpen && (
+                  <span className={`hidden sm:flex items-center gap-1.5 mt-0.5 text-[11px] tracking-[0.12em] uppercase ${scrolled ? 'text-sand-500' : 'text-sand-200/75'}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-kente-300"></span>
+                    Open now
+                  </span>
+                )}
               </div>
             </Link>
 
             {/* Search is desktop-only. On mobile it lives in the menu sheet,
                 where it has room to be usable rather than a 90px stub. */}
-            <div className="hidden lg:flex flex-1 justify-center">
-              <div className="relative w-full max-w-sm">
+            <div className="hidden lg:flex flex-1 justify-end pr-2">
+              <div className="relative w-full max-w-xs">
                 <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
                   scrolled ? 'text-sand-500' : 'text-sand-200/70'
                 }`} />
@@ -347,9 +356,9 @@ export default function AfricanCuisineWebsite() {
             </div>
 
             {/* Right Side - Menu, Cart, Order Button */}
-            <div className="flex items-center space-x-6 ml-auto">
+            <div className="flex items-center gap-3 ml-auto">
               {/* Desktop Menu */}
-              <div className="hidden md:flex items-center space-x-6">
+              <div className="hidden md:flex items-center gap-5">
                 {['Menu', 'About', 'Contact'].map(item => (
                   <a key={item} href={`#${item.toLowerCase()}`} 
                      className={`text-sm font-medium transition-colors ${
@@ -502,9 +511,10 @@ export default function AfricanCuisineWebsite() {
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      </nav>
+            )}
+          </div>
+        </nav>
+      </header>
 
       {/* Hero Section */}
       {/* h-screen pushed everything below the fold on phones and left a lot of
