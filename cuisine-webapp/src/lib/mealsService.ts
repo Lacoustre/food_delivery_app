@@ -9,6 +9,16 @@ export interface Meal {
   description?: string
   available: boolean
   active?: boolean
+  /** Grouping key — rows sharing one render as a single menu card. */
+  baseSlug: string
+  baseName: string
+  /** Option shown in the picker. Null when the dish has no variants. */
+  variantLabel?: string
+  /** protein | soup | preparation | side — drives the picker heading. */
+  variantType?: string
+  isVegetarian: boolean
+  /** Main Dishes | Side Dishes | Desserts | Drinks */
+  menuSection: string
 }
 
 function toMeal(row: {
@@ -20,6 +30,12 @@ function toMeal(row: {
   description: string | null
   available: boolean
   active: boolean
+  base_slug: string | null
+  base_name: string | null
+  variant_label: string | null
+  variant_type: string | null
+  is_vegetarian: boolean | null
+  menu_section: string | null
 }): Meal {
   return {
     id: row.id,
@@ -29,7 +45,15 @@ function toMeal(row: {
     imageUrl: row.image_url || '',
     description: row.description || undefined,
     available: row.available,
-    active: row.active
+    active: row.active,
+    // Fall back to the dish itself so a row predating the grouping migrations
+    // still renders as its own card rather than vanishing from the menu.
+    baseSlug: row.base_slug || row.id,
+    baseName: row.base_name || row.name,
+    variantLabel: row.variant_label || undefined,
+    variantType: row.variant_type || undefined,
+    isVegetarian: row.is_vegetarian ?? false,
+    menuSection: row.menu_section || 'Main Dishes'
   }
 }
 

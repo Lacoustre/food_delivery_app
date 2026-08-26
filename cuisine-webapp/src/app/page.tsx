@@ -22,6 +22,9 @@ export default function AfricanCuisineWebsite() {
   const [loading, setLoading] = useState(true)
   const [scrolled, setScrolled] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  // Which variant is selected per menu card, keyed by baseSlug.
+  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({})
+  const [vegOnly, setVegOnly] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [currentReview, setCurrentReview] = useState(0)
@@ -856,28 +859,31 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Menu Section */}
-      <section id="menu" className="py-20 bg-amber-50 relative">
-        {/* Logo Background Pattern */}
-        <div className="absolute inset-0 opacity-3 pointer-events-none" style={{
-          backgroundImage: `url('/assets/images/logo.png')`,
-          backgroundSize: '200px 200px',
-          backgroundRepeat: 'repeat',
-          backgroundPosition: 'center'
-        }}></div>
-        
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-3 bg-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
-              <span className="text-2xl">🍽️</span>
-              <span className="font-bold">SIGNATURE DISHES</span>
+      <section id="menu" className="py-20 bg-sand-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
+            <div className="max-w-xl">
+              <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">The menu</p>
+              <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">
+                Cooked to order, the way it&rsquo;s made at home
+              </h2>
+              <p className="text-sand-700 leading-relaxed">
+                Pick a dish, then choose how you want it — protein, soup or side.
+              </p>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Our Authentic Menu</h2>
-            <p className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed">Traditional Ghanaian dishes prepared with authentic spices and time-honored cooking methods.</p>
-            <button 
-              onClick={refreshMeals}
-              className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+
+            {/* Vegetarian is a flag on the dish now, so it filters the whole
+                menu rather than hiding in a section of its own. */}
+            <button
+              onClick={() => setVegOnly(v => !v)}
+              aria-pressed={vegOnly}
+              className={`self-start shrink-0 px-4 py-2.5 rounded-control text-sm font-semibold border transition-colors ${
+                vegOnly
+                  ? 'bg-kente text-sand-50 border-kente'
+                  : 'bg-white text-ink-soft border-sand-200 hover:border-sand-300'
+              }`}
             >
-              Refresh Menu
+              {vegOnly ? 'Showing vegetarian' : 'Vegetarian only'}
             </button>
           </div>
 
@@ -887,99 +893,140 @@ export default function AfricanCuisineWebsite() {
             </div>
           ) : meals.length === 0 ? (
             <p className="text-center text-gray-500 py-20">No meals available at the moment.</p>
-          ) : searchQuery && filteredMeals.length === 0 ? (
+          ) : (searchQuery || vegOnly) && (vegOnly ? filteredMeals.filter(m => m.isVegetarian) : filteredMeals).length === 0 ? (
             <div className="text-center py-20">
               <p className="text-xl text-gray-600 mb-4">No meals found for &ldquo;{searchQuery}&rdquo;</p>
               <p className="text-gray-500">Try a dish, a category like &ldquo;drinks&rdquo;, or an ingredient.</p>
             </div>
           ) : (
-            <div className="space-y-16">
-              {/* Group meals by category dynamically */}
+            <div className="space-y-14">
               {(() => {
-                const mealsToShow = filteredMeals
-                const categorizedMeals = mealsToShow.reduce((acc, meal) => {
-                  const category = meal.category || 'Main Dishes'
-                  if (!acc[category]) acc[category] = []
-                  acc[category].push(meal)
-                  return acc
-                }, {} as Record<string, Meal[]>)
-                
-                const sortedCategories = Object.keys(categorizedMeals).sort((a, b) => {
-                  const order = ['Main Dishes', 'Side Dishes', 'Appetizer', 'Appetizers', 'Starters', 'Dessert', 'Desserts', 'Beverage', 'Beverages', 'Drinks']
-                  const aIndex = order.indexOf(a)
-                  const bIndex = order.indexOf(b)
-                  if (aIndex === -1 && bIndex === -1) return a.localeCompare(b)
-                  if (aIndex === -1) return 1
-                  if (bIndex === -1) return -1
-                  return aIndex - bIndex
-                })
-                
-                return sortedCategories.map((category) => (
-                  <div key={category} className="">
-                    <div className="text-center mb-12">
-                      <h3 className="text-3xl font-bold text-gray-900 mb-2">{category}</h3>
-                      <div className="w-24 h-1 bg-orange-500 mx-auto rounded-full"></div>
+                // One card per base dish. 126 dishes become 68 cards, because a
+                // customer choosing jollof wants to pick a protein, not scroll
+                // past seven near-identical tiles.
+                const pool = vegOnly ? filteredMeals.filter(m => m.isVegetarian) : filteredMeals
+
+                const cards = new Map<string, Meal[]>()
+                for (const m of pool) {
+                  const list = cards.get(m.baseSlug) ?? []
+                  list.push(m)
+                  cards.set(m.baseSlug, list)
+                }
+
+                const SECTIONS = ['Main Dishes', 'Side Dishes', 'Desserts', 'Drinks']
+                const bySection = new Map<string, string[]>()
+                for (const [slug, group] of cards) {
+                  const s = group[0].menuSection
+                  bySection.set(s, [...(bySection.get(s) ?? []), slug])
+                }
+
+                const HEADINGS: Record<string, string> = {
+                  protein: 'Choose your protein',
+                  soup: 'Choose your soup',
+                  preparation: 'Choose your preparation',
+                  side: 'Served with',
+                }
+
+                return SECTIONS.filter(s => bySection.has(s)).map(section => (
+                  <div key={section}>
+                    <div className="flex items-baseline gap-3 mb-7">
+                      <h3 className="font-display text-3xl sm:text-4xl text-ink">{section}</h3>
+                      <span className="text-sm text-sand-500">{bySection.get(section)!.length}</span>
+                      <div className="flex-1 h-px bg-sand-200" />
                     </div>
-                    
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {categorizedMeals[category].map((meal, index) => (
-                          <div key={meal.id} className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
-                               onClick={() => {
-                                 const mealData = encodeURIComponent(JSON.stringify(meal))
-                                 window.location.href = `/meal?meal=${mealData}`
-                               }}>
-                            <div className="relative h-48 overflow-hidden rounded-t-xl">
+
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {bySection.get(section)!.map(slug => {
+                        const group = cards.get(slug)!
+                        const variants = group.filter(m => m.variantLabel)
+                          .sort((a, b) => a.price - b.price)
+                        const chosenId = selectedVariant[slug]
+                        const active = group.find(m => m.id === chosenId)
+                          ?? (variants.length ? variants[0] : group[0])
+                        const cheapest = Math.min(...group.map(m => m.price))
+                        const soldOut = active.available === false
+
+                        return (
+                          <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card">
+                            <div
+                              className="relative h-44 cursor-pointer"
+                              onClick={() => { window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}` }}
+                            >
                               <Image
-                                src={getImageUrl(meal)}
-                                alt={meal.name}
+                                src={getImageUrl(active)}
+                                alt={active.baseName}
                                 fill
-                                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                className="object-cover"
                                 unoptimized
-                                onError={(e) => {
-                                  const target = e.currentTarget as HTMLImageElement
-                                  if (target) {
-                                    target.src = '/assets/images/logo.png'
-                                  }
-                                }}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/images/logo.png' }}
                               />
-                              {meal.available === false && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                  <span className="bg-red-500 text-white px-4 py-2 rounded-full font-bold text-sm">
-                                    Out of Stock
-                                  </span>
+                              {soldOut && (
+                                <div className="absolute inset-0 bg-ink/65 flex items-center justify-center">
+                                  <span className="bg-clay text-sand-50 px-3 py-1.5 rounded-control text-xs font-semibold">Sold out</span>
                                 </div>
                               )}
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleFavorite(meal.id)
-                                }}
-                                className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur rounded-full shadow-md hover:shadow-lg transition-all"
+                                onClick={(e) => { e.stopPropagation(); toggleFavorite(active.id) }}
+                                aria-label="Save this dish"
+                                className="absolute top-3 right-3 p-2 bg-sand-50/90 backdrop-blur rounded-full"
                               >
-                                <Heart className={`w-4 h-4 ${favorites.has(meal.id) ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                                <Heart className={`w-4 h-4 ${favorites.has(active.id) ? 'fill-clay text-clay' : 'text-sand-700'}`} />
                               </button>
+                              {group.every(m => m.isVegetarian) && (
+                                <span className="absolute top-3 left-3 bg-kente text-sand-50 text-[11px] font-semibold px-2 py-1 rounded">
+                                  Vegetarian
+                                </span>
+                              )}
                             </div>
 
-                            <div className="p-6">
-                              <h3 className="text-xl font-bold text-gray-900 mb-2">{meal.name}</h3>
-                              <p className="text-gray-600 mb-4 text-sm leading-relaxed line-clamp-2">{meal.description}</p>
+                            <div className="flex flex-col flex-1 p-5">
+                              <h4 className="font-display text-xl text-ink leading-tight">{active.baseName}</h4>
+                              {active.description && (
+                                <p className="mt-1.5 text-sm text-sand-700 line-clamp-2">{active.description}</p>
+                              )}
 
-                              <div className="flex items-center justify-between">
+                              {variants.length > 1 && (
+                                <div className="mt-4">
+                                  <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-sand-500 mb-2">
+                                    {HEADINGS[active.variantType ?? 'protein'] ?? 'Choose an option'}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {variants.map(v => {
+                                      const on = v.id === active.id
+                                      return (
+                                        <button
+                                          key={v.id}
+                                          onClick={() => setSelectedVariant(prev => ({ ...prev, [slug]: v.id }))}
+                                          className={`px-2.5 py-1.5 rounded-control text-xs font-medium border transition-colors ${
+                                            on
+                                              ? 'bg-ink text-sand-50 border-ink'
+                                              : 'bg-sand-50 text-ink-soft border-sand-200 hover:border-sand-300'
+                                          }`}
+                                        >
+                                          {v.variantLabel}
+                                          {v.isVegetarian && <span className="ml-1 text-kente-300">·</span>}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="mt-auto pt-5 flex items-end justify-between gap-3">
                                 <div>
-                                  <span className="text-2xl font-bold text-orange-600">${meal.price?.toFixed(2)}</span>
+                                  {variants.length > 1 && active.price !== cheapest && (
+                                    <span className="block text-[11px] text-sand-500">from ${cheapest.toFixed(2)}</span>
+                                  )}
+                                  <span className="text-xl font-semibold text-ink tabular-nums">${active.price?.toFixed(2)}</span>
                                 </div>
                                 <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation()
-                                    const mealData = encodeURIComponent(JSON.stringify(meal))
-                                    window.location.href = `/meal?meal=${mealData}`
-                                  }}
-                                  disabled={meal.available === false || !restaurantStatus.isOpen}
-                                  className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all ${
-                                    meal.available !== false && restaurantStatus.isOpen
-                                      ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                  } disabled:opacity-70`}
+                                  onClick={() => { window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}` }}
+                                  disabled={soldOut || !restaurantStatus.isOpen}
+                                  className={`px-4 py-2 rounded-control text-sm font-semibold flex items-center gap-1.5 transition-colors ${
+                                    !soldOut && restaurantStatus.isOpen
+                                      ? 'bg-gold text-ink hover:bg-gold-300'
+                                      : 'bg-sand-200 text-sand-500 cursor-not-allowed'
+                                  }`}
                                 >
                                   <Plus className="w-4 h-4" />
                                   {!restaurantStatus.isOpen ? 'Closed' : 'Add'}
@@ -987,7 +1034,8 @@ export default function AfricanCuisineWebsite() {
                               </div>
                             </div>
                           </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 ))
