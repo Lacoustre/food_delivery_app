@@ -716,22 +716,22 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Features */}
-      <section className="py-20 bg-amber-50 relative">
-        {/* Logo Background Pattern */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-          backgroundImage: `url('/assets/images/logo.png')`,
-          backgroundSize: '150px 150px',
-          backgroundRepeat: 'repeat',
-          backgroundPosition: 'center'
-        }}></div>
-        
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Why Choose Our Authentic African Cuisine</h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">We are passionate about bringing you the most authentic taste of Ghana through traditional recipes, premium ingredients, and exceptional service that honors our rich West African heritage.</p>
+      <section className="py-20 bg-sand-100">
+        <div className="w-full px-4 sm:px-6 lg:px-10">
+          {/* Left-aligned to share the edge the header and hero sit on —
+              centred headings above left-aligned content read as misaligned. */}
+          <div className="mb-14 max-w-2xl">
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Why us</p>
+            <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-4">
+              Recipes from Accra, cooked in Vernon
+            </h2>
+            <p className="text-sand-700 leading-relaxed">
+              Traditional Ghanaian dishes made from scratch with the ingredients
+              and methods they&rsquo;re meant to be made with.
+            </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-12">
+          <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
             {[
               { 
                 icon: '🍽️', 
@@ -749,12 +749,12 @@ export default function AfricanCuisineWebsite() {
                 desc: 'Proudly rated 4.9/5 stars by thousands of satisfied customers who trust us to deliver exceptional authentic African cuisine with outstanding service and unmatched quality.'
               },
             ].map((item, index) => (
-              <div key={item.title} className="group text-center">
-                <div className="w-24 h-24 bg-gradient-to-br from-orange-50 to-red-100 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-all duration-300 shadow-lg group-hover:shadow-xl">
-                  <span className="text-4xl relative z-10">{item.icon}</span>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">{item.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{item.desc}</p>
+              <div key={item.title} className="border-t border-sand-300 pt-6">
+                <span className="block font-display text-3xl text-gold-600 mb-3 tabular-nums">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="font-display text-2xl text-ink mb-3 leading-tight">{item.title}</h3>
+                <p className="text-sand-700 text-[15px] leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -762,7 +762,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Popular Items Section */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 to-red-50 relative overflow-hidden">
+      <section className="py-20 bg-sand-50 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
           backgroundImage: `url('/assets/images/logo.png')`,
           backgroundSize: '120px 120px',
@@ -770,14 +770,14 @@ export default function AfricanCuisineWebsite() {
           backgroundPosition: 'center'
         }}></div>
         
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="text-center mb-16">
+        <div className="w-full px-4 sm:px-6 lg:px-10 relative z-10">
+          <div className="mb-12 max-w-2xl">
             <div className="inline-flex items-center gap-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
               <span className="text-2xl">🔥</span>
               <span className="font-bold">POPULAR ITEMS</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Customer Favorites</h2>
-            <p className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed">Discover the dishes our customers can't get enough of!</p>
+            <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">Customer favourites</h2>
+            <p className="text-sand-700 leading-relaxed">The dishes people come back for.</p>
           </div>
 
           {loading ? (
@@ -860,7 +860,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* Menu Section */}
       <section id="menu" className="py-20 bg-sand-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="w-full px-4 sm:px-6 lg:px-10">
           <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
             <div className="max-w-xl">
               <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">The menu</p>
@@ -1046,29 +1046,35 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* About Section */}
-      <section id="about" className="py-20 bg-gray-900 text-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid md:grid-cols-3 gap-12 text-center mb-16">
+      <section id="about" className="py-20 bg-ink text-sand-100">
+        <div className="w-full px-4 sm:px-6 lg:px-10">
+          <div className="mb-14 max-w-2xl">
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 mb-3">Our story</p>
+            <h2 className="font-display text-4xl sm:text-5xl text-sand-50 leading-[1.05]">
+              A family kitchen, brought to Connecticut
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-10 mb-16">
             <div className="group">
-              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-all">
+              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
                 <span className="text-3xl">🇬🇭</span>
               </div>
-              <h3 className="text-2xl font-bold text-orange-400 mb-2">Born in Ghana</h3>
-              <p className="text-gray-300">Authentic recipes from Accra, brought to Connecticut with love and tradition</p>
+              <h3 className="font-display text-2xl text-gold-300 mb-2">Born in Ghana</h3>
+              <p className="text-sand-300 text-[15px] leading-relaxed">Authentic recipes from Accra, brought to Connecticut with love and tradition</p>
             </div>
             <div className="group">
-              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-all">
+              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
                 <span className="text-3xl">👨‍👩‍👧‍👦</span>
               </div>
-              <h3 className="text-2xl font-bold text-orange-400 mb-2">Family Legacy</h3>
-              <p className="text-gray-300">Three generations of culinary wisdom passed down through our family kitchen</p>
+              <h3 className="font-display text-2xl text-gold-300 mb-2">Family Legacy</h3>
+              <p className="text-sand-300 text-[15px] leading-relaxed">Three generations of culinary wisdom passed down through our family kitchen</p>
             </div>
             <div className="group">
-              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-all">
+              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
                 <span className="text-3xl">🌶️</span>
               </div>
-              <h3 className="text-2xl font-bold text-orange-400 mb-2">Authentic Spices</h3>
-              <p className="text-gray-300">Imported seasonings and traditional cooking methods for genuine West African flavors</p>
+              <h3 className="font-display text-2xl text-gold-300 mb-2">Authentic Spices</h3>
+              <p className="text-sand-300 text-[15px] leading-relaxed">Imported seasonings and traditional cooking methods for genuine West African flavors</p>
             </div>
           </div>
 
@@ -1088,15 +1094,15 @@ export default function AfricanCuisineWebsite() {
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
                 <h4 className="text-xl font-bold text-orange-400 mb-3">🏆 Community Recognition</h4>
-                <p className="text-gray-300">Featured in Hartford Courant as "Connecticut's Hidden Gem for Authentic African Cuisine"</p>
+                <p className="text-sand-300 text-[15px] leading-relaxed">Featured in Hartford Courant as "Connecticut's Hidden Gem for Authentic African Cuisine"</p>
               </div>
               <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
                 <h4 className="text-xl font-bold text-orange-400 mb-3">🌍 Cultural Bridge</h4>
-                <p className="text-gray-300">Proudly serving both homesick Africans and curious food adventurers since opening</p>
+                <p className="text-sand-300 text-[15px] leading-relaxed">Proudly serving both homesick Africans and curious food adventurers since opening</p>
               </div>
               <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
                 <h4 className="text-xl font-bold text-orange-400 mb-3">💚 Fresh Daily</h4>
-                <p className="text-gray-300">Every sauce, stew, and seasoning made fresh each morning using traditional methods</p>
+                <p className="text-sand-300 text-[15px] leading-relaxed">Every sauce, stew, and seasoning made fresh each morning using traditional methods</p>
               </div>
             </div>
           </div>
@@ -1112,7 +1118,7 @@ export default function AfricanCuisineWebsite() {
           backgroundPosition: 'center'
         }}></div>
         
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
+        <div className="w-full px-4 sm:px-6 lg:px-10 relative z-10">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
               <span className="text-2xl">⭐</span>
@@ -1218,7 +1224,7 @@ export default function AfricanCuisineWebsite() {
 
       {/* Footer */}
       <footer id="contact" className="bg-gray-800 text-white py-16">
-        <div className="max-w-6xl mx-auto px-6">
+        <div className="w-full px-4 sm:px-6 lg:px-10">
           <div className="grid md:grid-cols-3 gap-12">
             <div>
               <div className="flex items-center space-x-3 mb-6">
