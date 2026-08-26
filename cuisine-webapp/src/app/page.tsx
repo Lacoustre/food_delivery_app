@@ -396,7 +396,7 @@ export default function AfricanCuisineWebsite() {
                 ))}
                 
                 <Link href="/cart" className={`relative p-2 rounded-full transition-colors ${
-                  navSolid ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
+                  navSolid ? 'text-sand-700 hover:bg-sand-100' : 'text-white hover:bg-white/10'
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
@@ -418,14 +418,14 @@ export default function AfricanCuisineWebsite() {
                   <div className="flex items-center space-x-3">
                     <OrderNotifications />
                     <Link href="/orders" className={`p-2 rounded-full transition-colors ${
-                      navSolid ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
+                      navSolid ? 'text-sand-700 hover:bg-sand-100' : 'text-white hover:bg-white/10'
                     }`} title="My Orders">
                       <Clock className="w-5 h-5" />
                     </Link>
                     <div className="flex items-center space-x-2">
-                      <User className="w-5 h-5 text-gray-600" />
-                      <Link href="/profile" className={`text-sm font-medium hover:text-orange-600 transition-colors ${
-                        navSolid ? 'text-gray-700' : 'text-white'
+                      <User className="w-5 h-5 text-sand-700" />
+                      <Link href="/profile" className={`text-sm font-medium hover:text-gold-600 transition-colors ${
+                        navSolid ? 'text-sand-700' : 'text-white'
                       }`}>
                         {userProfile?.name || user.email}
                       </Link>
@@ -438,7 +438,7 @@ export default function AfricanCuisineWebsite() {
                       }}
                       disabled={signingOut}
                       className={`p-2 transition-all duration-300 disabled:opacity-70 transform hover:scale-110 ${
-                        navSolid ? 'text-gray-600 hover:text-red-600' : 'text-white hover:text-red-400'
+                        navSolid ? 'text-sand-700 hover:text-clay' : 'text-white hover:text-clay-300'
                       }`}
                       title="Sign Out"
                     >
@@ -469,7 +469,7 @@ export default function AfricanCuisineWebsite() {
                       className="bg-kente text-sand-50 px-4 py-2 rounded-control text-sm font-semibold hover:bg-kente-800 transition-colors flex items-center gap-2"
                     >
                       {navigating ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-ink/30 border-t-ink"></div>
                       ) : null}
                       Sign Up
                     </Link>
@@ -480,7 +480,7 @@ export default function AfricanCuisineWebsite() {
               {/* Mobile Menu Button */}
               <div className="md:hidden flex items-center space-x-2">
                 <Link href="/cart" className={`relative p-2 rounded-full ${
-                  navSolid ? 'text-gray-700' : 'text-white'
+                  navSolid ? 'text-sand-700' : 'text-white'
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
@@ -492,7 +492,7 @@ export default function AfricanCuisineWebsite() {
                 <button 
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   className={`p-2 rounded-full ${
-                    navSolid ? 'text-gray-700' : 'text-white'
+                    navSolid ? 'text-sand-700' : 'text-white'
                   }`}
                 >
                   {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -762,42 +762,32 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Popular Items Section */}
-      <section className="py-20 bg-sand-50 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-          backgroundImage: `url('/assets/images/logo.png')`,
-          backgroundSize: '120px 120px',
-          backgroundRepeat: 'repeat',
-          backgroundPosition: 'center'
-        }}></div>
-        
-        <div className="page-shell relative z-10">
+      <section className="py-20 bg-sand-50">
+        <div className="page-shell">
           <div className="mb-12 max-w-2xl">
-            <div className="inline-flex items-center gap-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
-              <span className="text-2xl">🔥</span>
-              <span className="font-bold">POPULAR ITEMS</span>
-            </div>
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Popular right now</p>
             <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">Customer favourites</h2>
             <p className="text-sand-700 leading-relaxed">The dishes people come back for.</p>
           </div>
 
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gold mx-auto"></div>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
               {getPopularItems().map((meal, index) => (
-                <div key={meal.id} className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-105"
+                <div key={meal.id} className="relative flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card cursor-pointer"
                      onClick={() => {
                        const mealData = encodeURIComponent(JSON.stringify(meal))
                        window.location.href = `/meal?meal=${mealData}`
                      }}>
                   {/* Popular Badge */}
-                  <div className="absolute top-4 left-4 z-10 bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                    #{index + 1} Popular
+                  <div className="absolute top-3 left-3 z-10 bg-ink text-sand-50 px-2 py-1 rounded text-[11px] font-semibold tabular-nums">
+                    {index + 1}
                   </div>
                   
-                  <div className="relative h-48 overflow-hidden rounded-t-xl">
+                  <div className="relative h-44 overflow-hidden">
                     <Image
                       src={getImageUrl(meal)}
                       alt={meal.name}
@@ -811,18 +801,18 @@ export default function AfricanCuisineWebsite() {
                         e.stopPropagation()
                         toggleFavorite(meal.id)
                       }}
-                      className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur rounded-full shadow-md hover:shadow-lg transition-all"
+                      className="absolute top-3 right-3 p-2 bg-sand-50/90 backdrop-blur rounded-full"
                     >
-                      <Heart className={`w-4 h-4 ${favorites.has(meal.id) ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                      <Heart className={`w-4 h-4 ${favorites.has(meal.id) ? 'fill-clay text-clay' : 'text-sand-700'}`} />
                     </button>
                   </div>
 
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{meal.name}</h3>
-                    <p className="text-gray-600 mb-4 text-sm leading-relaxed line-clamp-2">{meal.description}</p>
+                  <div className="flex flex-col flex-1 p-5">
+                    <h4 className="font-display text-xl text-ink leading-tight">{meal.name}</h4>
+                    <p className="mt-1.5 text-sm text-sand-700 line-clamp-2 min-h-[2.5rem]">{meal.description}</p>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold text-orange-600">${meal.price?.toFixed(2)}</span>
+                    <div className="mt-auto pt-5 flex items-center justify-between">
+                      <span className="text-xl font-semibold text-ink tabular-nums">${meal.price?.toFixed(2)}</span>
                       <button
                         onClick={async (e) => {
                           e.stopPropagation()
@@ -831,7 +821,7 @@ export default function AfricanCuisineWebsite() {
                           window.location.href = `/meal?meal=${mealData}`
                         }}
                         disabled={navigating}
-                        className="px-4 py-2 bg-orange-500 text-white rounded-lg font-medium text-sm hover:bg-orange-600 transition-all flex items-center gap-2 disabled:opacity-70"
+                        className="px-4 py-2 bg-gold text-ink rounded-control font-semibold text-sm hover:bg-gold-300 transition-colors flex items-center gap-1.5 disabled:opacity-70"
                       >
                         {navigating ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
@@ -850,9 +840,9 @@ export default function AfricanCuisineWebsite() {
           <div className="text-center mt-12">
             <button 
               onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-8 py-4 rounded-2xl font-bold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg"
+              className="inline-flex items-center gap-2 border border-sand-300 text-ink px-6 py-3 rounded-control font-semibold hover:bg-sand-100 transition-colors"
             >
-              <span>🍽️</span> View Full Menu
+              See the full menu
             </button>
           </div>
         </div>
@@ -889,14 +879,14 @@ export default function AfricanCuisineWebsite() {
 
           {loading ? (
             <div className="text-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-gold mx-auto"></div>
             </div>
           ) : meals.length === 0 ? (
-            <p className="text-center text-gray-500 py-20">No meals available at the moment.</p>
+            <p className="text-center text-sand-500 py-20">No meals available at the moment.</p>
           ) : (searchQuery || vegOnly) && (vegOnly ? filteredMeals.filter(m => m.isVegetarian) : filteredMeals).length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-xl text-gray-600 mb-4">No meals found for &ldquo;{searchQuery}&rdquo;</p>
-              <p className="text-gray-500">Try a dish, a category like &ldquo;drinks&rdquo;, or an ingredient.</p>
+              <p className="text-xl text-sand-700 mb-4">No meals found for &ldquo;{searchQuery}&rdquo;</p>
+              <p className="text-sand-500">Try a dish, a category like &ldquo;drinks&rdquo;, or an ingredient.</p>
             </div>
           ) : (
             <div className="space-y-14">
@@ -1080,27 +1070,27 @@ export default function AfricanCuisineWebsite() {
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
               <h2 className="font-display text-3xl sm:text-4xl leading-tight mb-5">About Us</h2>
-              <p className="text-gray-300 mb-6 text-lg">
+              <p className="text-sand-300 mb-6 text-lg">
                 At Taste of African Cuisine, we take pride in serving the most authentic West African foods. Our dishes are prepared using traditional recipes that have been passed down from generation to generation.
               </p>
-              <p className="text-gray-300 mb-6 text-lg">
+              <p className="text-sand-300 mb-6 text-lg">
                 We use only the freshest ingredients to ensure that every dish is bursting with flavor. Whether you're a fan of jollof rice, Waakye or Banku we have something for everyone.
               </p>
-              <p className="text-gray-300 text-lg">
+              <p className="text-sand-300 text-lg">
                 Come and experience the taste of West Africa today!
               </p>
             </div>
             <div className="space-y-6">
-              <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
-                <h4 className="text-xl font-bold text-orange-400 mb-3">🏆 Community Recognition</h4>
+              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
+                <h4 className="text-xl font-bold text-gold-300 mb-3">🏆 Community Recognition</h4>
                 <p className="text-sand-300 text-[15px] leading-relaxed">Featured in Hartford Courant as "Connecticut's Hidden Gem for Authentic African Cuisine"</p>
               </div>
-              <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
-                <h4 className="text-xl font-bold text-orange-400 mb-3">🌍 Cultural Bridge</h4>
+              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
+                <h4 className="text-xl font-bold text-gold-300 mb-3">🌍 Cultural Bridge</h4>
                 <p className="text-sand-300 text-[15px] leading-relaxed">Proudly serving both homesick Africans and curious food adventurers since opening</p>
               </div>
-              <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-6 border border-orange-500/30">
-                <h4 className="text-xl font-bold text-orange-400 mb-3">💚 Fresh Daily</h4>
+              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
+                <h4 className="text-xl font-bold text-gold-300 mb-3">💚 Fresh Daily</h4>
                 <p className="text-sand-300 text-[15px] leading-relaxed">Every sauce, stew, and seasoning made fresh each morning using traditional methods</p>
               </div>
             </div>
@@ -1109,22 +1099,12 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Customer Reviews Section */}
-      <section className="py-20 bg-gradient-to-br from-yellow-50 to-orange-50 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-          backgroundImage: `url('/assets/images/logo.png')`,
-          backgroundSize: '100px 100px',
-          backgroundRepeat: 'repeat',
-          backgroundPosition: 'center'
-        }}></div>
-        
-        <div className="page-shell relative z-10">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg mb-6">
-              <span className="text-2xl">⭐</span>
-              <span className="font-bold">CUSTOMER REVIEWS</span>
-            </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">What Our Customers Say</h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">Real reviews from our valued customers who love our authentic African cuisine</p>
+      <section className="py-20 bg-sand-100 overflow-hidden">
+        <div className="page-shell">
+          <div className="mb-12 max-w-2xl">
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Reviews</p>
+            <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">What people say</h2>
+            <p className="text-sand-700 leading-relaxed">From customers who order with us regularly.</p>
           </div>
 
           {/* Reviews Carousel */}
@@ -1132,15 +1112,15 @@ export default function AfricanCuisineWebsite() {
             {/* Navigation Arrows */}
             <button
               onClick={prevReview}
-              className="absolute left-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-orange-200"
+              className="absolute left-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
             >
-              <ChevronLeft className="w-6 h-6 text-orange-600" />
+              <ChevronLeft className="w-6 h-6 text-gold-600" />
             </button>
             <button
               onClick={nextReview}
-              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-orange-200"
+              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
             >
-              <ChevronRight className="w-6 h-6 text-orange-600" />
+              <ChevronRight className="w-6 h-6 text-gold-600" />
             </button>
 
             {/* Reviews Container */}
@@ -1151,29 +1131,29 @@ export default function AfricanCuisineWebsite() {
               >
                 {reviews.map((review, index) => (
                   <div key={index} className="w-full flex-shrink-0 px-4">
-                    <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-orange-200 mx-auto max-w-4xl">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-sand-200 mx-auto max-w-4xl">
                       <div className="text-center">
                         {/* Stars */}
                         <div className="flex justify-center mb-6">
                           {[...Array(review.rating)].map((_, i) => (
-                            <span key={i} className="text-3xl text-yellow-500">⭐</span>
+                            <span key={i} className="text-3xl text-gold">⭐</span>
                           ))}
                         </div>
                         
                         {/* Review Text */}
-                        <blockquote className="text-xl md:text-2xl text-gray-700 mb-8 leading-relaxed font-medium italic">
+                        <blockquote className="text-xl md:text-2xl text-sand-700 mb-8 leading-relaxed font-medium italic">
                           "{review.review}"
                         </blockquote>
                         
                         {/* Customer Info */}
                         <div className="flex items-center justify-center space-x-4">
-                          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                          <div className="w-16 h-16 bg-gold rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
                             {review.name.charAt(0)}
                           </div>
                           <div className="text-left">
-                            <h4 className="text-xl font-bold text-gray-900">{review.name}</h4>
-                            <div className="flex items-center space-x-3 text-sm text-gray-600">
-                              <span className="bg-orange-500 text-white px-3 py-1 rounded-full font-medium">{review.dish}</span>
+                            <h4 className="text-xl font-bold text-ink">{review.name}</h4>
+                            <div className="flex items-center space-x-3 text-sm text-sand-700">
+                              <span className="bg-gold text-white px-3 py-1 rounded-full font-medium">{review.dish}</span>
                               <span>•</span>
                               <span>{review.date}</span>
                             </div>
@@ -1194,8 +1174,8 @@ export default function AfricanCuisineWebsite() {
                   onClick={() => setCurrentReview(index)}
                   className={`w-3 h-3 rounded-full transition-all duration-300 ${
                     index === currentReview 
-                      ? 'bg-orange-500 w-8' 
-                      : 'bg-orange-200 hover:bg-orange-300'
+                      ? 'bg-gold w-8' 
+                      : 'bg-sand-200 hover:bg-sand-300'
                   }`}
                 />
               ))}
@@ -1222,7 +1202,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="bg-gray-800 text-white py-16">
+      <footer id="contact" className="bg-ink text-sand-100 py-16">
         <div className="page-shell">
           <div className="grid md:grid-cols-3 gap-12">
             <div>
@@ -1236,49 +1216,49 @@ export default function AfricanCuisineWebsite() {
                   unoptimized
                 />
                 <div>
-                  <h3 className="text-2xl font-bold">Taste of African Cuisine</h3>
-                  <p className="text-orange-400">Authentic Ghanaian Food</p>
+                  <h3 className="font-display text-2xl text-sand-50">Taste of African Cuisine</h3>
+                  <p className="text-gold-300 text-sm">Authentic Ghanaian food</p>
                 </div>
               </div>
-              <p className="text-gray-300 leading-relaxed">
+              <p className="text-sand-300 leading-relaxed">
                 Bringing authentic West African flavors to your doorstep with love and tradition.
               </p>
             </div>
 
             <div>
-              <h4 className="text-xl font-bold mb-6 text-orange-400">Contact Us</h4>
+              <h4 className="text-xl font-bold mb-6 text-gold-300">Contact Us</h4>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-orange-400" />
-                  <a href="tel:+18608055121" className="text-gray-300 hover:text-orange-400 transition-colors font-medium underline decoration-dotted">
+                  <Phone className="w-5 h-5 text-gold-300" />
+                  <a href="tel:+18608055121" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted">
                     (860) 805-5121
                   </a>
                 </div>
                 <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-orange-400 mt-0.5" />
-                  <a href="https://maps.google.com/?q=200+Hartford+Turnpike,+Vernon,+CT" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-orange-400 transition-colors font-medium underline decoration-dotted">
+                  <MapPin className="w-5 h-5 text-gold-300 mt-0.5" />
+                  <a href="https://maps.google.com/?q=200+Hartford+Turnpike,+Vernon,+CT" target="_blank" rel="noopener noreferrer" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted">
                     200 Hartford Turnpike<br />Vernon, CT
                   </a>
                 </div>
-                <div className="text-gray-300">
+                <div className="text-sand-300">
                   tasteofafricancuisine01@gmail.com
                 </div>
               </div>
             </div>
 
             <div>
-              <h4 className="text-xl font-bold mb-6 text-orange-400">Hours & Social</h4>
+              <h4 className="text-xl font-bold mb-6 text-gold-300">Hours & Social</h4>
               <div className="space-y-3 mb-6">
-                <div className="text-gray-300">
-                  <span className="font-medium text-white">Tue–Sat:</span> 11:00 AM – 9:00 PM<br /><span className="text-gray-400 text-sm">Friday until 8:00 PM</span>
+                <div className="text-sand-300">
+                  <span className="font-medium text-white">Tue–Sat:</span> 11:00 AM – 9:00 PM<br /><span className="text-sand-500 text-sm">Friday until 8:00 PM</span>
                 </div>
-                <div className="text-gray-300">
-                  <span className="font-medium text-white">Sun & Mon:</span> <span className="text-red-400">Closed</span>
+                <div className="text-sand-300">
+                  <span className="font-medium text-white">Sun & Mon:</span> <span className="text-clay-300">Closed</span>
                 </div>
               </div>
               
               <div className="flex items-center gap-4">
-                <a href="https://www.instagram.com/tasteofafrican_cuisinee/?hl=en" target="_blank" rel="noopener noreferrer" className="bg-orange-500 hover:bg-orange-600 p-3 rounded-full transition-colors">
+                <a href="https://www.instagram.com/tasteofafrican_cuisinee/?hl=en" target="_blank" rel="noopener noreferrer" className="bg-gold hover:bg-gold-600 p-3 rounded-full transition-colors">
                   <Instagram className="w-6 h-6 text-white" />
                 </a>
                 <a href="https://www.facebook.com/people/Taste-Africa-Cuisine/pfbid01DpatNS1oHWsXCiHAEXQHirTRAyHbYqbRxhXVqw8htbCLe8H5S4CkspKmGnAhmgLl/?mibextid=7cd5pb" target="_blank" rel="noopener noreferrer" className="bg-blue-600 hover:bg-blue-700 p-3 rounded-full transition-colors">
@@ -1288,8 +1268,8 @@ export default function AfricanCuisineWebsite() {
             </div>
           </div>
 
-          <div className="border-t border-gray-700 mt-12 pt-8 text-center">
-            <p className="text-gray-400">
+          <div className="border-t border-sand-700/40 mt-12 pt-8 text-center">
+            <p className="text-sand-500">
               © 2025 Taste of African Cuisine. All rights reserved.
             </p>
           </div>
