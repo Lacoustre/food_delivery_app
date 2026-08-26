@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// sessions (RLS); for customers they fail silently, same as the old
 /// Firestore rules.
 class RestaurantHoursService {
+  bool _isOpenNow = false;
   static final RestaurantHoursService _instance =
       RestaurantHoursService._internal();
   factory RestaurantHoursService() => _instance;
@@ -56,16 +57,21 @@ class RestaurantHoursService {
       final daySchedule = hours[currentDay] as Map<String, dynamic>?;
 
       if (daySchedule == null || daySchedule['closed'] == true) {
-        await _setRestaurantStatus(false, value);
+        _isOpenNow = false;
         return;
       }
 
       final openTime = _parseTime(daySchedule['open']);
       final closeTime = _parseTime(daySchedule['close']);
 
+      // Deliberately does not write back. This value is derived from
+      // businessHours, which every client and the server can read directly —
+      // caching it into a shared setting only created a way for it to be
+      // wrong. It last wrote `false` at closing time and, with no admin
+      // running the app afterwards, left the server refusing orders through
+      // the whole of the next day's opening hours.
       if (openTime != null && closeTime != null) {
-        final isOpen = _isTimeInRange(currentTime, openTime, closeTime);
-        await _setRestaurantStatus(isOpen, value);
+        _isOpenNow = _isTimeInRange(currentTime, openTime, closeTime);
       }
     } catch (e) {
       // Silently handle permission errors
@@ -73,20 +79,6 @@ class RestaurantHoursService {
     }
   }
 
-  Future<void> _setRestaurantStatus(
-    bool isOpen,
-    Map<String, dynamic> currentValue,
-  ) async {
-    if (currentValue['isOpen'] == isOpen) return; // no change, skip the write
-    try {
-      await _supabase.from('settings').update({
-        'value': {...currentValue, 'isOpen': isOpen},
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('key', 'restaurant');
-    } catch (e) {
-      debugPrint('Failed to update restaurant status: $e');
-    }
-  }
 
   String _getDayOfWeek(int weekday) {
     const days = [
@@ -129,8 +121,8 @@ class RestaurantHoursService {
 
   Future<bool> isRestaurantOpen() async {
     try {
-      final value = await _fetchSettingsValue();
-      return value?['isOpen'] ?? false;
+      await _updateRestaurantStatus();
+      return _isOpenNow;
     } catch (e) {
       return false;
     }

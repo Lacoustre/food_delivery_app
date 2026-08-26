@@ -73,11 +73,14 @@ export async function getOpenState(): Promise<OpenState> {
   }
   if (!value) return { open: true }
 
-  // Manual override from the admin panel wins over the schedule.
-  if (value.isOpen === false) {
+  // An explicit "closed today" switch. Deliberately not `isOpen`: that field
+  // is derived from businessHours by the mobile app and written back, so it is
+  // a cache of this same schedule rather than a decision, and it goes stale as
+  // soon as no admin has the app open.
+  if (value.manuallyClosed === true) {
     const msg = typeof value.message === 'string' && value.message.trim()
       ? value.message.trim()
-      : 'The restaurant is currently closed.'
+      : 'The restaurant is closed right now.'
     return { open: false, reason: msg }
   }
 
