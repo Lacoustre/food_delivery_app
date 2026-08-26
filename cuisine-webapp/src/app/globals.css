@@ -63,13 +63,13 @@
   --drop-shadow-glow: 0 0 20px rgba(255, 215, 0, 0.3);
 }
 
-/* One page width, used everywhere. Pages previously picked their own —
-   max-w-6xl on cart, 4xl on the meal page, 2xl on confirmation, and both 2xl
-   and 4xl on orders and profile — so content changed width as you navigated. */
+/* One shell, used by the header and every section on every page.
+   It spans the viewport rather than centring, so the brand sits at the screen's
+   left edge and all content shares that same edge — a centred container always
+   leaves the header inboard on a wide display. Grids add columns as the
+   viewport grows so cards keep a card's width instead of stretching. */
 @utility page-shell {
   width: 100%;
-  max-width: 1600px;
-  margin-inline: auto;
   padding-inline: 1rem;
 }
 @media (min-width: 640px) { .page-shell { padding-inline: 1.5rem; } }
