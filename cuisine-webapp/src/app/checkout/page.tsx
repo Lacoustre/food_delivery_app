@@ -873,9 +873,18 @@ function CheckoutContent() {
                   </div>
                 ) : !readyToPay ? (
                   <div className="rounded-control border border-sand-200 bg-sand-100 p-4 text-sand-700 text-sm">
-                    {orderData.orderType === 'delivery' && !quoteAddress
-                      ? 'Enter your delivery address to continue.'
-                      : 'Add something to your order to continue.'}
+                    {/* Say which of the four reasons it is. Falling through to
+                        "add something to your order" whenever the quote failed
+                        told the customer their cart was empty when it wasn't. */}
+                    {cartItems.length === 0
+                      ? 'Your order is empty. Add a dish to continue.'
+                      : orderData.orderType === 'delivery' && !quoteAddress
+                        ? 'Enter your delivery address to continue.'
+                        : quoting
+                          ? 'Checking delivery for that address…'
+                          : quoteError
+                            ? quoteError
+                            : 'Add something to your order to continue.'}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-sand-700 text-sm">Loading payment form…</div>
