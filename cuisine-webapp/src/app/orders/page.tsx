@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { orderService, type Order } from '@/lib/orderService'
 import { Clock, CheckCircle, Truck, Package, MapPin, Star, ArrowLeft, ChefHat, Phone } from 'lucide-react'
@@ -8,7 +8,7 @@ import Link from 'next/link'
 import Reviews from '@/components/Reviews'
 import { useSearchParams } from 'next/navigation'
 
-export default function OrdersPage() {
+function OrdersContent() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
@@ -499,5 +499,19 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-sand-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-sand-300 border-t-gold rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <OrdersContent />
+    </Suspense>
   )
 }

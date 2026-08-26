@@ -1,13 +1,57 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ghana-gold: #FFD700;
-  --color-ghana-red: #CE1126;
-  --color-ghana-green: #006B3F;
-  --color-ghana-black: #000000;
-  
-  --font-primary: 'Inter', system-ui, sans-serif;
-  --font-display: 'Playfair Display', serif;
+  /* ── Palette ──────────────────────────────────────────────────────────
+     Drawn from kente and the Ghanaian flag, but desaturated for screen —
+     flag primaries (#FFD700 / #CE1126) are too hot to build an interface
+     from and read as novelty rather than a restaurant. Gold carries the
+     identity, green grounds it, clay is the warm accent. Neutrals are
+     biased warm so nothing reads as generic grey.                        */
+
+  --color-gold-50:  #FBF3E0;
+  --color-gold-100: #F4E3BC;
+  --color-gold-300: #E0BE6E;
+  --color-gold:     #C9982E;
+  --color-gold-600: #A87D22;
+  --color-gold-800: #6E5015;
+
+  --color-kente-50:  #E8F0EC;
+  --color-kente-300: #5C9A80;
+  --color-kente:     #14543D;
+  --color-kente-800: #0C3527;
+
+  --color-clay-50:  #F8ECE8;
+  --color-clay-300: #D08D77;
+  --color-clay:     #A8452C;
+  --color-clay-700: #7C2F1D;
+
+  /* Warm neutrals — a grey with no hue reads as unconsidered. */
+  --color-sand-50:  #FBF8F3;
+  --color-sand-100: #F4EFE6;
+  --color-sand-200: #E7DFD1;
+  --color-sand-300: #D2C6B3;
+  --color-sand-500: #8C8175;
+  --color-sand-700: #4E463D;
+  --color-ink:      #1A1512;
+  --color-ink-soft: #3A322B;
+
+  /* ── Type ─────────────────────────────────────────────────────────────
+     A serif for dish names and headings gives the appetite appeal and the
+     premium register Inter-for-everything could not; DM Sans handles UI
+     and body. Prices use tabular numerals so columns line up.            */
+  --font-primary: var(--font-dm-sans), system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+
+  /* ── Shape ────────────────────────────────────────────────────────────
+     The old design rounded almost everything to 2xl/3xl, which flattened
+     hierarchy — when every surface is a pill, none of them read as
+     interactive. These are deliberately tighter.                         */
+  --radius-card: 4px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(26, 21, 18, .06), 0 8px 24px -14px rgba(26, 21, 18, .18);
+  --shadow-lift: 0 2px 4px rgba(26, 21, 18, .08), 0 18px 40px -20px rgba(26, 21, 18, .28);
   
   --animate-gradient: gradient 3s ease infinite;
   --animate-float: float 3s ease-in-out infinite;

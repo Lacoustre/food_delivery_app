@@ -288,54 +288,60 @@ export default function AfricanCuisineWebsite() {
     <div className="min-h-screen bg-amber-50">
       {/* Restaurant Status Banner */}
       {!restaurantStatus.isOpen && (
-        <div className="bg-red-600 text-white py-3 px-4 text-center font-bold">
-          🔒 Restaurant is currently closed. {restaurantStatus.message || 'We will be back soon!'}
+        <div className="bg-clay-700 text-sand-50 py-2.5 px-4 text-center text-sm">
+          <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
+          {restaurantStatus.message || 'You can still schedule an order for later.'}
         </div>
       )}
       
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-white/95 backdrop-blur-md shadow-lg' : 'bg-black/20 backdrop-blur-sm'
+        scrolled ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/70 to-transparent'
       }`}>
         <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            {/* Logo & Brand - Far Left */}
-            <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-4 h-16">
+            {/* Brand. The full name is two lines of text next to a 48px mark —
+                far too wide to share a 375px row with a search field, which is
+                what broke the mobile header. Below sm it becomes the mark plus
+                a short wordmark. */}
+            <Link href="/" className="flex items-center gap-3 shrink-0">
               <Image
                 src="/assets/images/logo.png"
-                alt="Logo"
-                width={48}
-                height={48}
-                className="object-contain"
+                alt="Taste of African Cuisine"
+                width={40}
+                height={40}
+                className="object-contain w-9 h-9 sm:w-11 sm:h-11"
                 unoptimized
               />
-              <div>
-                <h1 className={`text-lg font-bold italic ${scrolled ? 'text-gray-900' : 'text-white'}`}>
-                  Taste of African Cuisine
-                </h1>
-                <p className={`text-xs italic flex items-center gap-2 ${scrolled ? 'text-orange-600' : 'text-orange-300'}`}>
-                  <span className={`w-2 h-2 rounded-full ${restaurantStatus.isOpen ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                  {restaurantStatus.isOpen ? 'Open Now' : 'Closed'} • Authentic Ghanaian Food
-                </p>
+              <div className="min-w-0">
+                <span className={`block font-display leading-none tracking-tight text-[17px] sm:text-xl ${scrolled ? 'text-ink' : 'text-sand-50'}`}>
+                  <span className="sm:hidden">Taste of Africa</span>
+                  <span className="hidden sm:inline">Taste of African Cuisine</span>
+                </span>
+                <span className={`hidden sm:flex items-center gap-1.5 mt-1 text-[11px] tracking-wide uppercase ${scrolled ? 'text-sand-500' : 'text-sand-200/80'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${restaurantStatus.isOpen ? 'bg-kente-300' : 'bg-clay-300'}`}></span>
+                  {restaurantStatus.isOpen ? 'Open now' : 'Closed'} · Ghanaian kitchen
+                </span>
               </div>
-            </div>
+            </Link>
 
-            {/* Centered Search Bar */}
-            <div className="flex-1 flex justify-center">
-              <div className="relative w-full max-w-md">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
-                  scrolled ? 'text-gray-400' : 'text-white/70'
+            {/* Search is desktop-only. On mobile it lives in the menu sheet,
+                where it has room to be usable rather than a 90px stub. */}
+            <div className="hidden lg:flex flex-1 justify-center">
+              <div className="relative w-full max-w-sm">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                  scrolled ? 'text-sand-500' : 'text-sand-200/70'
                 }`} />
                 <input
                   type="text"
-                  placeholder="Search dishes..."
+                  placeholder="Search dishes"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 rounded-full border-2 border-orange-500 transition-all ${
-                    scrolled 
-                      ? 'bg-white text-gray-900 placeholder-gray-500 focus:border-orange-600' 
-                      : 'bg-white/10 text-white placeholder-white/70 focus:border-orange-400'
-                  } focus:outline-none focus:ring-2 focus:ring-orange-500/20`}
+                  className={`w-full pl-10 pr-4 py-2 text-sm rounded-control border transition-colors focus:outline-none ${
+                    scrolled
+                      ? 'bg-sand-50 border-sand-200 text-ink placeholder-sand-500 focus:border-gold'
+                      : 'bg-white/10 border-white/20 text-white placeholder-white/60 focus:border-gold-300'
+                  }`}
                 />
               </div>
             </div>
@@ -346,8 +352,8 @@ export default function AfricanCuisineWebsite() {
               <div className="hidden md:flex items-center space-x-6">
                 {['Menu', 'About', 'Contact'].map(item => (
                   <a key={item} href={`#${item.toLowerCase()}`} 
-                     className={`font-medium transition-colors ${
-                       scrolled ? 'text-gray-700 hover:text-orange-600' : 'text-white hover:text-orange-300'
+                     className={`text-sm font-medium transition-colors ${
+                       scrolled ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
                      }`}>
                     {item}
                   </a>
@@ -358,7 +364,7 @@ export default function AfricanCuisineWebsite() {
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
+                    <span className="absolute -top-1 -right-1 bg-clay text-white text-[11px] rounded-full w-5 h-5 flex items-center justify-center font-semibold">
                       {cartCount}
                     </span>
                   )}
@@ -366,9 +372,9 @@ export default function AfricanCuisineWebsite() {
                 
                 <button 
                   onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full font-medium hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg"
+                  className="bg-gold text-ink px-5 py-2 rounded-control text-sm font-semibold hover:bg-gold-600 hover:text-sand-50 transition-colors"
                 >
-                  Order Now
+                  Order now
                 </button>
                 
                 {/* Auth Buttons */}
@@ -412,8 +418,8 @@ export default function AfricanCuisineWebsite() {
                     <Link
                       href="/login"
                       onClick={() => setNavigating(true)}
-                      className={`font-medium transition-colors flex items-center gap-2 ${
-                        scrolled ? 'text-gray-700 hover:text-orange-600' : 'text-white hover:text-orange-300'
+                      className={`text-sm font-medium transition-colors flex items-center gap-2 ${
+                        scrolled ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
                       }`}
                     >
                       {navigating ? (
@@ -424,7 +430,7 @@ export default function AfricanCuisineWebsite() {
                     <Link
                       href="/register"
                       onClick={() => setNavigating(true)}
-                      className="bg-orange-500 text-white px-4 py-2 rounded-full font-medium hover:bg-orange-600 transition-colors flex items-center gap-2"
+                      className="bg-kente text-sand-50 px-4 py-2 rounded-control text-sm font-semibold hover:bg-kente-800 transition-colors flex items-center gap-2"
                     >
                       {navigating ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
@@ -442,7 +448,7 @@ export default function AfricanCuisineWebsite() {
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 bg-clay text-white text-[11px] rounded-full w-5 h-5 flex items-center justify-center font-semibold">
                       {cartCount}
                     </span>
                   )}
@@ -460,16 +466,28 @@ export default function AfricanCuisineWebsite() {
           </div>
 
           {/* Mobile Menu */}
+          {/* Always a solid surface. The old sheet went translucent-dark over the
+              hero, which left the links sitting on whatever photo happened to be
+              behind them. */}
           {mobileMenuOpen && (
-            <div className={`md:hidden border-t ${
-              scrolled ? 'border-gray-200 bg-white' : 'border-white/20 bg-black/40'
-            }`}>
-              <div className="px-4 py-4 space-y-4">
+            <div className="md:hidden border-t border-sand-200 bg-sand-50 shadow-card">
+              <div className="px-4 py-4 space-y-3">
+                {/* Search lives here on mobile, with room to actually be used */}
+                <div className="relative lg:hidden">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sand-500" />
+                  <input
+                    type="text"
+                    placeholder="Search dishes"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-control border border-sand-200 bg-white text-ink placeholder-sand-500 focus:outline-none focus:border-gold"
+                  />
+                </div>
                 {/* Mobile Navigation */}
                 {['Menu', 'About', 'Contact'].map(item => (
                   <a key={item} href={`#${item.toLowerCase()}`} 
-                     className={`block py-2 font-medium ${
-                       scrolled ? 'text-gray-700' : 'text-white'
+                     className={`block py-2.5 font-medium border-b border-sand-200/60 ${
+                       scrolled ? 'text-ink-soft' : 'text-ink-soft'
                      }`}
                      onClick={() => setMobileMenuOpen(false)}>
                     {item}
@@ -478,9 +496,9 @@ export default function AfricanCuisineWebsite() {
                 
                 <button 
                   onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-full font-medium"
+                  className="w-full bg-gold text-ink py-3 rounded-control font-semibold"
                 >
-                  Order Now
+                  Order now
                 </button>
               </div>
             </div>
@@ -489,7 +507,10 @@ export default function AfricanCuisineWebsite() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
+      {/* h-screen pushed everything below the fold on phones and left a lot of
+          dimmed photo doing nothing. A capped viewport height with a floor
+          keeps the dish visible and the menu within reach. */}
+      <section className="relative min-h-[560px] h-[86svh] max-h-[820px] flex items-end sm:items-center overflow-hidden">
         {/* Carousel Images */}
         {heroImages.map((image, index) => (
           <div
@@ -502,42 +523,67 @@ export default function AfricanCuisineWebsite() {
               src={image.src}
               alt={image.title}
               fill
-              className="object-cover brightness-50"
+              className="object-cover"
               priority={index === 0}
               unoptimized
             />
           </div>
         ))}
+
+        {/* Scrim, not a global dim */}
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/45 to-ink/25 sm:bg-gradient-to-r sm:from-ink/90 sm:via-ink/60 sm:to-transparent" />
         
         {/* Navigation Arrows */}
-        <button
-          onClick={prevSlide}
-          className="absolute left-6 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all"
-        >
-          <ChevronLeft className="w-6 h-6 text-white" />
-        </button>
-        <button
-          onClick={nextSlide}
-          className="absolute right-6 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all"
-        >
-          <ChevronRight className="w-6 h-6 text-white" />
-        </button>
-        
-        {/* Content */}
-        <div className="relative z-10 text-center text-white px-6 max-w-4xl">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6">
-            Authentic African
-            <span className="block text-orange-400">Cuisine</span>
-          </h1>
-          <p className="text-xl md:text-2xl mb-8 opacity-90">
-            Experience the rich taste of Ghana with our traditional recipes passed down through generations
-          </p>
-          <button 
-            onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
-            className="bg-orange-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-600 transition-colors"
+        {/* Paired in the corner rather than pinned to each edge, where they
+            landed on top of the headline on narrow screens. */}
+        <div className="absolute bottom-5 right-4 sm:right-6 z-20 flex gap-2">
+          <button
+            onClick={prevSlide}
+            aria-label="Previous dish"
+            className="p-2.5 bg-sand-50/15 hover:bg-sand-50/25 border border-sand-50/25 rounded-control backdrop-blur-sm transition-colors"
           >
-            Explore Our Menu
+            <ChevronLeft className="w-5 h-5 text-sand-50" />
           </button>
+          <button
+            onClick={nextSlide}
+            aria-label="Next dish"
+            className="p-2.5 bg-sand-50/15 hover:bg-sand-50/25 border border-sand-50/25 rounded-control backdrop-blur-sm transition-colors"
+          >
+            <ChevronRight className="w-5 h-5 text-sand-50" />
+          </button>
+        </div>
+        
+        {/* Left-aligned rather than centred: centred text over a photograph
+            gives the eye no consistent starting point, and the type had to jump
+            5xl -> 7xl with nothing in between. */}
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-5 sm:px-8 pb-16 sm:pb-0">
+          <div className="max-w-xl">
+            <p className="text-gold-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase mb-4">
+              {heroImages[currentSlide].title} · {heroImages[currentSlide].subtitle}
+            </p>
+            <h1 className="font-display text-sand-50 leading-[0.95] tracking-tight text-[2.6rem] sm:text-6xl lg:text-7xl mb-5 text-balance">
+              Ghanaian cooking,<br />
+              <span className="text-gold">made from scratch</span>
+            </h1>
+            <p className="text-sand-100/85 text-base sm:text-lg leading-relaxed mb-8 max-w-md">
+              Jollof, waakye, banku and fufu — the recipes our family has cooked
+              for generations, served in Vernon.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <button
+                onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
+                className="bg-gold text-ink px-7 py-3.5 rounded-control font-semibold hover:bg-gold-300 transition-colors"
+              >
+                See the menu
+              </button>
+              <a
+                href="#about"
+                className="px-7 py-3.5 rounded-control font-semibold text-sand-50 border border-sand-50/30 hover:bg-sand-50/10 transition-colors text-center"
+              >
+                Our story
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* Dots Indicator */}
@@ -546,8 +592,9 @@ export default function AfricanCuisineWebsite() {
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all ${
-                index === currentSlide ? 'bg-orange-500' : 'bg-white/50'
+              aria-label={`Show slide ${index + 1}`}
+              className={`h-1 rounded-full transition-all ${
+                index === currentSlide ? 'w-7 bg-gold' : 'w-3 bg-sand-50/40 hover:bg-sand-50/70'
               }`}
             />
           ))}

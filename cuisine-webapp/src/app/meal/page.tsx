@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -37,7 +37,7 @@ interface CartItem {
   extrasTotal: number
 }
 
-export default function MealDetailPage() {
+function MealDetailContent() {
   const [meal, setMeal] = useState<Meal | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<Record<string, Extra>>({})
   const [instructions, setInstructions] = useState('')
@@ -373,5 +373,19 @@ export default function MealDetailPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function MealDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-sand-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-sand-300 border-t-gold rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <MealDetailContent />
+    </Suspense>
   )
 }
