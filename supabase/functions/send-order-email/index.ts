@@ -1,6 +1,9 @@
-// Order confirmation/status emails via SendGrid — replaces the Firebase
+// Order confirmation/status emails via Resend — replaces the Firebase
 // sendOrderConfirmationEmail / sendOrderCompletionEmail callables.
-// Secrets: SENDGRID_API_KEY, FROM_EMAIL (optional, has a default).
+// Secrets: RESEND_API_KEY, FROM_EMAIL (optional, has a default).
+//
+// FROM_EMAIL must be on a domain verified in Resend. Until a domain is
+// verified, Resend only accepts its own sandbox sender.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,9 +31,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const apiKey = Deno.env.get("SENDGRID_API_KEY");
-    if (!apiKey) throw new Error("SENDGRID_API_KEY not configured");
-    const fromEmail = Deno.env.get("FROM_EMAIL") || "orders@tasteofafricancuisine.com";
+    const apiKey = Deno.env.get("RESEND_API_KEY");
+    if (!apiKey) throw new Error("RESEND_API_KEY not configured");
+    const fromEmail = Deno.env.get("FROM_EMAIL") ||
+      "Taste of African Cuisine <orders@tasteofafricancuisine.com>";
 
     let subject: string;
     let htmlContent: string;
@@ -69,22 +73,24 @@ Deno.serve(async (req) => {
       `;
     }
 
-    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: customerEmail }] }],
-        from: { email: fromEmail },
+        from: fromEmail,
+        to: [customerEmail],
         subject,
-        content: [{ type: "text/html", value: htmlContent }],
+        html: htmlContent,
       }),
     });
     if (!res.ok) {
-      console.error("SendGrid error:", await res.text());
-      throw new Error("SendGrid request failed");
+      // Resend puts the reason in the body — log it, since a rejected sender
+      // domain and a bad key look identical from the status code alone.
+      console.error("Resend error:", res.status, await res.text());
+      throw new Error("Resend request failed");
     }
 
     return new Response(JSON.stringify({ success: true }), {

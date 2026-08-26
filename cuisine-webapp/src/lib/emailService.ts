@@ -1,16 +1,41 @@
-import nodemailer from 'nodemailer'
+/**
+ * Transactional email via Resend.
+ *
+ * Previously Gmail SMTP through nodemailer, which caps around 500 recipients a
+ * day, needs an App Password that breaks whenever 2FA settings change, and has
+ * no SPF/DKIM alignment for our domain — so confirmations often landed in spam.
+ *
+ * FROM_EMAIL must sit on a domain verified in Resend. The Deno edge function
+ * at supabase/functions/send-order-email sends the same way; keep them in step.
+ */
 
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.error('EMAIL_USER and EMAIL_PASS must be set in environment variables')
-}
+const FROM = process.env.FROM_EMAIL ||
+  'Taste of African Cuisine <orders@tasteofafricancuisine.com>'
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+async function sendEmail({ to, subject, html }: {
+  to: string
+  subject: string
+  html: string
+}) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) throw new Error('RESEND_API_KEY is not configured')
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({ from: FROM, to: [to], subject, html })
+  })
+
+  if (!res.ok) {
+    // Resend explains itself in the body — an unverified sender domain and a
+    // bad key are indistinguishable from the status code alone.
+    throw new Error(`Resend request failed: ${res.status} ${await res.text()}`)
   }
-})
+  return res.json()
+}
 
 export interface OrderEmailData {
   customerEmail: string
@@ -35,15 +60,9 @@ export interface OrderEmailData {
 export const emailService = {
   async sendWelcomeEmail(customerEmail: string, customerName: string) {
     try {
-      if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        console.error('Gmail credentials not configured')
-        return { success: false, error: 'Email service not configured' }
-      }
-
       console.log('Sending welcome email to:', customerEmail)
       
-      const result = await transporter.sendMail({
-        from: `"Taste of African Cuisine" <tasteofafricancuisine01@gmail.com>`,
+      const result = await sendEmail({
         to: customerEmail,
         subject: '🎉 Welcome to Taste of African Cuisine!',
         html: `
@@ -89,8 +108,7 @@ export const emailService = {
 
   async sendOrderConfirmation(data: OrderEmailData) {
     try {
-      const result = await transporter.sendMail({
-        from: `"Taste of African Cuisine" <tasteofafricancuisine01@gmail.com>`,
+      const result = await sendEmail({
         to: data.customerEmail,
         subject: `Order Confirmation #${data.orderNumber}`,
         html: `
@@ -142,8 +160,7 @@ export const emailService = {
 
   async sendStatusUpdate(data: OrderEmailData) {
     try {
-      const result = await transporter.sendMail({
-        from: `"Taste of African Cuisine" <tasteofafricancuisine01@gmail.com>`,
+      const result = await sendEmail({
         to: data.customerEmail,
         subject: `Order Update #${data.orderNumber} - ${data.status}`,
         html: `
