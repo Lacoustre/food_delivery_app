@@ -25,6 +25,8 @@ export default function AfricanCuisineWebsite() {
   // Which variant is selected per menu card, keyed by baseSlug.
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({})
   const [vegOnly, setVegOnly] = useState(false)
+  const [year, setYear] = useState(2025)
+  useEffect(() => setYear(new Date().getFullYear()), [])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [currentReview, setCurrentReview] = useState(0)
@@ -1278,7 +1280,7 @@ export default function AfricanCuisineWebsite() {
 
           <div className="border-t border-sand-700/40 mt-12 pt-8 text-center">
             <p className="text-sand-500">
-              © 2025 Taste of African Cuisine. All rights reserved.
+              © {year} Taste of African Cuisine. All rights reserved.
             </p>
           </div>
         </div>
