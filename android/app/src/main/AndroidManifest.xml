@@ -20,11 +20,6 @@
         android:theme="@style/Theme.AfricanCuisine"
         android:networkSecurityConfig="@xml/network_security_config">
 
-        <!-- ✅ Google Maps API Key -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyCgmA8o5DsT6LmQJ8MzDUrEiTZWn-ZpSiE" />
-
         <!-- ✅ FCM Push Notification Icon and Color -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

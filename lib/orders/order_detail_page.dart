@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User, MapType;
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:african_cuisine/provider/cart_provider.dart';
 import 'package:african_cuisine/services/order_adapter.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
@@ -31,7 +29,6 @@ class OrderDetailPage extends StatefulWidget {
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
   // --- state ---
-  final Completer<GoogleMapController> _mapController = Completer();
   final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
   final TextEditingController _reviewController = TextEditingController();
 
@@ -41,10 +38,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   bool _isLiveLoading = false;
 
   // map bits
-  LatLng? _deliveryLatLng;
-  Set<Marker> _markers = {};
-  bool _isLoadingLocation = false;
-  String _locationError = '';
 
   // review bits
   double _rating = 0;
@@ -102,8 +95,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     // 2) analytics
     _trackViewEvent();
 
-    // 3) try geocoding/coords
-    _getDeliveryLocation();
   }
 
   String? _extractDocId(Map<String, dynamic> data) {
@@ -184,86 +175,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   // ------------ delivery/map ------------
-  Future<void> _getDeliveryLocation() async {
-    final data = _order ?? widget.orderData ?? {};
-    final delivery = data['delivery'] as Map<String, dynamic>?;
-
-    // address could be String or Map { address, latitude, longitude }
-    String? address;
-    if (delivery?['address'] is String) {
-      address = delivery?['address'] as String?;
-    } else if (delivery?['address'] is Map) {
-      address = (delivery?['address'] as Map)['address']?.toString();
-    }
-
-    double? lat = (delivery?['latitude'] as num?)?.toDouble();
-    double? lng = (delivery?['longitude'] as num?)?.toDouble();
-
-    if ((lat == null || lng == null) && delivery?['address'] is Map) {
-      lat = ((delivery!['address'] as Map)['latitude'] as num?)?.toDouble();
-      lng = ((delivery['address'] as Map)['longitude'] as num?)?.toDouble();
-    }
-
-    if (lat != null && lng != null) {
-      _updateMapLocation(LatLng(lat, lng), address ?? 'Delivery Location');
-      return;
-    }
-
-    if (address == null || address.isEmpty) {
-      setState(() => _locationError = 'No delivery address provided');
-      return;
-    }
-
-    setState(() {
-      _isLoadingLocation = true;
-      _locationError = '';
-    });
-
-    try {
-      final locations = await locationFromAddress(address);
-      if (locations.isNotEmpty) {
-        _updateMapLocation(
-          LatLng(locations.first.latitude, locations.first.longitude),
-          address,
-        );
-      } else {
-        setState(() {
-          _locationError = 'Could not find that address.';
-          _isLoadingLocation = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _locationError = 'Could not find location: $e';
-        _isLoadingLocation = false;
-      });
-    }
-  }
-
-  void _updateMapLocation(LatLng latLng, String address) {
-    setState(() {
-      _deliveryLatLng = latLng;
-      _markers = {
-        Marker(
-          markerId: const MarkerId('delivery'),
-          position: latLng,
-          infoWindow: InfoWindow(title: 'Delivery Location', snippet: address),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        ),
-      };
-      _isLoadingLocation = false;
-    });
-    _animateToLocation(latLng);
-  }
-
-  Future<void> _animateToLocation(LatLng latLng) async {
-    if (!_mapController.isCompleted) return;
-    final controller = await _mapController.future;
-    await controller.animateCamera(
-      CameraUpdate.newCameraPosition(CameraPosition(target: latLng, zoom: 15)),
-    );
-  }
-
   // ------------ actions ------------
   Future<void> _submitReview() async {
     final order = _order ?? widget.orderData ?? {};
@@ -872,28 +783,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(address, style: theme.textTheme.bodySmall),
           ),
-          Container(
-            height: 200,
-            margin: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: _buildMapWidget(),
-            ),
-          ),
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(
               children: [
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Refresh'),
-                  onPressed: _getDeliveryLocation,
-                ),
-                const SizedBox(width: 8),
                 // Uber Direct orders get Uber's live tracking page; the
                 // in-house Call Driver button only shows for legacy orders.
                 if (uberTrackingUrl != null)
@@ -921,66 +815,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  Widget _buildMapWidget() {
-    if (_isLoadingLocation) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 8),
-          Text(
-            'Finding delivery location...',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      );
-    }
-    if (_locationError.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 40),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                _locationError,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _getDeliveryLocation,
-              child: const Text('Try Again'),
-            ),
-          ],
-        ),
-      );
-    }
-    if (_deliveryLatLng == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.location_off, size: 40, color: Colors.grey),
-            SizedBox(height: 8),
-            Text('Location not available'),
-          ],
-        ),
-      );
-    }
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(target: _deliveryLatLng!, zoom: 15),
-      markers: _markers,
-      mapType: MapType.normal,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      onMapCreated: (controller) => _mapController.complete(controller),
-    );
-  }
 
   Widget _buildReorderSection(
     List<Map<String, dynamic>> items,

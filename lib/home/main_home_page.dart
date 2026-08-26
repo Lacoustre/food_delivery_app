@@ -10,15 +10,13 @@ import 'package:african_cuisine/provider/favorites_provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:african_cuisine/delivery/delivery_fee_provider.dart';
 import 'package:african_cuisine/provider/notification_provider.dart';
-import 'package:african_cuisine/home/map_picker_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:african_cuisine/widgets/review_reminder_banner.dart';
-import 'package:african_cuisine/config/env_config.dart';
 import 'package:african_cuisine/services/places_service.dart';
 import 'package:african_cuisine/home/places_autocomplete_sheet.dart';
+import 'package:african_cuisine/home/address_picker_page.dart';
 
 class MainFoodPage extends StatefulWidget {
   const MainFoodPage({super.key});
@@ -28,12 +26,6 @@ class MainFoodPage extends StatefulWidget {
 }
 
 class _MainFoodPageState extends State<MainFoodPage> {
-  static const double _initialZoom = 14.0;
-  static const double _userLocationZoom = 16.0;
-  static const CameraPosition _defaultLocation = CameraPosition(
-    target: LatLng(41.6032, -73.0877),
-    zoom: 10.0,
-  );
 
   final List<Map<String, dynamic>> categories = [
     {'name': 'Main Dishes', 'icon': Icons.restaurant},
@@ -50,13 +42,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
   final TextEditingController _searchController = TextEditingController();
   String _greeting = '';
   String _location = 'Fetching location...';
-  Position? _currentPosition;
   int _selectedIndex = 0;
   String _selectedCategory = 'Main Dishes';
-  GoogleMapController? _mapController;
-  Set<Marker> _markers = {};
-  Set<Circle> _circles = {};
-  bool _isManualLocation = false;
   final LocationAccuracy _currentAccuracy = LocationAccuracy.high;
   bool _isRestaurantOpen = true;
   bool _showClosedDialog = true;
@@ -77,7 +64,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
   @override
   void dispose() {
-    _mapController?.dispose();
     _searchController.dispose();
     _restaurantStatusSubscription?.cancel();
     _mealsSubscription?.cancel();
@@ -313,16 +299,10 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
     if (!mounted) return;
     setState(() {
-      _currentPosition = pos;
-      _isManualLocation = false;
       _location = places.isNotEmpty
           ? '${places.first.street}, ${places.first.locality}'
           : '${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}';
     });
-
-    _updateMarkers();
-    _updateLocationCircle();
-    if (_mapController != null) _centerMapOnUser();
 
     final deliveryProvider = Provider.of<DeliveryFeeProvider>(
       context,
@@ -331,44 +311,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
     await deliveryProvider.updateDeliveryFee(pos);
   }
 
-  void _updateMarkers() {
-    if (_currentPosition == null) return;
-    _markers = {
-      Marker(
-        markerId: const MarkerId('user'),
-        position: LatLng(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-        ),
-        infoWindow: InfoWindow(title: _location),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-      ),
-    };
-  }
 
-  void _updateLocationCircle() {
-    if (_currentPosition == null) return;
-    _circles = {
-      Circle(
-        circleId: const CircleId('accuracy'),
-        center: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-        radius: _currentPosition!.accuracy,
-        fillColor: Colors.blue.withValues(alpha: 0.2),
-        strokeColor: Colors.blue,
-        strokeWidth: 1,
-      ),
-    };
-  }
 
-  Future<void> _centerMapOnUser() async {
-    if (_currentPosition == null || _mapController == null) return;
-    await _mapController!.animateCamera(
-      CameraUpdate.newLatLngZoom(
-        LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-        _userLocationZoom,
-      ),
-    );
-  }
 
   void _showLocationServiceDisabledAlert() {
     showDialog(
@@ -538,25 +482,18 @@ class _MainFoodPageState extends State<MainFoodPage> {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         Navigator.pop(context);
-                        final pickedLocation = await Navigator.push<LatLng>(
+                        final picked = await Navigator.push<PickedAddress>(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => MapPickerPage(
-                              initialPosition: _currentPosition != null
-                                  ? LatLng(
-                                      _currentPosition!.latitude,
-                                      _currentPosition!.longitude,
-                                    )
-                                  : null,
-                            ),
+                            builder: (_) => const AddressPickerPage(),
                           ),
                         );
-                        if (pickedLocation != null) {
-                          await _updateLocationFromMap(pickedLocation);
+                        if (picked != null) {
+                          await _updateLocationFromPicked(picked);
                         }
                       },
-                      icon: const Icon(Icons.map, size: 18),
-                      label: const Text('Map'),
+                      icon: const Icon(Icons.search, size: 18),
+                      label: const Text('Search'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade400,
                         foregroundColor: Colors.white,
@@ -630,11 +567,11 @@ class _MainFoodPageState extends State<MainFoodPage> {
     try {
       final prediction = await showPlacesAutocompleteSheet(
         context: context,
-        placesService: PlacesService(EnvConfig.googleMapsApiKey),
+        placesService: PlacesService(),
       );
 
       if (prediction != null && mounted) {
-        final placesService = PlacesService(EnvConfig.googleMapsApiKey);
+        final placesService = PlacesService();
         final location = await placesService.getDetails(prediction.placeId);
 
         final position = Position(
@@ -652,21 +589,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
 
         if (mounted) {
           setState(() {
-            _currentPosition = position;
-            _isManualLocation = true;
             _location = prediction.description;
-            _updateMarkers();
-            _updateLocationCircle();
           });
-
-          if (_mapController != null) {
-            await _mapController!.animateCamera(
-              CameraUpdate.newLatLngZoom(
-                LatLng(location.lat, location.lng),
-                _userLocationZoom,
-              ),
-            );
-          }
 
           if (!mounted) return;
           final deliveryProvider = Provider.of<DeliveryFeeProvider>(
@@ -686,16 +610,13 @@ class _MainFoodPageState extends State<MainFoodPage> {
     }
   }
 
-  Future<void> _updateLocationFromMap(LatLng pickedLocation) async {
+  /// The picker searched for a postal address, so the label is already known —
+  /// no reverse geocode, and no pin landing between two houses.
+  Future<void> _updateLocationFromPicked(PickedAddress picked) async {
     try {
-      final places = await placemarkFromCoordinates(
-        pickedLocation.latitude,
-        pickedLocation.longitude,
-      );
-
       final position = Position(
-        latitude: pickedLocation.latitude,
-        longitude: pickedLocation.longitude,
+        latitude: picked.lat,
+        longitude: picked.lng,
         timestamp: DateTime.now(),
         accuracy: 100.0,
         altitude: 0.0,
@@ -707,20 +628,8 @@ class _MainFoodPageState extends State<MainFoodPage> {
       );
 
       setState(() {
-        _currentPosition = position;
-        _isManualLocation = true;
-        _location = places.isNotEmpty
-            ? '${places.first.street}, ${places.first.locality}'
-            : '${pickedLocation.latitude.toStringAsFixed(4)}, ${pickedLocation.longitude.toStringAsFixed(4)}';
-        _updateMarkers();
-        _updateLocationCircle();
+        _location = picked.address;
       });
-
-      if (_mapController != null) {
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(pickedLocation, _userLocationZoom),
-        );
-      }
 
       if (!mounted) return;
       final deliveryProvider = Provider.of<DeliveryFeeProvider>(
@@ -729,15 +638,13 @@ class _MainFoodPageState extends State<MainFoodPage> {
       );
       await deliveryProvider.updateDeliveryFee(position);
     } catch (e) {
-      debugPrint('Error updating location from map: $e');
+      debugPrint('Error updating location from picked address: $e');
     }
   }
 
   Future<void> _updateLocationFromAddress(String newLocation) async {
     setState(() {
       _location = newLocation;
-      _isManualLocation = true;
-      _currentPosition = null;
     });
 
     try {
@@ -755,21 +662,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
           speed: 0.0,
           speedAccuracy: 0.0,
         );
-
-        setState(() {
-          _currentPosition = position;
-          _updateMarkers();
-          _updateLocationCircle();
-        });
-
-        if (_mapController != null) {
-          await _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(
-              LatLng(position.latitude, position.longitude),
-              _userLocationZoom,
-            ),
-          );
-        }
 
         if (!mounted) return;
         final deliveryProvider = Provider.of<DeliveryFeeProvider>(
@@ -934,36 +826,6 @@ class _MainFoodPageState extends State<MainFoodPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      if (_currentPosition != null || _isManualLocation)
-                        SizedBox(
-                          height: 60,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: GoogleMap(
-                              initialCameraPosition: _currentPosition != null
-                                  ? CameraPosition(
-                                      target: LatLng(
-                                        _currentPosition!.latitude,
-                                        _currentPosition!.longitude,
-                                      ),
-                                      zoom: _initialZoom,
-                                    )
-                                  : _defaultLocation,
-                              myLocationEnabled: !_isManualLocation,
-                              myLocationButtonEnabled: false,
-                              zoomControlsEnabled: false,
-                              markers: _markers,
-                              circles: _circles,
-                              onMapCreated: (controller) {
-                                _mapController = controller;
-                                if (_currentPosition != null) {
-                                  _centerMapOnUser();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: _searchController,

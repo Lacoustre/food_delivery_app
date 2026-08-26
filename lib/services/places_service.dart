@@ -25,10 +25,7 @@ class PlaceLocation {
 /// no second "details" round trip — [getDetails] reads what [autocomplete]
 /// already fetched.
 class PlacesService {
-  /// Kept so existing call sites compile unchanged; Photon ignores it.
-  final String apiKey;
-
-  PlacesService([this.apiKey = '']);
+  PlacesService();
 
   static const _host = 'photon.komoot.io';
 

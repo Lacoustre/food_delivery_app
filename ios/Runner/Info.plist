@@ -46,8 +46,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>GMSApiKey</key>
-	<string>AIzaSyCcv1PK7WonTsFHcaGw8T2Jw3J2Ob8DKFQ</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MKDirectionsApplicationSupportedModes</key>
