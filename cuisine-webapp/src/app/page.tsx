@@ -503,15 +503,23 @@ export default function AfricanCuisineWebsite() {
         </nav>
       </header>
 
-          {/* Full-height sheet. The old dropdown was three text links and a
-          slab, with no way to reach an account at all — sign in, orders and
-          profile were desktop-only, so a phone user was locked out of them.
-          Tap-to-call and directions matter more than a hamburger on a
-          restaurant site, so they're here too. */}
+      {/* Side drawer. It carries what the old dropdown didn't — there was no
+          way to reach an account on mobile at all, and tap-to-call and
+          directions matter more on a restaurant site than a hamburger does.
+          It sits alongside the page rather than replacing it. */}
       {mobileMenuOpen && (
-        <div className={`md:hidden fixed inset-x-0 top-0 bottom-0 z-40 flex flex-col bg-sand-50 ${
-            restaurantStatus.isOpen ? 'pt-16' : 'pt-[6.25rem]'
-          }`}>
+        <>
+          <div
+            onClick={() => setMobileMenuOpen(false)}
+            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 ${
+              restaurantStatus.isOpen ? 'top-16' : 'top-[6.25rem]'
+            }`}
+          />
+          <div
+            className={`md:hidden fixed right-0 bottom-0 z-40 w-[80%] max-w-xs flex flex-col bg-sand-50 border-l border-sand-200 shadow-lift ${
+              restaurantStatus.isOpen ? 'top-16' : 'top-[6.25rem]'
+            }`}
+          >
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
 
             <div className="relative mt-4">
@@ -601,7 +609,8 @@ export default function AfricanCuisineWebsite() {
               </span>
             </div>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
 
