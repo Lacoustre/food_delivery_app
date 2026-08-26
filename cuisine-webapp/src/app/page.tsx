@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook } from 'lucide-react'
+import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { mealsService, type Meal } from '@/lib/mealsService'
@@ -1240,8 +1240,11 @@ export default function AfricanCuisineWebsite() {
                     200 Hartford Turnpike<br />Vernon, CT
                   </a>
                 </div>
-                <div className="text-sand-300">
-                  tasteofafricancuisine01@gmail.com
+                <div className="flex items-center gap-3">
+                  <Mail className="w-5 h-5 text-gold-300 shrink-0" />
+                  <a href="mailto:tasteofafricancuisine01@gmail.com" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted break-all">
+                    tasteofafricancuisine01@gmail.com
+                  </a>
                 </div>
               </div>
             </div>
