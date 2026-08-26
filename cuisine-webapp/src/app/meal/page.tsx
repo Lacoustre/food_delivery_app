@@ -254,10 +254,10 @@ function MealDetailContent() {
         </div>
       </div>
 
-      <div className="page-shell px-4 py-8 relative z-10">
+      <div className="page-shell max-w-5xl px-4 py-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Image */}
-          <div className="relative aspect-square rounded-xl overflow-hidden shadow-lg">
+          <div className="relative aspect-[4/3] max-h-[420px] rounded-card overflow-hidden border border-sand-200">
             <img
               src={getImageUrl(meal)}
               alt={meal.name}

@@ -731,7 +731,7 @@ export default function AfricanCuisineWebsite() {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-12 max-w-[1500px]">
+          <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
             {[
               { 
                 icon: '🍽️', 
@@ -785,7 +785,7 @@ export default function AfricanCuisineWebsite() {
               <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500 mx-auto"></div>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 lg:gap-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
               {getPopularItems().map((meal, index) => (
                 <div key={meal.id} className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-105"
                      onClick={() => {
@@ -935,7 +935,7 @@ export default function AfricanCuisineWebsite() {
                       <div className="flex-1 h-px bg-sand-200" />
                     </div>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 lg:gap-6">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
                       {bySection.get(section)!.map(slug => {
                         const group = cards.get(slug)!
                         const variants = group.filter(m => m.variantLabel)
@@ -1054,7 +1054,7 @@ export default function AfricanCuisineWebsite() {
               A family kitchen, brought to Connecticut
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-10 mb-16 max-w-[1500px]">
+          <div className="grid md:grid-cols-3 gap-10 mb-16">
             <div className="group">
               <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
                 <span className="text-3xl">🇬🇭</span>
@@ -1225,7 +1225,7 @@ export default function AfricanCuisineWebsite() {
       {/* Footer */}
       <footer id="contact" className="bg-gray-800 text-white py-16">
         <div className="page-shell">
-          <div className="grid md:grid-cols-3 gap-12 max-w-[1500px]">
+          <div className="grid md:grid-cols-3 gap-12">
             <div>
               <div className="flex items-center space-x-3 mb-6">
                 <Image
