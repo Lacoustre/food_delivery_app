@@ -331,7 +331,7 @@ export default function AfricanCuisineWebsite() {
               floating in the middle of a centred container. The controls stay
               grouped on the right so the gap between reads as deliberate
               rather than as three scattered clusters. */}
-          <div className="page-shell">
+          <div className="chrome-shell">
             <div className="flex items-center gap-3 lg:gap-8 h-16">
             {/* Brand. The full name is two lines of text next to a 48px mark —
                 far too wide to share a 375px row with a search field, which is
@@ -670,7 +670,7 @@ export default function AfricanCuisineWebsite() {
         {/* Same horizontal padding as the header, so the headline starts on
             the same left edge as the brand instead of being indented by a
             centred container. */}
-        <div className="relative z-10 w-full min-w-0 page-shell pb-16 sm:pb-0">
+        <div className="relative z-10 w-full min-w-0 chrome-shell pb-16 sm:pb-0">
           <div className="min-w-0 max-w-2xl">
             <p className="text-gold-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase mb-4 break-words">
               {heroImages[currentSlide].title} · {heroImages[currentSlide].subtitle}
@@ -1080,7 +1080,7 @@ export default function AfricanCuisineWebsite() {
 
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
-              <h2 className="text-4xl font-bold mb-6">About Us</h2>
+              <h2 className="font-display text-3xl sm:text-4xl leading-tight mb-5">About Us</h2>
               <p className="text-gray-300 mb-6 text-lg">
                 At Taste of African Cuisine, we take pride in serving the most authentic West African foods. Our dishes are prepared using traditional recipes that have been passed down from generation to generation.
               </p>

@@ -68,6 +68,16 @@
    let content grow with the viewport — the meal page rendered a 1200px square
    photograph on a wide display. Content is contained; only the site header
    spans the viewport. */
+/* Site chrome spans the viewport so the brand sits at the screen's left edge.
+   Content stays contained — one container cannot do both without either
+   parking the brand in the middle or letting a dish photo grow to 1200px. */
+@utility chrome-shell {
+  width: 100%;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) { .chrome-shell { padding-inline: 1.5rem; } }
+@media (min-width: 1024px) { .chrome-shell { padding-inline: 2.5rem; } }
+
 @utility page-shell {
   width: 100%;
   max-width: 1280px;
