@@ -230,6 +230,11 @@ export default function AfricanCuisineWebsite() {
     }
   }
 
+  // The header is light-on-transparent over the hero; with the mobile sheet
+  // open it sits on cream instead, so it has to switch to its solid styling
+  // or the brand and icons disappear.
+  const navSolid = scrolled || mobileMenuOpen
+
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
   // Match category and description too — searching "drinks" or "vegetarian"
@@ -317,7 +322,7 @@ export default function AfricanCuisineWebsite() {
         )}
 
         <nav className={`transition-colors duration-300 ${
-          scrolled ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/80 via-ink/40 to-transparent'
+          navSolid ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/80 via-ink/40 to-transparent'
         }`}>
           {/* Full-bleed: the brand belongs at the left edge of the screen, not
               floating in the middle of a centred container. The controls stay
@@ -339,13 +344,13 @@ export default function AfricanCuisineWebsite() {
                 unoptimized
               />
               <div className="min-w-0">
-                <span className={`block font-display tracking-tight leading-[1.05] text-[15px] sm:text-xl ${scrolled ? 'text-ink' : 'text-sand-50'}`}>
+                <span className={`block font-display tracking-tight leading-[1.05] text-[15px] sm:text-xl ${navSolid ? 'text-ink' : 'text-sand-50'}`}>
                   Taste of African Cuisine
                 </span>
                 {/* When closed, the banner directly above already says so —
                     repeating it here just crowds the mark. */}
                 {restaurantStatus.isOpen && (
-                  <span className={`hidden sm:flex items-center gap-1.5 mt-0.5 text-[11px] tracking-[0.12em] uppercase ${scrolled ? 'text-sand-500' : 'text-sand-200/75'}`}>
+                  <span className={`hidden sm:flex items-center gap-1.5 mt-0.5 text-[11px] tracking-[0.12em] uppercase ${navSolid ? 'text-sand-500' : 'text-sand-200/75'}`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-kente-300"></span>
                     Open now
                   </span>
@@ -358,7 +363,7 @@ export default function AfricanCuisineWebsite() {
             <div className="hidden lg:flex flex-1 justify-end">
               <div className="relative w-full max-w-xs">
                 <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
-                  scrolled ? 'text-sand-500' : 'text-sand-200/70'
+                  navSolid ? 'text-sand-500' : 'text-sand-200/70'
                 }`} />
                 <input
                   type="text"
@@ -381,14 +386,14 @@ export default function AfricanCuisineWebsite() {
                 {['Menu', 'About', 'Contact'].map(item => (
                   <a key={item} href={`#${item.toLowerCase()}`} 
                      className={`text-sm font-medium transition-colors ${
-                       scrolled ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
+                       navSolid ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
                      }`}>
                     {item}
                   </a>
                 ))}
                 
                 <Link href="/cart" className={`relative p-2 rounded-full transition-colors ${
-                  scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
+                  navSolid ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
@@ -410,14 +415,14 @@ export default function AfricanCuisineWebsite() {
                   <div className="flex items-center space-x-3">
                     <OrderNotifications />
                     <Link href="/orders" className={`p-2 rounded-full transition-colors ${
-                      scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
+                      navSolid ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
                     }`} title="My Orders">
                       <Clock className="w-5 h-5" />
                     </Link>
                     <div className="flex items-center space-x-2">
                       <User className="w-5 h-5 text-gray-600" />
                       <Link href="/profile" className={`text-sm font-medium hover:text-orange-600 transition-colors ${
-                        scrolled ? 'text-gray-700' : 'text-white'
+                        navSolid ? 'text-gray-700' : 'text-white'
                       }`}>
                         {userProfile?.name || user.email}
                       </Link>
@@ -430,7 +435,7 @@ export default function AfricanCuisineWebsite() {
                       }}
                       disabled={signingOut}
                       className={`p-2 transition-all duration-300 disabled:opacity-70 transform hover:scale-110 ${
-                        scrolled ? 'text-gray-600 hover:text-red-600' : 'text-white hover:text-red-400'
+                        navSolid ? 'text-gray-600 hover:text-red-600' : 'text-white hover:text-red-400'
                       }`}
                       title="Sign Out"
                     >
@@ -447,7 +452,7 @@ export default function AfricanCuisineWebsite() {
                       href="/login"
                       onClick={() => setNavigating(true)}
                       className={`text-sm font-medium transition-colors flex items-center gap-2 ${
-                        scrolled ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
+                        navSolid ? 'text-ink-soft hover:text-gold-600' : 'text-sand-100 hover:text-gold-300'
                       }`}
                     >
                       {navigating ? (
@@ -472,7 +477,7 @@ export default function AfricanCuisineWebsite() {
               {/* Mobile Menu Button */}
               <div className="md:hidden flex items-center space-x-2">
                 <Link href="/cart" className={`relative p-2 rounded-full ${
-                  scrolled ? 'text-gray-700' : 'text-white'
+                  navSolid ? 'text-gray-700' : 'text-white'
                 }`}>
                   <ShoppingCart className="w-5 h-5" />
                   {cartCount > 0 && (
@@ -484,7 +489,7 @@ export default function AfricanCuisineWebsite() {
                 <button 
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   className={`p-2 rounded-full ${
-                    scrolled ? 'text-gray-700' : 'text-white'
+                    navSolid ? 'text-gray-700' : 'text-white'
                   }`}
                 >
                   {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -494,46 +499,111 @@ export default function AfricanCuisineWebsite() {
           </div>
 
           {/* Mobile Menu */}
-          {/* Always a solid surface. The old sheet went translucent-dark over the
-              hero, which left the links sitting on whatever photo happened to be
-              behind them. */}
-          {mobileMenuOpen && (
-            <div className="md:hidden border-t border-sand-200 bg-sand-50 shadow-card">
-              <div className="px-4 py-4 space-y-3">
-                {/* Search lives here on mobile, with room to actually be used */}
-                <div className="relative lg:hidden">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sand-500" />
-                  <input
-                    type="text"
-                    placeholder="Search dishes"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-control border border-sand-200 bg-white text-ink placeholder-sand-500 focus:outline-none focus:border-gold"
-                  />
-                </div>
-                {/* Mobile Navigation */}
-                {['Menu', 'About', 'Contact'].map(item => (
-                  <a key={item} href={`#${item.toLowerCase()}`} 
-                     className={`block py-2.5 font-medium border-b border-sand-200/60 ${
-                       scrolled ? 'text-ink-soft' : 'text-ink-soft'
-                     }`}
-                     onClick={() => setMobileMenuOpen(false)}>
-                    {item}
-                  </a>
-                ))}
-                
-                <button 
-                  onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="w-full bg-gold text-ink py-3 rounded-control font-semibold"
-                >
-                  Order now
-                </button>
-              </div>
-            </div>
-            )}
           </div>
         </nav>
       </header>
+
+          {/* Full-height sheet. The old dropdown was three text links and a
+          slab, with no way to reach an account at all — sign in, orders and
+          profile were desktop-only, so a phone user was locked out of them.
+          Tap-to-call and directions matter more than a hamburger on a
+          restaurant site, so they're here too. */}
+      {mobileMenuOpen && (
+        <div className={`md:hidden fixed inset-x-0 top-0 bottom-0 z-40 flex flex-col bg-sand-50 ${
+            restaurantStatus.isOpen ? 'pt-16' : 'pt-[6.25rem]'
+          }`}>
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
+
+            <div className="relative mt-4">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-sand-500" />
+              <input
+                type="text"
+                placeholder="Search dishes"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') setMobileMenuOpen(false) }}
+                className="w-full pl-10 pr-4 py-3 text-[15px] rounded-control border border-sand-200 bg-white text-ink placeholder-sand-500 focus:outline-none focus:border-gold"
+              />
+            </div>
+
+            <button
+              onClick={() => { setMobileMenuOpen(false); document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' }) }}
+              className="mt-4 w-full bg-gold text-ink py-3.5 rounded-control font-semibold hover:bg-gold-300 transition-colors"
+            >
+              Order now
+            </button>
+
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Browse</p>
+            {[
+              { label: 'Menu', href: '#menu' },
+              { label: 'About', href: '#about' },
+              { label: 'Contact', href: '#contact' },
+            ].map(item => (
+              <a
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-3.5 border-b border-sand-200 text-ink font-medium"
+              >
+                {item.label}
+                <ChevronRight className="w-4 h-4 text-sand-300" />
+              </a>
+            ))}
+
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Account</p>
+            {user ? (
+              <>
+                <Link href="/orders" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                  <Clock className="w-4 h-4 text-sand-500" /> My orders
+                </Link>
+                <Link href="/profile" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                  <User className="w-4 h-4 text-sand-500" /> Profile
+                </Link>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); signOut() }}
+                  disabled={signingOut}
+                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-clay font-medium disabled:opacity-60 w-full"
+                >
+                  <LogOut className="w-4 h-4" /> {signingOut ? 'Signing out…' : 'Sign out'}
+                </button>
+              </>
+            ) : (
+              <div className="flex gap-3 mt-3">
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+                  className="flex-1 text-center py-3 rounded-control border border-sand-300 text-ink font-semibold">
+                  Sign in
+                </Link>
+                <Link href="/register" onClick={() => setMobileMenuOpen(false)}
+                  className="flex-1 text-center py-3 rounded-control bg-kente text-sand-50 font-semibold">
+                  Create account
+                </Link>
+              </div>
+            )}
+
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Visit us</p>
+            <a href="tel:+18608055121"
+              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              <Phone className="w-4 h-4 text-sand-500" /> (860) 805-5121
+            </a>
+            <a href="https://maps.google.com/?q=200+Hartford+Turnpike,+Vernon,+CT+06066"
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-start gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              <MapPin className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
+              <span>200 Hartford Turnpike<br /><span className="text-sand-500 font-normal text-sm">Vernon, CT 06066</span></span>
+            </a>
+            <div className="flex items-start gap-3 py-3.5 text-sand-700">
+              <Clock className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
+              <span className="text-sm">
+                Tue–Sat 11:00 AM – 9:00 PM<br />
+                <span className="text-sand-500">Friday until 8:00 PM · Sun &amp; Mon closed</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Hero Section */}
       {/* h-screen pushed everything below the fold on phones and left a lot of
