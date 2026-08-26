@@ -28,7 +28,19 @@ export const createPaymentIntent = async ({
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency })
   })
-  return response.json()
+
+  const data = await response.json().catch(() => null)
+
+  // fetch only rejects on a network failure, so a 409 (closed) or 422 (address
+  // Uber won't quote) used to resolve with { error } and no clientSecret —
+  // which left the checkout spinner running forever with nothing explaining it.
+  if (!response.ok) {
+    throw new Error(data?.error || 'Could not start payment. Please try again.')
+  }
+  if (!data?.clientSecret) {
+    throw new Error('Payment could not be started. Please try again.')
+  }
+  return data as { clientSecret: string; total: number; deliveryFee?: number }
 }
 
 export { stripePromise }

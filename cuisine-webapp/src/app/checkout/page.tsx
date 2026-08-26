@@ -121,6 +121,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
   const [locationLoading, setLocationLoading] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [appliedPromo, setAppliedPromo] = useState<{ promotion: Promotion, discount: number } | undefined>()
@@ -244,26 +245,36 @@ function CheckoutContent() {
     promoDiscount,
   })
 
+  const readyToPay =
+    total > 0 && (orderData.orderType !== 'delivery' || (!!quoteAddress && !quoteError && !quoting))
+
   useEffect(() => {
-    const readyToPay =
-      total > 0 && (orderData.orderType !== 'delivery' || (!!quoteAddress && !quoteError && !quoting))
-    if (readyToPay) {
-      createPaymentIntent({
-        items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
-        orderType: orderData.orderType,
-        deliveryAddress: orderData.deliveryAddress,
-        promoCode: appliedPromo?.promotion.code
+    if (!readyToPay) return
+    let cancelled = false
+    setPaymentError(null)
+
+    createPaymentIntent({
+      items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
+      orderType: orderData.orderType,
+      deliveryAddress: orderData.deliveryAddress,
+      promoCode: appliedPromo?.promotion.code
+    })
+      .then(({ clientSecret }) => {
+        if (!cancelled) setClientSecret(clientSecret)
       })
-        .then(({ clientSecret }) => {
-          setClientSecret(clientSecret)
-        })
-        .catch((error) => {
-          console.error('Payment intent error:', error)
-          alert('Unable to initialize payment. Please try again or use cash payment.')
-        })
-    }
+      .catch((error: Error) => {
+        if (cancelled) return
+        // Show the server's reason — "the restaurant is closed", "we could not
+        // quote delivery to that address" — rather than leaving the spinner up.
+        setClientSecret(null)
+        setPaymentError(error.message)
+      })
+
+    return () => { cancelled = true }
+    // Re-runs on address changes too: the fee can move without the total
+    // changing, and a previously refused address may now be quotable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total])
+  }, [total, readyToPay, orderData.deliveryAddress, orderData.orderType])
 
   const getCurrentLocation = async () => {
     setLocationLoading(true)
@@ -852,8 +863,22 @@ function CheckoutContent() {
                       processing={processing}
                     />
                   </Elements>
+                ) : paymentError ? (
+                  <div className="rounded-control border border-clay-50 bg-clay-50 p-4">
+                    <p className="text-clay font-semibold text-sm mb-1">Payment unavailable</p>
+                    <p className="text-sand-700 text-sm">{paymentError}</p>
+                    <p className="text-sand-500 text-xs mt-2">
+                      You can still place this order and pay cash on delivery.
+                    </p>
+                  </div>
+                ) : !readyToPay ? (
+                  <div className="rounded-control border border-sand-200 bg-sand-100 p-4 text-sand-700 text-sm">
+                    {orderData.orderType === 'delivery' && !quoteAddress
+                      ? 'Enter your delivery address to continue.'
+                      : 'Add something to your order to continue.'}
+                  </div>
                 ) : (
-                  <div className="text-center py-4 text-ink-soft font-bold">Loading payment form...</div>
+                  <div className="text-center py-4 text-sand-700 text-sm">Loading payment form…</div>
                 )
               ) : (
                 <button

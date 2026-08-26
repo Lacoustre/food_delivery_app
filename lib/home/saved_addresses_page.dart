@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/address.dart';
-import '../home/map_picker_page.dart';
+import '../home/address_picker_page.dart';
 
 /// Saved addresses live in the Supabase addresses table (owner-only RLS),
 /// replacing the per-user Firestore subcollection.
@@ -22,40 +20,31 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
   final _stateController = TextEditingController();
   final _zipController = TextEditingController();
   bool _isDefault = false;
-  LatLng? _selectedLatLng;
+  ({double lat, double lng})? _selectedLatLng;
 
   final SupabaseClient _supabase = Supabase.instance.client;
   String get _userId => _supabase.auth.currentUser!.id;
 
   Future<void> _pickLocationAndFillFields() async {
-    final LatLng? picked = await Navigator.push(
+    final picked = await Navigator.push<PickedAddress>(
       context,
-      MaterialPageRoute(builder: (_) => const MapPickerPage()),
+      MaterialPageRoute(builder: (_) => const AddressPickerPage()),
     );
     if (picked == null) return;
 
-    try {
-      final placemarks = await placemarkFromCoordinates(
-        picked.latitude,
-        picked.longitude,
-      );
+    // The picker searched for a postal address, so its parts are already
+    // known — no reverse geocode needed, and no chance of a dropped pin
+    // resolving to the house next door.
+    final parts = picked.address.split(',').map((s) => s.trim()).toList();
+    final tail = parts.length > 2 ? parts.last.split(' ') : const <String>[];
 
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-        setState(() {
-          _selectedLatLng = picked;
-          _streetController.text = place.street ?? '';
-          _cityController.text = place.locality ?? '';
-          _stateController.text = place.administrativeArea ?? '';
-          _zipController.text = place.postalCode ?? '';
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to reverse geocode location.")),
-      );
-    }
+    setState(() {
+      _selectedLatLng = (lat: picked.lat, lng: picked.lng);
+      _streetController.text = parts.isNotEmpty ? parts[0] : picked.address;
+      _cityController.text = parts.length > 1 ? parts[1] : '';
+      _stateController.text = tail.isNotEmpty ? tail.first : '';
+      _zipController.text = tail.length > 1 ? tail.last : '';
+    });
   }
 
   void _showToast(String msg, Color background) {
@@ -76,7 +65,7 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
       _stateController.text = address.state;
       _zipController.text = address.zipCode;
       _selectedLatLng = (address.latitude != null && address.longitude != null)
-          ? LatLng(address.latitude!, address.longitude!)
+          ? (lat: address.latitude!, lng: address.longitude!)
           : null;
       _isDefault = address.isDefault;
     } else {
@@ -206,8 +195,8 @@ class _SavedAddressesPageState extends State<SavedAddressesPage> {
                       'city': city,
                       'state': state,
                       'zip': zip,
-                      'lat': _selectedLatLng?.latitude,
-                      'lng': _selectedLatLng?.longitude,
+                      'lat': _selectedLatLng?.lat,
+                      'lng': _selectedLatLng?.lng,
                       'is_default': _isDefault,
                     };
 
