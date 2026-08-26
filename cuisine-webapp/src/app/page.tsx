@@ -300,11 +300,12 @@ export default function AfricanCuisineWebsite() {
         <nav className={`transition-colors duration-300 ${
           scrolled ? 'bg-sand-50/95 backdrop-blur-md border-b border-sand-200' : 'bg-gradient-to-b from-ink/80 via-ink/40 to-transparent'
         }`}>
-          {/* Capped and centred — the header previously ran the full width of
-              the viewport, which spread the controls to the far edges on a
-              wide display. */}
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3 lg:gap-6 h-16">
+          {/* Full-bleed: the brand belongs at the left edge of the screen, not
+              floating in the middle of a centred container. The controls stay
+              grouped on the right so the gap between reads as deliberate
+              rather than as three scattered clusters. */}
+          <div className="w-full px-4 sm:px-6 lg:px-10">
+            <div className="flex items-center gap-3 lg:gap-8 h-16">
             {/* Brand. The full name is two lines of text next to a 48px mark —
                 far too wide to share a 375px row with a search field, which is
                 what broke the mobile header. Below sm it becomes the mark plus
@@ -336,7 +337,7 @@ export default function AfricanCuisineWebsite() {
 
             {/* Search is desktop-only. On mobile it lives in the menu sheet,
                 where it has room to be usable rather than a 90px stub. */}
-            <div className="hidden lg:flex flex-1 justify-end pr-2">
+            <div className="hidden lg:flex flex-1 justify-end">
               <div className="relative w-full max-w-xs">
                 <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
                   scrolled ? 'text-sand-500' : 'text-sand-200/70'
@@ -566,9 +567,12 @@ export default function AfricanCuisineWebsite() {
         {/* Left-aligned rather than centred: centred text over a photograph
             gives the eye no consistent starting point, and the type had to jump
             5xl -> 7xl with nothing in between. */}
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-5 sm:px-8 pb-16 sm:pb-0">
-          <div className="max-w-xl">
-            <p className="text-gold-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase mb-4">
+        {/* Same horizontal padding as the header, so the headline starts on
+            the same left edge as the brand instead of being indented by a
+            centred container. */}
+        <div className="relative z-10 w-full min-w-0 px-4 sm:px-6 lg:px-10 pb-16 sm:pb-0">
+          <div className="min-w-0 max-w-2xl">
+            <p className="text-gold-300 text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase mb-4 break-words">
               {heroImages[currentSlide].title} · {heroImages[currentSlide].subtitle}
             </p>
             <h1 className="font-display text-sand-50 leading-[0.95] tracking-tight text-[2.6rem] sm:text-6xl lg:text-7xl mb-5 text-balance">
