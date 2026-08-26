@@ -28,11 +28,11 @@ export async function POST(request: NextRequest) {
       quoteId: quote.quoteId
     })
   } catch (error) {
-    // Uber declining is a real answer — out of range, or an address it can't
-    // resolve. Surface it rather than inventing a fee.
+    // Uber returns address_undeliverable for both an address it cannot resolve
+    // and one that is genuinely out of range, so the message has to cover both.
     console.error('quote-delivery failed:', error)
     return NextResponse.json(
-      { error: 'Delivery is not available to that address right now.' },
+      { error: 'We could not quote delivery to that address. Check it includes the street, city and ZIP — we deliver within about 10 miles of Vernon.' },
       { status: 422 }
     )
   }

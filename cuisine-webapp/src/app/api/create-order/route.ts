@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       } catch (quoteError) {
         console.error('Uber quote failed:', quoteError)
         return NextResponse.json(
-          { error: 'Delivery is not available to that address right now.' },
+          { error: 'We could not quote delivery to that address. Check it includes the street, city and ZIP — we deliver within about 10 miles of Vernon.' },
           { status: 422 }
         )
       }

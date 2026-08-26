@@ -81,104 +81,15 @@ export default function CartPage() {
       setCartItems(JSON.parse(savedCart))
     }
     
-    // Wait for Google Maps to load, then get user location
-    const checkGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        getUserLocation()
-      } else {
-        setTimeout(checkGoogleMaps, 100)
-      }
-    }
-    
-    const getUserLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords
-            setUserLocation({ lat: latitude, lng: longitude })
-            
-            try {
-              // Coarse radius pre-check only — Uber gives the real answer, and
-              // the price, once there's an address at checkout.
-              const distance = await calculateDistance(latitude, longitude)
-              
-              if (distance > maxDeliveryDistance) {
-                setDeliveryAvailable(false)
-                setOrderType('pickup')
-                setLocationError(`Delivery not available. You're ${distance.toFixed(1)} miles away (max: ${maxDeliveryDistance} miles)`)
-              }
-            } catch (error) {
-              console.error('Distance calculation failed:', error)
-              setLocationError('Unable to calculate delivery distance. Delivery may not be available.')
-            }
-          },
-          (error) => {
-            console.error('Geolocation error:', error)
-            switch(error.code) {
-              case error.PERMISSION_DENIED:
-                setLocationError('Location access denied. Please enable location or use pickup.')
-                break
-              case error.POSITION_UNAVAILABLE:
-                setLocationError('Location unavailable. Please use pickup or enter address manually.')
-                break
-              case error.TIMEOUT:
-                setLocationError('Location request timed out. Please try again or use pickup.')
-                break
-              default:
-                setLocationError('Location error. Delivery may not be available.')
-                break
-            }
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 300000
-          }
-        )
-      } else {
-        setLocationError('Geolocation not supported. Delivery may not be available.')
-      }
-    }
-    
-    checkGoogleMaps()
+    // The cart used to ask for the browser's location and run a Google
+    // Distance Matrix lookup to decide whether delivery was available. That
+    // needed billing enabled on the Maps project (it isn't, so every call
+    // failed), and it is now redundant: Uber decides deliverability when the
+    // address is quoted at checkout, and answers for the real address rather
+    // than wherever the phone happens to be.
     setLoading(false)
   }, [user, router])
 
-  const calculateDistance = async (userLat: number, userLng: number) => {
-    try {
-      // Loaded globally by the Maps script tag in layout.tsx
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const google = (window as any).google
-      const service = new google.maps.DistanceMatrixService()
-      
-      return new Promise<number>((resolve, reject) => {
-        service.getDistanceMatrix({
-          origins: [{ lat: userLat, lng: userLng }],
-          destinations: [{ lat: restaurantLocation.lat, lng: restaurantLocation.lng }],
-          travelMode: google.maps.TravelMode.DRIVING,
-          unitSystem: google.maps.UnitSystem.IMPERIAL,
-          avoidHighways: false,
-          avoidTolls: false
-        }, (response: any, status: any) => {
-          if (status === google.maps.DistanceMatrixStatus.OK && response) {
-            const distance = response.rows[0].elements[0].distance
-            if (distance) {
-              // Convert meters to miles
-              const miles = distance.value * 0.000621371
-              resolve(miles)
-            } else {
-              reject(new Error('No distance data'))
-            }
-          } else {
-            reject(new Error('Distance Matrix request failed'))
-          }
-        })
-      })
-    } catch (error) {
-      console.error('Google Maps error:', error)
-      throw error
-    }
-  }
 
   const updateQuantity = (id: string, newQuantity: number) => {
     if (newQuantity <= 0) {
