@@ -937,8 +937,10 @@ export default function AfricanCuisineWebsite() {
                         const variants = group.filter(m => m.variantLabel)
                           .sort((a, b) => a.price - b.price)
                         const chosenId = selectedVariant[slug]
+                        const defaultVariant =
+                          variants.find(v => !v.isVegetarian) ?? variants[0]
                         const active = group.find(m => m.id === chosenId)
-                          ?? (variants.length ? variants[0] : group[0])
+                          ?? (variants.length ? defaultVariant : group[0])
                         const cheapest = Math.min(...group.map(m => m.price))
                         const soldOut = active.available === false
 
@@ -1000,7 +1002,7 @@ export default function AfricanCuisineWebsite() {
                                     >
                                       {variants.map(v => (
                                         <option key={v.id} value={v.id}>
-                                          {v.variantLabel}{v.isVegetarian ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}
+                                          {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}
                                         </option>
                                       ))}
                                     </select>
