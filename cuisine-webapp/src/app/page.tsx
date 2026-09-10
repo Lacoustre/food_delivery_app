@@ -345,7 +345,7 @@ export default function AfricanCuisineWebsite() {
                 alt="Taste of African Cuisine"
                 width={40}
                 height={40}
-                className="object-contain w-9 h-9 sm:w-11 sm:h-11"
+                className="object-cover w-9 h-9 sm:w-11 sm:h-11 rounded-card"
                 unoptimized
               />
               <div className="min-w-0">
