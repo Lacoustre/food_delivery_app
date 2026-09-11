@@ -683,7 +683,7 @@ export default function AfricanCuisineWebsite() {
               {heroImages[currentSlide].title} · {heroImages[currentSlide].subtitle}
             </p>
             <h1 className="font-display text-sand-50 leading-[0.95] tracking-tight text-[2.6rem] sm:text-6xl lg:text-7xl mb-5 text-balance">
-              Ghanaian cooking,<br />
+              African cooking,<br />
               <span className="text-gold">made from scratch</span>
             </h1>
             <p className="text-sand-100/85 text-base sm:text-lg leading-relaxed mb-8 max-w-md">
@@ -733,7 +733,7 @@ export default function AfricanCuisineWebsite() {
               Recipes from Ghana, cooked in Vernon
             </h2>
             <p className="text-sand-700 leading-relaxed">
-              Traditional Ghanaian dishes made from scratch with the ingredients
+              Traditional African dishes made from scratch with the ingredients
               and methods they&rsquo;re meant to be made with.
             </p>
           </div>
@@ -743,7 +743,7 @@ export default function AfricanCuisineWebsite() {
               { 
                 icon: '🍽️', 
                 title: 'Premium Fresh Ingredients', 
-                desc: 'We carefully source the finest, freshest ingredients daily from trusted local suppliers and authentic African markets to ensure every dish captures the true essence of traditional Ghanaian flavors.'
+                desc: 'We carefully source the finest, freshest ingredients daily from trusted local suppliers and authentic African markets to ensure every dish captures the true essence of traditional African flavors.'
               },
               { 
                 icon: '👨‍🍳', 
@@ -1233,7 +1233,7 @@ export default function AfricanCuisineWebsite() {
                 />
                 <div>
                   <h3 className="font-display text-2xl text-sand-50">Taste of African Cuisine</h3>
-                  <p className="text-gold-300 text-sm">Authentic Ghanaian food</p>
+                  <p className="text-gold-300 text-sm">Authentic African cooking</p>
                 </div>
               </div>
               <p className="text-sand-300 leading-relaxed">

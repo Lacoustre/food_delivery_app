@@ -20,7 +20,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Taste of African Cuisine — Authentic Ghanaian Food in Vernon, CT",
+  title: "Taste of African Cuisine — Authentic African Cooking in Vernon, CT",
   description:
     "Jollof, waakye, banku and fufu made from scratch. Order pickup or delivery from Taste of African Cuisine, 200 Hartford Turnpike, Vernon, Connecticut.",
 };

@@ -271,7 +271,7 @@ function OrdersContent() {
               <Package className="w-12 h-12 text-gold" />
             </div>
             <h2 className="font-display text-2xl text-ink mb-3">No orders yet</h2>
-            <p className="text-sand-700 mb-8 text-lg">Start your culinary journey with authentic Ghanaian flavors!</p>
+            <p className="text-sand-700 mb-8 text-lg">Start your culinary journey with authentic African flavors!</p>
             <Link
               href="/"
               className="inline-flex items-center gap-2 bg-gold text-white px-8 py-4 rounded-card font-bold hover:bg-gold-600 transition-all shadow-card"

@@ -239,7 +239,7 @@ function MealDetailContent() {
                   Taste of African Cuisine
                 </h1>
                 <p className="text-xs italic text-gold-600">
-                  Authentic Ghanaian Food
+                  Authentic African Cooking
                 </p>
               </div>
             </div>

@@ -91,7 +91,7 @@ function layout(preheader: string, inner: string): string {
           Taste of African Cuisine
         </div>
         <div style="color:${C.muted};font-size:12px;letter-spacing:0.5px;margin-top:5px;">
-          Authentic Ghanaian food &middot; Vernon, CT
+          Authentic African cooking &middot; Vernon, CT
         </div>
       </td>
     </tr>
