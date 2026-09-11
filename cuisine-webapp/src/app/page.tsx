@@ -937,8 +937,15 @@ export default function AfricanCuisineWebsite() {
                         const variants = group.filter(m => m.variantLabel)
                           .sort((a, b) => a.price - b.price)
                         const chosenId = selectedVariant[slug]
+                        // Prefer a variant that can actually be ordered. Picking
+                        // purely by "first non-vegetarian" made a whole card read
+                        // "Sold out" whenever that one option happened to be off —
+                        // Fried Rice looked unavailable while five proteins were fine.
                         const defaultVariant =
-                          variants.find(v => !v.isVegetarian) ?? variants[0]
+                          variants.find(v => !v.isVegetarian && v.available !== false)
+                          ?? variants.find(v => v.available !== false)
+                          ?? variants.find(v => !v.isVegetarian)
+                          ?? variants[0]
                         const active = group.find(m => m.id === chosenId)
                           ?? (variants.length ? defaultVariant : group[0])
                         const cheapest = Math.min(...group.map(m => m.price))
@@ -1002,7 +1009,7 @@ export default function AfricanCuisineWebsite() {
                                     >
                                       {variants.map(v => (
                                         <option key={v.id} value={v.id}>
-                                          {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}
+                                          {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · sold out' : ''}
                                         </option>
                                       ))}
                                     </select>
