@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
       customerInfo,
       deliveryAddress,
       deliveryTime,
-      paymentMethod
+      paymentMethod,
+      paymentIntentId
     }: {
       items: CartItemInput[]
       orderType: 'delivery' | 'pickup'
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       deliveryAddress?: string
       deliveryTime?: string
       paymentMethod: 'card' | 'cash'
+      paymentIntentId?: string
     } = await request.json()
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -157,6 +159,9 @@ export async function POST(request: NextRequest) {
         order_number: orderNumber,
         order_type: orderType,
         payment_method: paymentMethod,
+        // The handle on the Stripe charge. Without it stored here, nothing can
+        // find the payment later to refund it. Cash orders have none.
+        payment_intent_id: paymentMethod === 'card' ? (paymentIntentId ?? null) : null,
         delivery_address: orderType === 'delivery' ? deliveryAddress : null,
         scheduled_for: scheduledFor,
         subtotal: totals.subtotal,

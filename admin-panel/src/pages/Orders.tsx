@@ -109,6 +109,55 @@ export default function Orders() {
     return "Unknown Customer";
   };
 
+  /**
+   * Refunds a cancelled order through the customer site, which is the only
+   * side holding the Stripe secret key. The route is admin-only and refuses a
+   * second refund, so a double click cannot send the money twice.
+   */
+  const refundCancelledOrder = async (orderId: string) => {
+    const base = import.meta.env.VITE_WEBAPP_URL;
+    if (!base) {
+      toast.warning("Order cancelled, but VITE_WEBAPP_URL is not set — refund it in Stripe by hand.", {
+        position: "top-center",
+        autoClose: 8000
+      });
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${base}/api/refund`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      const body = await res.json().catch(() => null);
+
+      if (res.ok) {
+        toast.success(`Order cancelled and $${Number(body.refundAmount).toFixed(2)} refunded.`, {
+          position: "top-center",
+          autoClose: 5000
+        });
+        return;
+      }
+
+      // The order is already cancelled at this point. Say exactly what did not
+      // happen, so nobody assumes the customer has their money back.
+      toast.warning(`Order cancelled, but the refund did not go through: ${body?.error ?? res.status}`, {
+        position: "top-center",
+        autoClose: 10000
+      });
+    } catch {
+      toast.warning("Order cancelled, but the refund could not be reached. Refund it in Stripe.", {
+        position: "top-center",
+        autoClose: 10000
+      });
+    }
+  };
+
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       const order = orders?.find((o) => o.id === orderId);
@@ -124,18 +173,27 @@ export default function Orders() {
         .eq("id", orderId);
       if (error) throw error;
 
+      // Cancelling has to move the money, not just the status. Without this
+      // the customer was emailed "you will receive a refund shortly" while
+      // their card stayed charged until somebody remembered to do it by hand.
+      if (finalStatus === "cancelled") {
+        await refundCancelledOrder(orderId);
+        return;
+      }
+
+      // These used to end "Customer will be notified", which was not true —
+      // nothing sends anything on a status change yet.
       const statusMessages = {
-        confirmed: "Order confirmed successfully. Customer will be notified.",
-        preparing: "Order marked as preparing. Customer will be notified.",
-        "ready for pickup": "Order ready for pickup. Customer will be notified.",
-        "on the way": "Order is on the way. Customer will be notified.",
-        delivered: "Order marked as delivered and completed. Customer will be notified.",
-        "picked up": "Order marked as picked up and completed. Customer will be notified.",
-        completed: "Order completed successfully.",
-        cancelled: "Order cancelled. Customer will be notified."
+        confirmed: "Order confirmed.",
+        preparing: "Order marked as preparing.",
+        "ready for pickup": "Order marked ready for pickup.",
+        "on the way": "Order marked as on the way.",
+        delivered: "Order marked as delivered and completed.",
+        "picked up": "Order marked as picked up and completed.",
+        completed: "Order completed."
       };
 
-      const message = statusMessages[finalStatus as keyof typeof statusMessages] || `Order status updated to ${finalStatus}. Customer will be notified.`;
+      const message = statusMessages[finalStatus as keyof typeof statusMessages] || `Order status updated to ${finalStatus}.`;
 
       toast.success(message, {
         position: "top-center",

@@ -27,7 +27,10 @@ export default function NotificationCenter() {
   const navigate = useNavigate();
 
   // Track previous notification count for sound alerts
-  const [prevNotificationCount, setPrevNotificationCount] = useState(0);
+  // Only the setter is used — the previous count is read from the updater's
+  // own argument, so binding the value too fails tsc's unused-variable check
+  // and broke the admin panel build.
+  const [, setPrevNotificationCount] = useState(0);
 
   // Notifications are derived from Supabase: pending orders needing
   // confirmation, recent orders, latest reviews, inactive meals.

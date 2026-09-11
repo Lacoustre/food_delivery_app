@@ -39,7 +39,7 @@ interface OrderData {
 }
 
 const StripePaymentForm = ({ onPaymentSuccess, total, processing }: {
-  onPaymentSuccess: () => void
+  onPaymentSuccess: (paymentIntentId: string) => void
   total: number
   processing: boolean
 }) => {
@@ -75,7 +75,9 @@ const StripePaymentForm = ({ onPaymentSuccess, total, processing }: {
       if (error) {
         setError(error.message || 'Payment failed')
       } else if (paymentIntent?.status === 'succeeded') {
-        onPaymentSuccess()
+        // The id is the only handle on this charge. Without it stored against
+        // the order, nothing can find the payment later to refund it.
+        onPaymentSuccess(paymentIntent.id)
       }
     } catch (err) {
       console.error('Payment error:', err)
@@ -358,7 +360,7 @@ function CheckoutContent() {
   // the confirmation email) are built from THIS response, not from raw
   // client cart state — otherwise a tampered cart could still get a
   // different order fulfilled than what was actually paid for.
-  const createValidatedOrder = async () => {
+  const createValidatedOrder = async (paymentIntentId?: string) => {
     const response = await fetch('/api/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
@@ -369,7 +371,8 @@ function CheckoutContent() {
         customerInfo: orderData.customerInfo,
         deliveryAddress: orderData.deliveryAddress,
         deliveryTime: orderData.deliveryTime,
-        paymentMethod: orderData.paymentMethod
+        paymentMethod: orderData.paymentMethod,
+        paymentIntentId
       })
     })
     const validated = await response.json()
@@ -387,7 +390,7 @@ function CheckoutContent() {
     }
   }
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
     setProcessing(true)
     
     try {
@@ -421,7 +424,7 @@ function CheckoutContent() {
 
       // Re-validates items/prices/promo server-side; the order that gets
       // fulfilled and emailed is built from this response, not raw cart state.
-      const validated = await createValidatedOrder()
+      const validated = await createValidatedOrder(paymentIntentId)
 
       const orderPayload = {
         orderNumber: validated.orderNumber,
