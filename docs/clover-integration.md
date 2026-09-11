@@ -1,0 +1,125 @@
+# Clover integration — findings and design
+
+Discovery done 2026-09-11. **No integration code exists yet.** This records
+what was established so it does not have to be rediscovered.
+
+## Goal
+
+Website orders push into Clover so the kitchen works from one screen. Payment
+stays with Stripe; Clover receives the ticket and the till entry. In-store,
+phone and counter payments stay entirely on the Clover POS and do not involve
+the website.
+
+## Credentials
+
+In `cuisine-webapp/.env.local`, never committed:
+
+    CLOVER_MERCHANT_ID=08DMZSYQYW6H1
+    CLOVER_API_TOKEN=<token named "Website Orders">
+
+Token permissions: Inventory R/W, Merchant R, Orders R/W, Payments R/W.
+Payments write is needed to record the external payment, and also allows
+refunds — revoke from Settings > API tokens if it ever leaks.
+
+**Two different things are called "Merchant ID".** The API needs the 13-char
+alphanumeric one from the dashboard URL (`/m/08DMZSYQYW6H1/`). The 12-digit
+number under Settings > Business information is the payment-processing MID and
+returns 401 against the API.
+
+Environment: production, `https://api.clover.com`. Verified — the merchant
+reads back as Taste of African Cuisine, 200 Hartford Turnpike, Vernon.
+
+## Order types
+
+Six exist, in two sets:
+
+| Label | Id | Source |
+|---|---|---|
+| Delivery | `F8FDVGPEPQNY4` | online ordering, `hoursAvailable=ALL` |
+| In-store Pickup | `AGY2RMBBEFD3T` | online ordering, `hoursAvailable=ALL` |
+| Curbside Pickup | `51JVEZVDGBVNE` | online ordering, `hoursAvailable=ALL` |
+| Dine In | `FJNJBQ73M6WBW` | online ordering, `hoursAvailable=ALL` |
+| TAKE OUT | `1YD3CXV2209MM` | POS native, `BUSINESS` hours, **default** |
+| Dine In | `446FPGNN72XCC` | POS native, `BUSINESS` hours |
+
+The two "Dine In" entries are not duplicates — one per set. Do not delete
+either.
+
+**Use the online-ordering set.** Website orders then look like the
+cloveronline.com orders staff already handle, and `hoursAvailable=ALL` matters
+because the site accepts scheduled orders while the restaurant is closed. A
+`BUSINESS`-hours type risks rejecting those.
+
+    delivery -> F8FDVGPEPQNY4
+    pickup   -> AGY2RMBBEFD3T
+
+Still worth confirming with whoever works the POS that In-store Pickup tickets
+land where they will be seen.
+
+## Payment status — the part that must not be got wrong
+
+Website orders are not all paid. Pushing everything as paid is the simple
+version and it gives food away:
+
+| Website order | Push as |
+|---|---|
+| Card (paid via Stripe) | **paid**, tender `com.clover.tender.external_payment` |
+| Cash on pickup | **open/unpaid** — staff collect at the counter |
+
+If a cash-pickup order arrives marked paid, the ticket tells staff it is
+settled, the food goes over the counter, and no money is taken. Nobody is
+stealing; the POS said it was paid.
+
+Cash on delivery does not exist — the site blocks it, because Uber couriers do
+not collect cash.
+
+The `External Payment` tender already exists and is enabled on this account.
+Using it means Stripe's fee applies instead of Clover's, not that fees vanish.
+Check the Fiserv agreement for minimum volume commitments before shifting
+volume away from Clover processing.
+
+## Menu
+
+131 items in Clover against 119 unique names on the site. **Zero price
+mismatches** where names match.
+
+Most differences are naming, not different food: Clover appends `Item`
+(`Fufu Ball Item`) and marks vegetarian variants `(Veg)`. Clover has **no
+modifier groups** — each protein variant is its own item, the same shape as
+the `base_slug` model, so mapping is one-to-one rather than item-plus-modifier.
+
+An explicit mapping table from meal id to Clover item id will be needed. Draft
+it by name similarity, then review by hand — an earlier automatic photo matcher
+on this project paired Rice Ball with fried rice.
+
+Two dishes removed from the site are still orderable on Clover:
+**Alvaro (Malt Drink)** $3.99 and **Fried Plantain & Tomato Stew (Veg)** $24.99.
+
+## Printing — the open question
+
+One printer, type `MY_LOCAL`: the receipt printer built into the Clover
+terminal. No separate networked kitchen printer. One routing tag,
+`Device Printer`.
+
+Whether an API-created order prints by itself is unverified. The cheap way to
+find out: ask whether orders from tasteofafrican.cloveronline.com print
+automatically today. Those arrive remotely by the same path, so if they print,
+API orders very likely will. If they do not, that is an existing gap affecting
+orders already being taken.
+
+This matters because auto-printing is most of the benefit. Without it the
+kitchen still has to watch a screen.
+
+## API shape
+
+    POST /v3/merchants/{mId}/orders                    create, with orderType
+    POST /v3/merchants/{mId}/orders/{id}/line_items    one per dish
+    POST /v3/merchants/{mId}/orders/{id}/payments      only when already paid
+
+Rate limits bite: bulk reads returned 429 during discovery. Back off and retry.
+
+## Where this hangs
+
+The push belongs wherever the Stripe webhook lands — both trigger on "payment
+definitely succeeded". Build them together. Nothing here touches the existing
+payment path.
