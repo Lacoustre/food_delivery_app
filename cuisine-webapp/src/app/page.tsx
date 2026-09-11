@@ -730,7 +730,7 @@ export default function AfricanCuisineWebsite() {
           <div className="mb-14 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Why us</p>
             <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-4">
-              Recipes from Accra, cooked in Vernon
+              Recipes from Ghana, cooked in Vernon
             </h2>
             <p className="text-sand-700 leading-relaxed">
               Traditional Ghanaian dishes made from scratch with the ingredients
@@ -1065,7 +1065,7 @@ export default function AfricanCuisineWebsite() {
                 <span className="text-3xl">🇬🇭</span>
               </div>
               <h3 className="font-display text-2xl text-gold-300 mb-2">Born in Ghana</h3>
-              <p className="text-sand-300 text-[15px] leading-relaxed">Authentic recipes from Accra, brought to Connecticut with love and tradition</p>
+              <p className="text-sand-300 text-[15px] leading-relaxed">Authentic recipes from Ghana, brought to Connecticut with love and tradition</p>
             </div>
             <div className="group">
               <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
