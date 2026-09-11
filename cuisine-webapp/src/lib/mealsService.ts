@@ -12,6 +12,8 @@ export interface Meal {
   /** Grouping key — rows sharing one render as a single menu card. */
   baseSlug: string
   baseName: string
+  /** Describes the dish rather than the selected variant. Multi-variant cards only. */
+  baseDescription?: string
   /** Option shown in the picker. Null when the dish has no variants. */
   variantLabel?: string
   /** protein | soup | preparation | side — drives the picker heading. */
@@ -32,6 +34,7 @@ function toMeal(row: {
   active: boolean
   base_slug: string | null
   base_name: string | null
+  base_description: string | null
   variant_label: string | null
   variant_type: string | null
   is_vegetarian: boolean | null
@@ -50,6 +53,7 @@ function toMeal(row: {
     // still renders as its own card rather than vanishing from the menu.
     baseSlug: row.base_slug || row.id,
     baseName: row.base_name || row.name,
+    baseDescription: row.base_description || undefined,
     variantLabel: row.variant_label || undefined,
     variantType: row.variant_type || undefined,
     isVegetarian: row.is_vegetarian ?? false,

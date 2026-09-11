@@ -730,7 +730,7 @@ export default function AfricanCuisineWebsite() {
           <div className="mb-14 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Why us</p>
             <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-4">
-              Recipes from Ghana, cooked in Vernon
+              Cooked in Vernon, the way it is done at home
             </h2>
             <p className="text-sand-700 leading-relaxed">
               Traditional African dishes made from scratch with the ingredients
@@ -739,21 +739,23 @@ export default function AfricanCuisineWebsite() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
+            {/* Kept to what is demonstrably true. The previous third card
+                claimed "4.9/5 stars by thousands of satisfied customers" and
+                "Award-Winning Excellence" — there are no reviews in the
+                database and no award, and invented ratings are the kind of
+                claim the FTC acts on. */}
             {[
-              { 
-                icon: '🍽️', 
-                title: 'Premium Fresh Ingredients', 
-                desc: 'We carefully source the finest, freshest ingredients daily from trusted local suppliers and authentic African markets to ensure every dish captures the true essence of traditional African flavors.'
+              {
+                title: 'Cooked to order',
+                desc: 'Nothing sits under a lamp. Stews are simmered, plantain fried and fufu pounded once you order, which is why it takes a little longer.'
               },
-              { 
-                icon: '👨‍🍳', 
-                title: 'Master Chefs & Traditional Methods', 
-                desc: 'Our experienced chefs bring decades of culinary expertise and generations of family recipes, using time-honored cooking techniques passed down through West African traditions.'
+              {
+                title: 'The right ingredients',
+                desc: 'Seasonings and staples from African markets, because the recipes do not work with substitutes.'
               },
-              { 
-                icon: '⭐', 
-                title: 'Award-Winning Excellence', 
-                desc: 'Proudly rated 4.9/5 stars by thousands of satisfied customers who trust us to deliver exceptional authentic African cuisine with outstanding service and unmatched quality.'
+              {
+                title: 'Pickup or delivery',
+                desc: 'Collect from Hartford Turnpike, or we deliver across Vernon and the towns around it.'
               },
             ].map((item, index) => (
               <div key={item.title} className="border-t border-sand-300 pt-6">
@@ -986,8 +988,12 @@ export default function AfricanCuisineWebsite() {
 
                             <div className="flex flex-col flex-1 p-5">
                               <h4 className="font-display text-xl text-ink leading-tight">{active.baseName}</h4>
+                              {/* Describe the dish, not the selected variant.
+                                  Showing active.description put "Jollof rice
+                                  served with fried chicken" directly above a
+                                  dropdown already reading "Fried Chicken". */}
                               <p className="mt-1.5 text-sm text-sand-700 line-clamp-2 min-h-[2.5rem]">
-                                {active.description}
+                                {active.baseDescription ?? active.description}
                               </p>
 
                               {/* A wrapped grid of chips made cards with many
