@@ -46,6 +46,16 @@ export async function POST(request: NextRequest) {
     if (paymentMethod !== 'card' && paymentMethod !== 'cash') {
       return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 })
     }
+    // Deliveries go out with an Uber Direct courier, and couriers do not
+    // collect cash. A cash delivery order would be cooked, dispatched and
+    // handed over with nobody ever taking the money. Checkout hides the
+    // option, but that is presentation — this is the check that holds.
+    if (orderType === 'delivery' && paymentMethod === 'cash') {
+      return NextResponse.json(
+        { error: 'Delivery orders must be paid by card. Choose pickup to pay cash.' },
+        { status: 400 }
+      )
+    }
 
     // Scope this client to the caller's own access token so Postgres RLS
     // (orders_owner_insert: auth.uid() = user_id) applies for real — this

@@ -174,6 +174,9 @@ function CheckoutContent() {
     setOrderData(prev => ({
       ...prev,
       orderType: savedOrderType as 'delivery' | 'pickup',
+      // Uber couriers do not collect cash, so delivery is card-only. This is
+      // the only place orderType is decided — it arrives from the cart page.
+      paymentMethod: savedOrderType === 'delivery' ? 'card' : prev.paymentMethod,
       deliveryAddress: savedDeliveryAddress,
       customerInfo: {
         name: userProfile?.name || '',
@@ -825,7 +828,7 @@ function CheckoutContent() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className={`grid ${orderData.orderType === 'delivery' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 mb-6`}>
                 <button
                   type="button"
                   onClick={() => setOrderData(prev => ({ ...prev, paymentMethod: 'card' }))}
@@ -839,19 +842,23 @@ function CheckoutContent() {
                   <div className="font-bold text-ink">Card Payment</div>
                   <div className="text-xs text-sand-700 mt-1">Credit, Debit, Amazon Pay, Klarna & more</div>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderData(prev => ({ ...prev, paymentMethod: 'cash' }))}
-                  className={`p-4 rounded-card border-2 transition-all ${
-                    orderData.paymentMethod === 'cash'
-                      ? 'border-gold bg-sand-100'
-                      : 'border-gold-300 hover:border-gold-300 bg-white'
-                  }`}
-                >
-                  <div className="w-6 h-6 mx-auto mb-2 text-gold font-bold text-lg">$</div>
-                  <div className="font-bold text-ink">Cash Payment</div>
-                  <div className="text-xs text-sand-700 mt-1">Pay on {orderData.orderType === 'delivery' ? 'delivery' : 'pickup'}</div>
-                </button>
+                {/* Cash is pickup-only: an Uber courier cannot take money at
+                    the door, so a cash delivery would be handed over unpaid. */}
+                {orderData.orderType === 'pickup' && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderData(prev => ({ ...prev, paymentMethod: 'cash' }))}
+                    className={`p-4 rounded-card border-2 transition-all ${
+                      orderData.paymentMethod === 'cash'
+                        ? 'border-gold bg-sand-100'
+                        : 'border-gold-300 hover:border-gold-300 bg-white'
+                    }`}
+                  >
+                    <div className="w-6 h-6 mx-auto mb-2 text-gold font-bold text-lg">$</div>
+                    <div className="font-bold text-ink">Cash Payment</div>
+                    <div className="text-xs text-sand-700 mt-1">Pay at the counter</div>
+                  </button>
+                )}
               </div>
 
               {orderData.paymentMethod === 'card' ? (
@@ -868,7 +875,9 @@ function CheckoutContent() {
                     <p className="text-clay font-semibold text-sm mb-1">Payment unavailable</p>
                     <p className="text-sand-700 text-sm">{paymentError}</p>
                     <p className="text-sand-500 text-xs mt-2">
-                      You can still place this order and pay cash on delivery.
+                      {orderData.orderType === 'pickup'
+                        ? 'You can still place this order and pay cash at the counter.'
+                        : 'Please try again, or switch to pickup to pay cash.'}
                     </p>
                   </div>
                 ) : !readyToPay ? (
