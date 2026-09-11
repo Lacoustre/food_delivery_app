@@ -41,6 +41,10 @@ const C = {
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
+// Served from Supabase Storage rather than the site, so it resolves the same
+// whatever the site is deployed at — and keeps working if the domain moves.
+const LOGO = 'https://peimbksjyjcxmurwwmnn.supabase.co/storage/v1/object/public/meals/email-logo.png'
+
 /** Names and addresses are customer-supplied; a stray < would break the layout. */
 function esc(v: unknown): string {
   return String(v ?? '')
@@ -80,11 +84,13 @@ function layout(preheader: string, inner: string): string {
   <span style="display:none;font-size:1px;color:${C.sand};max-height:0;overflow:hidden;">${esc(preheader)}</span>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ${C.sandLine};">
     <tr>
-      <td style="background:${C.kente};padding:22px 28px;text-align:center;">
-        <div style="color:${C.gold};font-size:19px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">
+      <td style="background:#ffffff;padding:26px 28px 20px;text-align:center;border-bottom:3px solid ${C.gold};">
+        <img src="${LOGO}" width="118" height="118" alt="Taste of African Cuisine"
+             style="display:block;margin:0 auto 12px auto;border:0;outline:none;text-decoration:none;width:118px;height:118px;">
+        <div style="color:${C.kente};font-size:17px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;">
           Taste of African Cuisine
         </div>
-        <div style="color:#D9CFC0;font-size:12px;letter-spacing:0.6px;margin-top:5px;">
+        <div style="color:${C.muted};font-size:12px;letter-spacing:0.5px;margin-top:5px;">
           Authentic Ghanaian food &middot; Vernon, CT
         </div>
       </td>
