@@ -45,7 +45,7 @@ export default function AfricanCuisineWebsite() {
     }
   }, [user])
 
-  // Load favorites from Firebase
+  // Favourites live in Supabase, behind owner-only RLS.
   useEffect(() => {
     if (user) {
       const unsubscribe = favoritesService.onFavoritesChange(user.uid, setFavorites)
