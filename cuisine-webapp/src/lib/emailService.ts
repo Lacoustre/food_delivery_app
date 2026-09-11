@@ -7,10 +7,118 @@
  *
  * FROM_EMAIL must sit on a domain verified in Resend. The Deno edge function
  * at supabase/functions/send-order-email sends the same way; keep them in step.
+ *
+ * Markup here is deliberately old-fashioned — tables, inline styles, web-safe
+ * fonts. Gmail strips <head> entirely, Outlook renders through Word, and
+ * neither supports flexbox or grid. Anything cleverer breaks in the clients
+ * most customers actually use.
  */
 
 const FROM = process.env.FROM_EMAIL ||
   'Taste of African Cuisine <orders@tasteofafricancuisine.com>'
+
+// The one place these live. They were previously scattered through the
+// templates, which is how a personal Gmail address ended up being the contact
+// on every order confirmation.
+const RESTAURANT = {
+  name: 'Taste of African Cuisine',
+  address: '200 Hartford Turnpike, Vernon, CT 06066',
+  phone: '(860) 805-5121',
+  phoneHref: '+18608055121',
+  email: 'orders@tasteofafricancuisine.com'
+}
+
+// Matches globals.css so an email looks like the site the order came from.
+const C = {
+  gold: '#C9982E',
+  kente: '#14543D',
+  clay: '#A8452C',
+  ink: '#1A1512',
+  sand: '#FAF7F2',
+  sandLine: '#E5E0D8',
+  muted: '#6B6257'
+}
+
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
+/** Names and addresses are customer-supplied; a stray < would break the layout. */
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
+
+/** The database stores snake_case; customers should not have to read it. */
+function statusLabel(status: string): { title: string; blurb: string } {
+  switch (String(status).toLowerCase()) {
+    case 'pending':
+      return { title: 'Order received', blurb: 'We have your order and will confirm it shortly.' }
+    case 'confirmed':
+      return { title: 'Order confirmed', blurb: 'The kitchen has your order.' }
+    case 'preparing':
+      return { title: 'Being prepared', blurb: 'Your food is being cooked fresh.' }
+    case 'out_for_delivery':
+      return { title: 'Out for delivery', blurb: 'Your driver is on the way.' }
+    case 'delivered':
+      return { title: 'Delivered', blurb: 'Enjoy your meal.' }
+    case 'ready':
+      return { title: 'Ready for pickup', blurb: 'Your order is ready to collect.' }
+    case 'cancelled':
+      return { title: 'Order cancelled', blurb: 'This order has been cancelled. Any payment will be refunded.' }
+    default:
+      return { title: String(status), blurb: '' }
+  }
+}
+
+function layout(preheader: string, inner: string): string {
+  return `
+<div style="background:${C.sand};margin:0;padding:24px 12px;font-family:${FONT};">
+  <span style="display:none;font-size:1px;color:${C.sand};max-height:0;overflow:hidden;">${esc(preheader)}</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ${C.sandLine};">
+    <tr>
+      <td style="background:${C.kente};padding:22px 28px;text-align:center;">
+        <div style="color:${C.gold};font-size:19px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">
+          Taste of African Cuisine
+        </div>
+        <div style="color:#D9CFC0;font-size:12px;letter-spacing:0.6px;margin-top:5px;">
+          Authentic Ghanaian food &middot; Vernon, CT
+        </div>
+      </td>
+    </tr>
+    <tr><td style="padding:28px;color:${C.ink};font-size:15px;line-height:1.55;">${inner}</td></tr>
+    <tr>
+      <td style="background:${C.sand};border-top:1px solid ${C.sandLine};padding:20px 28px;color:${C.muted};font-size:12.5px;line-height:1.7;">
+        <strong style="color:${C.ink};">${RESTAURANT.name}</strong><br>
+        ${RESTAURANT.address}<br>
+        <a href="tel:${RESTAURANT.phoneHref}" style="color:${C.clay};text-decoration:none;">${RESTAURANT.phone}</a>
+        &nbsp;&middot;&nbsp;
+        <a href="mailto:${RESTAURANT.email}" style="color:${C.clay};text-decoration:none;">${RESTAURANT.email}</a>
+      </td>
+    </tr>
+  </table>
+</div>`
+}
+
+function heading(text: string): string {
+  return `<h1 style="margin:0 0 14px 0;color:${C.kente};font-size:22px;font-weight:700;">${esc(text)}</h1>`
+}
+
+/** Where to collect, on a pickup order. Previously missing entirely: a pickup
+ *  confirmation said "Type: Pickup" and never gave an address. */
+function pickupBlock(): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;">
+    <tr><td style="background:${C.sand};border-left:3px solid ${C.gold};padding:14px 16px;">
+      <div style="font-weight:700;color:${C.ink};margin-bottom:4px;">Collect from</div>
+      <div style="color:${C.ink};">${RESTAURANT.address}</div>
+      <div style="margin-top:6px;"><a href="tel:${RESTAURANT.phoneHref}" style="color:${C.clay};text-decoration:none;">${RESTAURANT.phone}</a></div>
+    </td></tr>
+  </table>`
+}
 
 async function sendEmail({ to, subject, html }: {
   to: string
@@ -60,45 +168,23 @@ export interface OrderEmailData {
 export const emailService = {
   async sendWelcomeEmail(customerEmail: string, customerName: string) {
     try {
-      console.log('Sending welcome email to:', customerEmail)
-      
       const result = await sendEmail({
         to: customerEmail,
-        subject: '🎉 Welcome to Taste of African Cuisine!',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #E65100; margin: 0;">🍽️ Welcome to Taste of African Cuisine!</h1>
-            </div>
-            
-            <p style="font-size: 16px;">Hi ${customerName},</p>
-            <p style="font-size: 16px;">Welcome! We're excited to have you try our authentic African dishes.</p>
-            
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="color: #E65100; margin: 0 0 15px 0;">🇬🇭 What Makes Us Special</h3>
-              <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
-                <li><strong>Authentic Recipes:</strong> Traditional Ghanaian dishes passed down through generations</li>
-                <li><strong>Fresh Ingredients:</strong> Premium quality ingredients sourced daily</li>
-                <li><strong>Expert Chefs:</strong> Experienced cooks who bring authentic flavors to life</li>
-                <li><strong>Fast Delivery:</strong> Hot, fresh meals delivered to your door</li>
-              </ul>
-            </div>
-            
-            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; text-align: center;"><strong>📍 Visit Us:</strong> 200 Hartford Turnpike, Vernon, CT</p>
-              <p style="margin: 5px 0 0 0; text-align: center;"><strong>📞 Call:</strong> (860) 805-5121</p>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-              <p style="color: #666; margin: 0;">Questions? Contact us at: <a href="mailto:tasteofafricancuisine01@gmail.com" style="color: #E65100;">tasteofafricancuisine01@gmail.com</a></p>
-              <p style="color: #666; margin: 5px 0 0 0;">With love and spices,</p>
-              <p style="color: #E65100; font-weight: bold; margin: 5px 0 0 0;">The Taste of African Cuisine Team</p>
-            </div>
-          </div>
-        `
+        subject: `Welcome to ${RESTAURANT.name}`,
+        html: layout(
+          'Your account is ready — browse the menu and order for delivery or pickup.',
+          `
+          ${heading('Welcome, ' + customerName)}
+          <p style="margin:0 0 14px 0;">
+            Thanks for creating an account. You can now order for delivery across the
+            Vernon area, or for pickup from the restaurant.
+          </p>
+          <p style="margin:0 0 20px 0;color:${C.muted};">
+            Everything is cooked to order, so give us a little time — it is worth the wait.
+          </p>
+          ${pickupBlock()}
+        `)
       })
-
-      console.log('Welcome email sent successfully:', result.messageId)
       return { success: true, data: result }
     } catch (error) {
       console.error('Welcome email service error:', error)
@@ -108,87 +194,105 @@ export const emailService = {
 
   async sendOrderConfirmation(data: OrderEmailData) {
     try {
+      const rows = data.items.map(item => `
+        <tr>
+          <td style="padding:9px 0;border-bottom:1px solid ${C.sandLine};color:${C.ink};">
+            ${esc(item.name)}
+            <span style="color:${C.muted};">&times;${Number(item.quantity) || 0}</span>
+          </td>
+          <td style="padding:9px 0;border-bottom:1px solid ${C.sandLine};text-align:right;white-space:nowrap;color:${C.ink};">
+            ${money(item.price * item.quantity)}
+          </td>
+        </tr>`).join('')
+
+      const totalRow = (label: string, value: string, strong = false) => `
+        <tr>
+          <td style="padding:${strong ? '11px 0 0 0' : '4px 0'};color:${strong ? C.ink : C.muted};font-size:${strong ? '17px' : '14px'};font-weight:${strong ? '700' : '400'};">${label}</td>
+          <td style="padding:${strong ? '11px 0 0 0' : '4px 0'};text-align:right;color:${strong ? C.gold : C.muted};font-size:${strong ? '17px' : '14px'};font-weight:${strong ? '700' : '400'};">${value}</td>
+        </tr>`
+
       const result = await sendEmail({
         to: data.customerEmail,
-        subject: `Order Confirmation #${data.orderNumber}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #E65100; margin: 0;">🍽️ Order Confirmed!</h1>
-            </div>
-            
-            <p style="font-size: 16px;">Hi ${data.customerName},</p>
-            <p style="font-size: 16px;">Thank you for your order! We're preparing your delicious African cuisine.</p>
-            
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #E65100;">
-              <h3 style="margin: 0 0 15px 0; color: #E65100;">Order #${data.orderNumber}</h3>
-              <p style="margin: 5px 0;"><strong>Type:</strong> ${data.orderType === 'delivery' ? 'Delivery' : 'Pickup'}</p>
-              ${data.deliveryAddress ? `<p style="margin: 5px 0;"><strong>Address:</strong> ${data.deliveryAddress}</p>` : ''}
-              
-              <h4 style="margin: 15px 0 10px 0;">Items:</h4>
-              <ul style="margin: 0; padding-left: 20px;">
-                ${data.items.map(item => 
-                  `<li style="margin: 5px 0;">${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}</li>`
-                ).join('')}
-              </ul>
-              
-              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-                <p style="margin: 3px 0;">Subtotal: $${data.subtotal.toFixed(2)}</p>
-                ${data.deliveryFee > 0 ? `<p style="margin: 3px 0;">Delivery Fee: $${data.deliveryFee.toFixed(2)}</p>` : ''}
-                <p style="margin: 3px 0;">Tax: $${data.tax.toFixed(2)}</p>
-                <p style="margin: 10px 0 0 0; font-size: 18px;"><strong>Total: $${data.total.toFixed(2)}</strong></p>
-              </div>
-            </div>
-            
-            ${data.estimatedTime ? `<p style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0;"><strong>🕒 Estimated time:</strong> ${data.estimatedTime}</p>` : ''}
-            
-            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-              <p style="color: #666; margin: 0;">Questions? Contact us at: <a href="mailto:tasteofafricancuisine01@gmail.com" style="color: #E65100;">tasteofafricancuisine01@gmail.com</a></p>
-              <p style="color: #666; margin: 5px 0 0 0;">Best regards,</p>
-              <p style="color: #E65100; font-weight: bold; margin: 5px 0 0 0;">Taste of African Cuisine Team</p>
-            </div>
-          </div>
-        `
-      })
+        subject: `Order #${data.orderNumber} confirmed — ${RESTAURANT.name}`,
+        html: layout(
+          `We have your order. Total ${money(data.total)}.`,
+          `
+          ${heading('Order confirmed')}
+          <p style="margin:0 0 6px 0;">Hi ${esc(data.customerName)},</p>
+          <p style="margin:0 0 18px 0;color:${C.muted};">
+            Thank you — we have your order and the kitchen is on it.
+          </p>
 
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:6px;">
+            <tr>
+              <td style="color:${C.muted};font-size:13px;">Order</td>
+              <td style="text-align:right;color:${C.ink};font-weight:700;">#${esc(data.orderNumber)}</td>
+            </tr>
+            <tr>
+              <td style="color:${C.muted};font-size:13px;">Type</td>
+              <td style="text-align:right;color:${C.ink};">${data.orderType === 'delivery' ? 'Delivery' : 'Pickup'}</td>
+            </tr>
+            ${data.estimatedTime ? `<tr>
+              <td style="color:${C.muted};font-size:13px;">Estimated</td>
+              <td style="text-align:right;color:${C.ink};">${esc(data.estimatedTime)}</td>
+            </tr>` : ''}
+          </table>
+
+          ${data.orderType === 'delivery' && data.deliveryAddress
+            ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;">
+                 <tr><td style="background:${C.sand};border-left:3px solid ${C.gold};padding:14px 16px;">
+                   <div style="font-weight:700;color:${C.ink};margin-bottom:4px;">Delivering to</div>
+                   <div style="color:${C.ink};">${esc(data.deliveryAddress)}</div>
+                 </td></tr>
+               </table>`
+            : pickupBlock()}
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;">
+            ${rows}
+          </table>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:14px;">
+            ${totalRow('Subtotal', money(data.subtotal))}
+            ${data.deliveryFee > 0 ? totalRow('Delivery', money(data.deliveryFee)) : ''}
+            ${totalRow('Tax', money(data.tax))}
+            ${totalRow('Total', money(data.total), true)}
+          </table>
+        `)
+      })
       return { success: true, data: result }
     } catch (error) {
-      console.error('Email service error:', error)
+      console.error('Order confirmation email error:', error)
       return { success: false, error }
     }
   },
 
   async sendStatusUpdate(data: OrderEmailData) {
     try {
+      const { title, blurb } = statusLabel(data.status)
       const result = await sendEmail({
         to: data.customerEmail,
-        subject: `Order Update #${data.orderNumber} - ${data.status}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #E65100; margin: 0;">📱 Order Update</h1>
-            </div>
-            
-            <p style="font-size: 16px;">Hi ${data.customerName},</p>
-            
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #E65100; text-align: center;">
-              <h2 style="color: #E65100; margin: 0 0 10px 0;">${data.status}</h2>
-              <p style="font-size: 18px; margin: 0;">Order #${data.orderNumber}</p>
-              ${data.estimatedTime ? `<p style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 15px 0 0 0;"><strong>🕒 ${data.estimatedTime}</strong></p>` : ''}
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-              <p style="color: #666; margin: 0;">Questions? Contact us at: <a href="mailto:tasteofafricancuisine01@gmail.com" style="color: #E65100;">tasteofafricancuisine01@gmail.com</a></p>
-              <p style="color: #666; margin: 5px 0 0 0;">Best regards,</p>
-              <p style="color: #E65100; font-weight: bold; margin: 5px 0 0 0;">Taste of African Cuisine Team</p>
-            </div>
-          </div>
-        `
-      })
+        subject: `Order #${data.orderNumber} — ${title}`,
+        html: layout(
+          `${title}. ${blurb}`,
+          `
+          ${heading(title)}
+          <p style="margin:0 0 6px 0;">Hi ${esc(data.customerName)},</p>
+          ${blurb ? `<p style="margin:0 0 18px 0;color:${C.muted};">${esc(blurb)}</p>` : ''}
 
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;">
+            <tr><td style="background:${C.sand};border-left:3px solid ${C.gold};padding:14px 16px;">
+              <div style="color:${C.muted};font-size:13px;">Order</div>
+              <div style="color:${C.ink};font-weight:700;font-size:17px;">#${esc(data.orderNumber)}</div>
+              ${data.estimatedTime ? `<div style="margin-top:6px;color:${C.ink};">${esc(data.estimatedTime)}</div>` : ''}
+            </td></tr>
+          </table>
+
+          ${data.orderType === 'pickup' && String(data.status).toLowerCase() === 'ready' ? pickupBlock() : ''}
+        `)
+      })
       return { success: true, data: result }
     } catch (error) {
-      console.error('Email service error:', error)
+      console.error('Status update email error:', error)
       return { success: false, error }
     }
   }
