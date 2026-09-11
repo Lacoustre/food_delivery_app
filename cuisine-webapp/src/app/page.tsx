@@ -796,7 +796,7 @@ export default function AfricanCuisineWebsite() {
                     {index + 1}
                   </div>
                   
-                  <div className="relative aspect-[4/3] overflow-hidden">
+                  <div className="relative aspect-square overflow-hidden">
                     <Image
                       src={getImageUrl(meal)}
                       alt={meal.name}
@@ -956,7 +956,7 @@ export default function AfricanCuisineWebsite() {
                         return (
                           <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card">
                             <div
-                              className="relative aspect-[4/3] cursor-pointer"
+                              className="relative aspect-square cursor-pointer"
                               onClick={() => { window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}` }}
                             >
                               <Image
