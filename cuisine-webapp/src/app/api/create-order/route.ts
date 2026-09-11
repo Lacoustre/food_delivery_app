@@ -149,14 +149,12 @@ export async function POST(request: NextRequest) {
     }
 
     const totals = computeOrderTotals({ subtotal, orderType, deliveryFee, promoDiscount })
-    const orderNumber = String(Math.floor(Math.random() * 10000) + 1000)
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
         user_id: decodedToken.uid,
         status: 'confirmed',
-        order_number: orderNumber,
         order_type: orderType,
         payment_method: paymentMethod,
         // The handle on the Stripe charge. Without it stored here, nothing can
@@ -177,6 +175,11 @@ export async function POST(request: NextRequest) {
       console.error('Order insert failed:', orderError)
       return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }
+
+    // Assigned by Postgres via order_number_seq, not by this route. Read it
+    // back rather than generating one — a random number with no unique
+    // constraint collided 39% of the time by the hundredth order.
+    const orderNumber: string = order.order_number
 
     const { error: itemsError } = await supabase.from('order_items').insert(
       validatedItems.map(item => ({
