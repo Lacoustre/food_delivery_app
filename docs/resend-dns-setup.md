@@ -1,49 +1,72 @@
-# Resend email — DNS records for tasteofafricancuisine.com
+# Email — Resend on tasteofafricancuisine.com
 
-Added to Resend on 2026-09-11. Domain id `55f4edf2-3c14-47ce-9026-feacb20e7de4`.
+**Status: working.** Verified 2026-09-11, test message delivered.
 
-Add these in **Wix → Domains → tasteofafricancuisine.com → DNS Records**.
-Wix is both the registrar and the DNS host, so this is the only place they go.
+## What is in DNS
 
-> Resend's dashboard labels all four of these "SPF". That is wrong. Wix asks
-> for the record **type**, so use the types in this table, not Resend's labels.
+Added in **Wix → Domains → tasteofafricancuisine.com → Manage DNS Records**.
+Wix is both registrar and DNS host, so this is the only place these live.
 
-| Type | Name / Host | Value | Priority |
-|---|---|---|---|
-| TXT | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDCa0hs4Qxze/NsG2zdPHBJtVlLWMv+qmpEoom2gDvZZUmbah26h8ViMY9pwh3yTPrHWz1KgfHGDMb42SgttAYvTs/iwMi5s6cDj+5fuwpvHqA1iTsA9XDaNxqmflcncR991ps5mpGRN8EttmN7rcBdDKmO3QVidb4jaUc0XGBOzwIDAQAB` | — |
-| MX | `send` | `feedback-smtp.us-east-1.amazonses.com` | 10 |
-| TXT | `send` | `v=spf1 include:amazonses.com ~all` | — |
-| CNAME | `rsend` | `send.forge.rmta.net` | — |
+| Type | Name | Value |
+|---|---|---|
+| TXT | `@` | `resend-domain-verification=8a8d28399312df8a77a74dea3b02498f` |
+| TXT | `resend._domainkey` | the DKIM public key (`p=MIGfMA0GCSqG…RJBiPNQIDAQAB`) |
+| CNAME | `rsend` | `rsend.forge.rmta.net` |
+| CNAME | `send` | `send.forge.rmta.net` |
 
-## Do not touch these
+## Why there is no MX record
 
-The restaurant's email runs on Zoho and is unrelated to the website. Deleting
-any of these stops mail to the business immediately:
+Resend's default setup wants an MX record on `send` for bounce feedback.
+**Wix does not support MX records on subdomains**, and Resend detects this: it
+refuses to verify and tells you to re-add the domain to get a CNAME-based set
+instead. That second set is what is in the table above.
+
+Re-adding must be done in the Resend **dashboard**, not the API — the API
+issues the MX variant regardless, because the CNAME alternative is offered
+only once Resend has detected the DNS provider.
+
+## Do not touch — the restaurant's own email
+
+Mail for the business runs on Zoho and is unrelated to the website. Deleting
+any of these stops it immediately:
 
 | Type | Name | Value |
 |---|---|---|
 | MX | `@` | `mx.zoho.com` (10), `mx2.zoho.com` (20), `mx3.zoho.com` (30) |
 | TXT | `@` | `v=spf1 include:zohomail.com ~all` |
 | TXT | `@` | `zoho-verification=zb31447644.zmverify.zoho.com` |
+| TXT | `zmail._domainkey` | `v=DKIM1; k=rsa; p=…` |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` |
 
-Every Resend record sits on a subdomain (`send`, `rsend`,
-`resend._domainkey`), so the two systems do not collide.
+Every Resend record sits on a subdomain, so the two never collide.
 
-## Website records (separate job, for Vercel)
+**Enable Receiving must stay OFF in Resend.** Turning it on would demand MX
+records pointing at Resend, which would fight the Zoho MX records above.
 
-| Type | Name | Value |
-|---|---|---|
-| A | `@` | Vercel's IP — take the exact value from the Vercel dashboard |
-| CNAME | `www` | `cname.vercel-dns.com` |
+## Two Resend accounts
 
-The apex currently points at Wix (`185.230.63.x`) and serves a 404, since the
-Wix subscription was cancelled. Changing it breaks nothing.
+There are two Resend teams. The domain is verified in the one reachable in the
+browser; the other holds an older, failed copy of the same domain.
+`RESEND_API_KEY` in `.env.local` must be a key from the team where the domain
+shows **Verified**, or every send returns 403. The key currently in use is
+sending-access only, which is why it cannot list domains or read delivery
+status — that is deliberate, not a fault.
 
-## After adding the records
+## Leftovers worth deleting
 
-    node scripts/check-resend-domain.mjs
+Three CNAMEs from the retired SendGrid setup still sit in the zone and do
+nothing: `s1._domainkey`, `s2._domainkey`, `em1315` — all pointing at
+`sendgrid.net` under user `u54268192`. Safe to remove now that email is
+verified. The SendGrid key they belonged to is one of the credentials exposed
+in git history.
 
-Propagation is usually 10-30 minutes. Once verified, `FROM_EMAIL` in
-`cuisine-webapp/.env.local` already reads
-`Taste of African Cuisine <orders@tasteofafricancuisine.com>` and will start
-working with no code change.
+## Website records (separate job)
+
+The apex still points at Wix and serves a 404, since that subscription was
+cancelled. Change these at deploy time, never before — deleting them early
+leaves the domain resolving nowhere.
+
+| Type | Name | Current | Becomes |
+|---|---|---|---|
+| A ×3 | `@` | `185.230.63.107 / .186 / .171` | Vercel's IP |
+| CNAME | `www` | `cdn1.wixdns.net` | `cname.vercel-dns.com` |
