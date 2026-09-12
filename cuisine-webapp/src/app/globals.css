@@ -421,3 +421,19 @@ body {
     border: 2px solid #000;
   }
 }
+
+/* Legal pages: privacy, terms, refunds. Plain body typography, since Tailwind
+   strips heading styles and these documents are nothing but headings and
+   prose. */
+.legal-body h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--color-kente);
+  margin: 2.25rem 0 0.75rem;
+  line-height: 1.2;
+}
+.legal-body p { margin-bottom: 1rem; line-height: 1.7; }
+.legal-body ul { margin: 0 0 1.25rem 1.25rem; list-style: disc; }
+.legal-body li { margin-bottom: 0.5rem; line-height: 1.65; }
+.legal-body a { color: var(--color-clay); text-decoration: underline; }
+.legal-body strong { font-weight: 600; }

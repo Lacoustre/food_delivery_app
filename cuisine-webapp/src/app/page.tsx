@@ -615,10 +615,10 @@ export default function AfricanCuisineWebsite() {
               <MapPin className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
               <span>200 Hartford Turnpike<br /><span className="text-sand-500 font-normal text-sm">Vernon, CT 06066</span></span>
             </a>
-            <a href="mailto:tasteofafricancuisine01@gmail.com"
+            <a href="mailto:orders@tasteofafricancuisine.com"
               className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
               <Mail className="w-4 h-4 text-sand-500 shrink-0" />
-              <span className="break-all text-[15px]">tasteofafricancuisine01@gmail.com</span>
+              <span className="break-all text-[15px]">orders@tasteofafricancuisine.com</span>
             </a>
             <div className="flex items-start gap-3 py-3.5 text-sand-700">
               <Clock className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
@@ -1290,8 +1290,8 @@ export default function AfricanCuisineWebsite() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-gold-300 shrink-0" />
-                  <a href="mailto:tasteofafricancuisine01@gmail.com" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted break-all">
-                    tasteofafricancuisine01@gmail.com
+                  <a href="mailto:orders@tasteofafricancuisine.com" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted break-all">
+                    orders@tasteofafricancuisine.com
                   </a>
                 </div>
               </div>
@@ -1322,6 +1322,12 @@ export default function AfricanCuisineWebsite() {
           <div className="border-t border-sand-700/40 mt-12 pt-8 text-center">
             <p className="text-sand-500">
               © {year} Taste of African Cuisine. All rights reserved.
+              <span className="mx-2 text-sand-500">·</span>
+              <a href="/privacy" className="text-sand-300 hover:text-gold-300 underline">Privacy</a>
+              <span className="mx-2 text-sand-500">·</span>
+              <a href="/terms" className="text-sand-300 hover:text-gold-300 underline">Terms</a>
+              <span className="mx-2 text-sand-500">·</span>
+              <a href="/refunds" className="text-sand-300 hover:text-gold-300 underline">Refunds</a>
             </p>
           </div>
         </div>
