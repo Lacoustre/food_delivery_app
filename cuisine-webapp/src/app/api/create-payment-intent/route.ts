@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
       scheduledFor,
       promoCode,
       currency = 'usd',
-      customerInfo
+      customerInfo,
+      // The intent this checkout already prepared, if any, so a changed total
+      // reprices it rather than abandoning it and making another.
+      existingIntentId
     }: {
       items: CartItemInput[]
       orderType: 'delivery' | 'pickup'
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
       promoCode?: string
       currency?: string
       customerInfo?: { name?: string; email?: string; phone?: string }
+      existingIntentId?: string
     } = await request.json()
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -133,14 +137,44 @@ export async function POST(request: NextRequest) {
       promoDiscount
     })
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total * 100),
-      currency,
-      automatic_payment_methods: {
-        enabled: true
-      },
-      metadata: { supabase_user_id: caller.uid }
-    })
+    // Reuse the intent this checkout already has, if it has one.
+    //
+    // The client prepares a payment whenever the total, address or order type
+    // changes — a delivery quote arriving is enough. Creating a fresh intent
+    // each time left nine abandoned shells in Stripe for a single order, and a
+    // pending_orders row behind each of them. Stripe lets an unconfirmed
+    // intent be repriced, which is all that is actually needed.
+    let paymentIntent: Stripe.PaymentIntent | null = null
+
+    if (existingIntentId) {
+      try {
+        const existing = await stripe.paymentIntents.retrieve(existingIntentId)
+        const reusable =
+          existing.status === 'requires_payment_method' ||
+          existing.status === 'requires_confirmation'
+
+        // Only this customer's own intent, so a guessed id cannot be repriced.
+        if (reusable && existing.metadata?.supabase_user_id === caller.uid) {
+          paymentIntent = await stripe.paymentIntents.update(existing.id, {
+            amount: Math.round(total * 100),
+            metadata: { supabase_user_id: caller.uid }
+          })
+        }
+      } catch {
+        // Gone, or never ours. Fall through and make a new one.
+      }
+    }
+
+    if (!paymentIntent) {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(total * 100),
+        currency,
+        automatic_payment_methods: {
+          enabled: true
+        },
+        metadata: { supabase_user_id: caller.uid }
+      })
+    }
 
     // Record what this order would be, keyed by the intent. If the browser
     // dies between confirming the card and calling create-order, the Stripe
@@ -182,6 +216,9 @@ export async function POST(request: NextRequest) {
     // is actually being charged.
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
+      // So the next call for this checkout reprices this intent rather than
+      // abandoning it and creating another.
+      paymentIntentId: paymentIntent.id,
       total,
       deliveryFee
     })

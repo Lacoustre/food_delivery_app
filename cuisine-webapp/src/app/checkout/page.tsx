@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -122,6 +122,8 @@ function CheckoutContent() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  // Held in a ref so updating it cannot retrigger the effect that sets it.
+  const intentIdRef = useRef<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [locationLoading, setLocationLoading] = useState(false)
@@ -281,12 +283,19 @@ function CheckoutContent() {
       orderType: orderData.orderType,
       deliveryAddress: orderData.deliveryAddress,
       promoCode: appliedPromo?.promotion.code,
+      // This effect re-runs whenever the total or address moves — a delivery
+      // quote arriving is enough. Handing back the intent we already have
+      // reprices it; without this, one checkout left nine abandoned payment
+      // intents in Stripe and a pending_orders row behind each.
+      existingIntentId: intentIdRef.current ?? undefined,
       // Recorded against the intent so the webhook can build the order if this
       // browser never reaches create-order.
       customerInfo: orderData.customerInfo
     })
-      .then(({ clientSecret }) => {
-        if (!cancelled) setClientSecret(clientSecret)
+      .then(({ clientSecret, paymentIntentId }) => {
+        if (cancelled) return
+        if (paymentIntentId) intentIdRef.current = paymentIntentId
+        setClientSecret(clientSecret)
       })
       .catch((error: Error) => {
         if (cancelled) return

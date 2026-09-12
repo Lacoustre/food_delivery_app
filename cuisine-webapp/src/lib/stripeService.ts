@@ -11,6 +11,8 @@ interface CreatePaymentIntentParams {
   promoCode?: string
   currency?: string
   customerInfo?: { name: string; email: string; phone: string }
+  /** Reprice the intent this checkout already has instead of making another. */
+  existingIntentId?: string
 }
 
 // The server recomputes the charge amount from authoritative meal prices
@@ -24,7 +26,8 @@ export const createPaymentIntent = async ({
   scheduledFor,
   promoCode,
   currency = 'usd',
-  customerInfo
+  customerInfo,
+  existingIntentId
 }: CreatePaymentIntentParams) => {
   const response = await fetch('/api/create-payment-intent', {
     method: 'POST',
@@ -33,7 +36,7 @@ export const createPaymentIntent = async ({
     // calling create-order. It also stops strangers minting payment intents
     // and live Uber quotes on the account.
     headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
-    body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency, customerInfo })
+    body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency, customerInfo, existingIntentId })
   })
 
   const data = await response.json().catch(() => null)
@@ -47,7 +50,7 @@ export const createPaymentIntent = async ({
   if (!data?.clientSecret) {
     throw new Error('Payment could not be started. Please try again.')
   }
-  return data as { clientSecret: string; total: number; deliveryFee?: number }
+  return data as { clientSecret: string; paymentIntentId?: string; total: number; deliveryFee?: number }
 }
 
 export { stripePromise }
