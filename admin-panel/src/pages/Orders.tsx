@@ -43,10 +43,24 @@ type Order = {
   uber_delivery_id: string | null;
   uber_tracking_url: string | null;
   uber_delivery_status: string | null;
+  refund_id: string | null;
+  refund_amount: number | null;
   created_at: string;
   order_items: OrderItemRow[];
   profiles: ProfileRow | ProfileRow[] | null;
 };
+
+/**
+ * What the customer is actually out of pocket.
+ *
+ * Every figure on this page used to show `total`, so a refunded order still
+ * read as its full price — order #1008 showed $63.79 after $7.99 had been
+ * given back. Worse, the revenue line added up the same way and overstated
+ * takings by the value of every refund ever issued.
+ */
+function netPaid(order: { total: number; refund_amount: number | null }): number {
+  return Math.max(0, Number(order.total ?? 0) - Number(order.refund_amount ?? 0));
+}
 
 export default function Orders() {
   const [filter, setFilter] = useState("all");
@@ -407,8 +421,12 @@ export default function Orders() {
     docPdf.text(`Generated on: ${moment().format("MMMM D, YYYY [at] h:mm A")}`, 14, 55);
     docPdf.text(`Total Orders: ${filteredOrders?.length || 0}`, 14, 62);
 
-    const totalRevenue = (filteredOrders || []).reduce((sum, order) => sum + (order.total ?? 0), 0);
+    const totalRevenue = (filteredOrders || []).reduce((sum, order) => sum + netPaid(order), 0);
+    const totalRefunded = (filteredOrders || []).reduce((sum, order) => sum + Number(order.refund_amount ?? 0), 0);
     docPdf.text(`Total Revenue: $${totalRevenue.toFixed(2)}`, 14, 69);
+    if (totalRefunded > 0) {
+      docPdf.text(`(after $${totalRefunded.toFixed(2)} refunded)`, 14, 76);
+    }
 
     autoTable(docPdf, {
       startY: 80,
@@ -421,7 +439,7 @@ export default function Orders() {
           getCustomerName(order),
           isPickup ? "Pickup" : "Delivery",
           order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : "Unknown",
-          (order.total ?? 0).toFixed(2),
+          netPaid(order).toFixed(2),
           order.created_at ? moment(order.created_at).format("MMM D, YYYY") : "—"
         ];
       }) || [],
@@ -583,7 +601,12 @@ export default function Orders() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${(order.total ?? 0).toFixed(2)}
+                        ${netPaid(order).toFixed(2)}
+                        {order.refund_amount ? (
+                          <div className="text-xs font-normal text-amber-700">
+                            ${Number(order.refund_amount).toFixed(2)} refunded of ${Number(order.total).toFixed(2)}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
@@ -719,7 +742,13 @@ export default function Orders() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total</p>
-                  <p className="text-lg font-bold text-gray-900">${(selectedOrder.total ?? 0).toFixed(2)}</p>
+                  <p className="text-lg font-bold text-gray-900">${netPaid(selectedOrder).toFixed(2)}</p>
+                  {selectedOrder.refund_amount ? (
+                    <p className="text-xs text-amber-700">
+                      ${Number(selectedOrder.refund_amount).toFixed(2)} refunded of $
+                      {Number(selectedOrder.total).toFixed(2)}
+                    </p>
+                  ) : null}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Status</p>
