@@ -186,6 +186,35 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (orderError || !order) {
+      // 23505 is a unique violation, which here means the Stripe webhook got
+      // there first: the customer paid, the browser was slow, and the backstop
+      // already built the order. That is a success, not a failure — returning
+      // an error would tell someone who has been charged that their order
+      // failed. See migration 64: the database enforces one order per payment
+      // because the application cannot check it without a race.
+      if (orderError?.code === '23505' && paymentIntentId) {
+        const { data: existing } = await supabase
+          .from('orders')
+          .select('id, order_number')
+          .eq('payment_intent_id', paymentIntentId)
+          .maybeSingle()
+
+        if (existing) {
+          console.log(
+            `create-order lost the race for ${paymentIntentId}; the webhook had already made #${existing.order_number}`
+          )
+          return NextResponse.json({
+            orderId: existing.id,
+            orderNumber: existing.order_number,
+            items: validatedItems,
+            customerInfo,
+            deliveryTime,
+            uberTrackingUrl: null,
+            ...totals
+          })
+        }
+      }
+
       console.error('Order insert failed:', orderError)
       return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }

@@ -146,6 +146,16 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (orderError || !order) {
+      // 23505: the browser's create-order got there between our check above and
+      // this insert. That is the normal path winning the race, which is the
+      // outcome we want — acknowledge it so Stripe stops retrying. The check
+      // above cannot prevent this on its own; the unique index added in
+      // migration 64 is what actually makes one payment mean one order.
+      if (orderError?.code === '23505') {
+        console.log(`Webhook lost the race for ${intent.id}; the browser had already created the order`)
+        return NextResponse.json({ received: true, action: 'none', reason: 'created by the browser first' })
+      }
+
       console.error(`Webhook could not create order for ${intent.id}:`, orderError)
       // 500 so Stripe retries — better than losing it silently.
       return NextResponse.json({ error: 'Order creation failed' }, { status: 500 })
