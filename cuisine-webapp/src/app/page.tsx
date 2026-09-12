@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { googleReviewsService, relativeDate, type GoogleReview } from '@/lib/googleReviewsService'
 import { mealsService, type Meal } from '@/lib/mealsService'
 import { restaurantService, type RestaurantStatus } from '@/lib/restaurantService'
 import { orderService } from '@/lib/orderService'
@@ -77,7 +78,10 @@ export default function AfricanCuisineWebsite() {
     { src: '/assets/images/fufu_and_light_soup.avif', title: 'Fufu & Light Soup', subtitle: 'Comfort & Tradition' }
   ]
 
-  const reviews = [
+  // Shown only while google_reviews is empty — i.e. until Google approves API
+  // access and the sync runs. Two of these could not be verified against the
+  // Business Profile and should come out regardless.
+  const fallbackReviews = [
     {
       name: "Shanay Hall",
       review: "Beyond the food, the service was outstanding. The owner made me feel like family. The portions were generous, the prices were fair, and the customer service was outstanding. Highly recommend - this place deserves ALL the stars!",
@@ -121,6 +125,25 @@ export default function AfricanCuisineWebsite() {
       rating: 5
     }
   ]
+
+  // Google reviews, when the sync has run. The carousel reads `reviews`, so
+  // switching source needs no change below.
+  const [googleReviews, setGoogleReviews] = useState<GoogleReview[]>([])
+
+  useEffect(() => {
+    googleReviewsService.getReviews().then(setGoogleReviews).catch(() => {})
+  }, [])
+
+  const reviews = googleReviews.length
+    ? googleReviews.map(r => ({
+        name: r.reviewerName,
+        review: r.comment,
+        dish: 'Google review',
+        date: relativeDate(r.createdAt),
+        rating: r.rating
+      }))
+    : fallbackReviews
+
 
   useEffect(() => {
     // Load cart from localStorage on component mount
