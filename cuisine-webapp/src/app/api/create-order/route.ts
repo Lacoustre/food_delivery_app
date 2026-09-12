@@ -324,6 +324,21 @@ export async function POST(request: NextRequest) {
           `${result.matchedItems}/${result.totalItems} items matched to inventory`
         )
       }
+
+      // Recorded so cancelling this order can remove the ticket again. The id
+      // used to be logged and discarded, which is why a cancelled order left
+      // an open ticket on the POS with nothing able to refer back to it.
+      if (result.cloverOrderId) {
+        supabase
+          .from('orders')
+          .update({ clover_order_id: result.cloverOrderId })
+          .eq('id', order.id)
+          .then(({ error }) => {
+            if (error) {
+              console.error(`Could not record Clover id for order ${order.id}:`, error)
+            }
+          })
+      }
     }))
 
     let uberTrackingUrl: string | null = null

@@ -292,3 +292,55 @@ export async function pushOrderToClover(
     }
   }
 }
+
+
+/**
+ * Removes a ticket from the POS when the order is cancelled.
+ *
+ * Without this, cancelling in the admin panel left the ticket open on Clover
+ * and staff could still cook food that nobody was going to collect or pay for.
+ *
+ * Clover will delete an order that has no payment against it. One that has
+ * been marked paid cannot be deleted through the API — the money has to be
+ * reversed on the POS — so those are left alone and reported, rather than
+ * failing silently and letting the admin panel claim success.
+ */
+export async function cancelCloverOrder(
+  cloverOrderId: string
+): Promise<{ ok: boolean; error?: string; needsManualVoid?: boolean }> {
+  const cfg = config()
+  if (!cfg) return { ok: false, error: 'Clover is not configured' }
+
+  try {
+    const res = await cloverFetch(`${cfg.url}/orders/${cloverOrderId}`, {
+      headers: cfg.headers
+    })
+
+    // Already gone. Cancelling twice must not look like a failure.
+    if (res.status === 404) return { ok: true }
+    if (!res.ok) {
+      return { ok: false, error: `Could not read Clover order: ${res.status}` }
+    }
+
+    const order = await res.json()
+    const payments = (order.payments?.elements ?? order.payments ?? []) as unknown[]
+    if (Array.isArray(payments) && payments.length > 0) {
+      return {
+        ok: false,
+        needsManualVoid: true,
+        error: 'This ticket has a payment against it and must be voided on the Clover terminal.'
+      }
+    }
+
+    const del = await cloverFetch(`${cfg.url}/orders/${cloverOrderId}`, {
+      method: 'DELETE',
+      headers: cfg.headers
+    })
+    if (!del.ok && del.status !== 404) {
+      return { ok: false, error: `Clover delete failed: ${del.status} ${(await del.text()).slice(0, 200)}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Clover cancel failed' }
+  }
+}

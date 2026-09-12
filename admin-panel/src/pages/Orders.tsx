@@ -159,6 +159,40 @@ export default function Orders() {
   };
 
   /**
+   * Takes the cancelled order's ticket off the POS.
+   *
+   * Cancelling used to set a status and move the money while telling Clover
+   * nothing, so the kitchen ticket stayed open and staff could cook food for
+   * an order that no longer existed.
+   *
+   * A ticket already marked paid cannot be removed through the API — that has
+   * to happen on the terminal — so the route says so and this reports it
+   * rather than pretending it worked.
+   */
+  const clearCloverTicket = async (orderId: string): Promise<string | null> => {
+    const base = import.meta.env.VITE_WEBAPP_URL;
+    if (!base) return "VITE_WEBAPP_URL is not set";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${base}/api/cancel-clover-order`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      if (res.ok) return null;
+      const body = await res.json().catch(() => null);
+      return body?.needsManualVoid
+        ? `void ticket ${body.cloverOrderId} on the Clover terminal`
+        : body?.error ?? `HTTP ${res.status}`;
+    } catch {
+      return "could not reach the site";
+    }
+  };
+
+  /**
    * Tells the customer their order moved on. The toasts used to claim
    * "Customer will be notified" while nothing was sent at all — a customer got
    * a confirmation when they ordered and then silence, including when a pickup
@@ -207,7 +241,27 @@ export default function Orders() {
       // the customer was emailed "you will receive a refund shortly" while
       // their card stayed charged until somebody remembered to do it by hand.
       if (finalStatus === "cancelled") {
+        // Money first: it is the part the customer notices.
         await refundCancelledOrder(orderId);
+
+        const ticketProblem = await clearCloverTicket(orderId);
+        if (ticketProblem) {
+          toast.warning(`Kitchen ticket still open in Clover — ${ticketProblem}.`, {
+            position: "top-center",
+            autoClose: 10000
+          });
+        }
+
+        // "cancelled" is not in worthTelling below, and this branch returns
+        // before reaching it, so a cancelled customer was never told anything
+        // — even though the email for it already existed.
+        const notifyProblem = await notifyCustomer(orderId);
+        if (notifyProblem) {
+          toast.warning(`The customer was NOT emailed about the cancellation: ${notifyProblem}`, {
+            position: "top-center",
+            autoClose: 8000
+          });
+        }
         return;
       }
 
