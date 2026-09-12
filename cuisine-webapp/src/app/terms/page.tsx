@@ -25,8 +25,9 @@ export default function Terms() {
       <p>
         We take orders during opening hours: Tuesday to Thursday 11am&ndash;9pm,
         Friday 11am&ndash;8pm, Saturday 11am&ndash;9pm. We are closed Sundays and
-        Mondays. You can schedule an order ahead while we are closed; it will be made
-        on the day you choose.
+        Mondays. You can order ahead while we are closed &mdash; choose a pickup or
+        delivery time up to three hours later, and we will have it ready then. We
+        cannot take an order for a time we are shut.
       </p>
       <p>
         Some dishes are made on set days only. Check Check is Wednesdays and Tuo

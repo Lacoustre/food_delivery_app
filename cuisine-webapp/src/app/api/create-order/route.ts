@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { computeOrderTotals } from '@/lib/pricing'
 import { getUberQuote } from '@/lib/uberDirect'
-import { getOpenState } from '@/lib/hours'
+import { getOpenState, getScheduleStateAt } from '@/lib/hours'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { createUberDelivery } from '@/lib/uberDirect'
@@ -120,6 +120,18 @@ export async function POST(request: NextRequest) {
       if (!state.open) {
         return NextResponse.json(
           { error: state.reason || 'The restaurant is closed.' },
+          { status: 409 }
+        )
+      }
+    } else {
+      // A scheduled order still has to land on a day and time the kitchen is
+      // actually working. Booking ahead while shut is the feature; booking for
+      // a Sunday, or for 10pm on a Saturday, is an order nobody will cook —
+      // and it was being accepted and charged for.
+      const state = await getScheduleStateAt(new Date(scheduledFor))
+      if (!state.open) {
+        return NextResponse.json(
+          { error: state.reason || 'We are closed at that time.' },
           { status: 409 }
         )
       }

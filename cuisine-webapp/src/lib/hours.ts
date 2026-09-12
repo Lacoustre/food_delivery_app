@@ -41,7 +41,7 @@ function minutesOf(hhmm: unknown): number | null {
 }
 
 // The restaurant's own wall clock, not the server's UTC.
-function nowInRestaurantTz(): { dayKey: string; minutes: number } {
+function inRestaurantTz(when: Date): { dayKey: string; minutes: number } {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone: RESTAURANT_TZ,
@@ -49,7 +49,7 @@ function nowInRestaurantTz(): { dayKey: string; minutes: number } {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
-    }).formatToParts(new Date()).map(p => [p.type, p.value])
+    }).formatToParts(when).map(p => [p.type, p.value])
   )
   const hour = Number(parts.hour) % 24 // some locales emit "24" at midnight
   return {
@@ -87,7 +87,7 @@ export async function getOpenState(): Promise<OpenState> {
   const hours = value.businessHours as Record<string, DaySchedule> | undefined
   if (!hours) return { open: true }
 
-  const { dayKey, minutes } = nowInRestaurantTz()
+  const { dayKey, minutes } = inRestaurantTz(new Date())
   if (!DAY_KEYS.includes(dayKey)) return { open: true }
 
   const today = hours[dayKey]
@@ -109,5 +109,62 @@ export async function getOpenState(): Promise<OpenState> {
     : {
       open: false,
       reason: `The restaurant is closed right now. Today's hours are ${today.open}–${today.close}.`
+    }
+}
+
+
+/**
+ * Whether the restaurant will be open at a given moment.
+ *
+ * Scheduled orders skipped the open check entirely, which is right for the
+ * "we are shut right now" case — booking ahead while closed is the feature —
+ * but wrong for the schedule itself. A customer could pick "in 2 hours" on a
+ * Sunday, or at 8pm on a Saturday, and the order was accepted and charged for
+ * a moment when the kitchen is closed and nobody would cook it.
+ *
+ * Deliberately ignores `manuallyClosed`: that is a switch about now, and
+ * scheduling past it is exactly what a customer is trying to do. This checks
+ * the published schedule only.
+ */
+export async function getScheduleStateAt(when: Date): Promise<OpenState> {
+  let value: Record<string, unknown> | null = null
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'restaurant')
+      .maybeSingle()
+    value = (data?.value as Record<string, unknown>) ?? null
+  } catch {
+    return { open: true }
+  }
+  if (!value) return { open: true }
+
+  const hours = value.businessHours as Record<string, DaySchedule> | undefined
+  if (!hours) return { open: true }
+
+  const { dayKey, minutes } = inRestaurantTz(when)
+  if (!DAY_KEYS.includes(dayKey)) return { open: true }
+
+  const day = hours[dayKey]
+  const label = dayKey.charAt(0).toUpperCase() + dayKey.slice(1)
+
+  if (!day || day.closed === true) {
+    return { open: false, reason: `We are closed on ${label}s. Please choose another time.` }
+  }
+
+  const openM = minutesOf(day.open)
+  const closeM = minutesOf(day.close)
+  if (openM === null || closeM === null) return { open: true }
+
+  const open = closeM > openM
+    ? minutes >= openM && minutes < closeM
+    : minutes >= openM || minutes < closeM
+
+  return open
+    ? { open: true }
+    : {
+      open: false,
+      reason: `We close at ${day.close} on ${label}s, so we cannot have that ready in time.`
     }
 }
