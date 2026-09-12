@@ -21,6 +21,38 @@ function profileOf(row: any): { name?: string | null; email?: string | null } | 
   return Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles;
 }
 
+/**
+ * Which notifications this admin has already dismissed.
+ *
+ * Notifications are derived fresh from the database on every load rather than
+ * stored, and `read` was hardcoded false in the generator — so "Mark all read"
+ * only changed React state and every refresh brought the same alerts back
+ * unread, forever. Kept per browser because these are a reading aid, not a
+ * record: there is nothing here worth a table.
+ */
+const READ_KEY = "admin.readNotifications";
+
+function loadReadIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    // Private windows and blocked site data both throw. An unread badge is a
+    // far smaller problem than a component that will not render.
+    return new Set();
+  }
+}
+
+function saveReadIds(ids: Set<string>) {
+  try {
+    // Trimmed: ids accumulate one per order and would otherwise grow without
+    // limit. The newest are the only ones still capable of matching.
+    localStorage.setItem(READ_KEY, JSON.stringify([...ids].slice(-200)));
+  } catch {
+    // Nothing to do — it just will not persist.
+  }
+}
+
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -119,13 +151,17 @@ export default function NotificationCenter() {
     const inactiveMeals = mealsRes.data ?? [];
     if (inactiveMeals.length > 0) {
       generatedNotifications.push({
-        id: "low-stock",
+        // The count is part of the id on purpose. With a fixed id, dismissing
+        // it once would also hide the alert when a different number of dishes
+        // went inactive later.
+        id: `inactive-meals:${inactiveMeals.length}`,
         type: "alert",
         title: "Inactive Menu Items",
-        message: `${inactiveMeals.length} menu items are currently inactive`,
+        message: `${inactiveMeals.length} menu ${inactiveMeals.length === 1 ? "item is" : "items are"} hidden from customers`,
         createdAtMs: Date.now(),
         read: false,
-        priority: "medium"
+        priority: "medium",
+        actionUrl: "/meals"
       });
     }
 
@@ -169,9 +205,13 @@ export default function NotificationCenter() {
             console.log('Audio notification not available');
           }
         }
-        return limitedNotifications.length;
+        return limitedNotifications.filter(n => !loadReadIds().has(n.id)).length;
       });
-      setNotifications(limitedNotifications);
+      // Anything already dismissed stays dismissed across refreshes.
+      const readIds = loadReadIds();
+      setNotifications(
+        limitedNotifications.map(n => (readIds.has(n.id) ? { ...n, read: true } : n))
+      );
     };
 
     refresh();
@@ -205,13 +245,21 @@ export default function NotificationCenter() {
   };
 
   const markAsRead = (id: string) => {
-    setNotifications(prev => 
+    const ids = loadReadIds();
+    ids.add(id);
+    saveReadIds(ids);
+    setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const ids = loadReadIds();
+    setNotifications(prev => {
+      prev.forEach(n => ids.add(n.id));
+      saveReadIds(ids);
+      return prev.map(n => ({ ...n, read: true }));
+    });
   };
 
   const handleNotificationClick = (notification: Notification) => {
