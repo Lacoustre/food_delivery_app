@@ -109,20 +109,6 @@ export default function AfricanCuisineWebsite() {
       dish: "Fufu & Egusi",
       date: "5 months ago",
       rating: 5
-    },
-    {
-      name: "Marcus Johnson",
-      review: "The jollof rice here is incredible! Perfectly seasoned and cooked to perfection. The atmosphere is warm and welcoming, and the staff treats you like family. Will definitely be back!",
-      dish: "Jollof Rice",
-      date: "3 months ago",
-      rating: 5
-    },
-    {
-      name: "Aisha Thompson",
-      review: "Best African food in the area! The plantains are sweet and perfectly fried, and the stews are rich with authentic flavors. You can taste the love in every bite.",
-      dish: "Plantains & Stew",
-      date: "6 months ago",
-      rating: 5
     }
   ]
 
