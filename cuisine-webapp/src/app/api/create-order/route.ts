@@ -197,6 +197,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }
 
+    // The ticket has to say when the food is wanted. A scheduled order printed
+    // the moment it is placed looks exactly like an ASAP one, so an order
+    // booked for this afternoon could be cooked now and sit for hours.
+    //
+    // Written in the restaurant's own wall clock, not UTC, because that is the
+    // clock the person reading the ticket is working to.
+    const cloverNoteParts: string[] = []
+    if (scheduledFor) {
+      const when = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        weekday: 'short',
+        hour: 'numeric',
+        minute: '2-digit'
+      }).format(new Date(scheduledFor))
+      cloverNoteParts.push(`SCHEDULED FOR ${when}`)
+    }
+    // Clover shows the order as open when it is unpaid, but the amount still
+    // to collect is worth spelling out on the ticket.
+    if (paymentMethod === 'cash') {
+      cloverNoteParts.push(`COLLECT $${totals.total.toFixed(2)} CASH`)
+    }
+    const cloverNote = cloverNoteParts.length ? cloverNoteParts.join(' · ') : undefined
+
     // Dispatch ASAP delivery orders to Uber Direct. Delayed options
     // ("1hour"/"2hours"/"3hours") skip auto-dispatch — a courier shouldn't
     // arrive before the food is wanted; those are handled manually until
@@ -217,7 +240,8 @@ export async function POST(request: NextRequest) {
       paid: paymentMethod === 'card',
       customerName: customerInfo?.name,
       customerPhone: customerInfo?.phone,
-      deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined
+      deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
+      note: cloverNote
     }).then(result => {
       if (!result.ok) {
         console.error(`Clover push failed for order ${orderNumber}: ${result.error}`)
