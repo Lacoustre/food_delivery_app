@@ -220,36 +220,50 @@ function MealDetailContent() {
       
       {/* Header */}
       <div className="bg-white shadow-sm border-b relative z-10">
-        <div className="page-shell px-4 py-4">
-          <div className="flex items-center h-16">
-            <Link href="/" className="p-2 hover:bg-sand-100 rounded-full transition-colors">
+        <div className="page-shell px-4 py-3">
+          {/* One fixed-height row used to hold the arrow, the logo, the
+              restaurant name and the dish name, with nothing allowed to shrink
+              or wrap — so on a phone they ran into each other. min-w-0 lets the
+              text truncate instead of pushing its neighbour over. */}
+          <div className="flex items-center gap-3 min-h-16">
+            <Link
+              href="/"
+              className="shrink-0 p-2 -ml-2 hover:bg-sand-100 rounded-full transition-colors"
+              aria-label="Back to the menu"
+            >
               <ArrowLeft className="w-5 h-5 text-black" />
             </Link>
-            <div className="flex items-center space-x-3 ml-3">
+
+            <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/assets/images/logo.png"
                 alt="Logo"
                 width={48}
                 height={48}
-                className="object-contain"
+                className="object-contain shrink-0 w-10 h-10 sm:w-12 sm:h-12"
                 unoptimized
               />
-              <div>
-                <h1 className="text-lg font-bold italic text-ink">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold italic text-ink truncate">
                   Taste of African Cuisine
                 </h1>
-                <p className="text-xs italic text-gold-600">
+                <p className="text-xs italic text-gold-600 truncate">
                   Authentic African Cooking
                 </p>
               </div>
             </div>
-            <h2 className="text-xl font-semibold text-black ml-auto">{meal.name}</h2>
+
+            {/* The dish name is the first thing in the body below, so on a
+                phone it is repetition that costs the header its layout. */}
+            <h2 className="hidden lg:block text-xl font-semibold text-black ml-auto truncate max-w-[40%]">
+              {meal.name}
+            </h2>
           </div>
         </div>
       </div>
 
-      <div className="page-shell max-w-5xl px-4 py-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-8">
+      <div className="page-shell max-w-5xl px-4 py-6 sm:py-8 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Image */}
           <div className="relative aspect-[4/3] max-h-[420px] rounded-card overflow-hidden border border-sand-200">
             <img
@@ -266,9 +280,9 @@ function MealDetailContent() {
           </div>
 
           {/* Details */}
-          <div className="space-y-6 bg-white p-6 rounded-xl shadow-card">
+          <div className="space-y-6 bg-white p-4 sm:p-6 rounded-xl shadow-card">
             <div>
-              <h2 className="font-display text-3xl text-black mb-2">{meal.name}</h2>
+              <h2 className="font-display text-2xl sm:text-3xl text-black mb-2">{meal.name}</h2>
               <p className="text-black mb-4">{meal.description}</p>
               <p className="font-display text-2xl text-gold-600">${meal.price.toFixed(2)}</p>
             </div>
@@ -286,7 +300,7 @@ function MealDetailContent() {
                     <button
                       key={extra.name}
                       onClick={() => handleExtraToggle(extra)}
-                      className={`px-4 py-2 rounded-full border transition-colors ${
+                      className={`px-4 py-2.5 text-sm sm:text-base rounded-full border transition-colors ${
                         selectedExtras[extra.name]
                           ? 'bg-gold text-white border-gold'
                           : 'bg-white text-black border-sand-200 hover:border-gold'
@@ -306,7 +320,7 @@ function MealDetailContent() {
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder="e.g. No onions, sauce on the side"
-                className="w-full p-3 border border-sand-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none text-black"
+                className="w-full p-3 text-base border border-sand-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none text-black"
                 rows={3}
               />
             </div>
@@ -317,16 +331,18 @@ function MealDetailContent() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-2 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
+                  className="p-3 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
+                  aria-label="One fewer"
                 >
-                  <Minus className="w-4 h-4 text-black" />
+                  <Minus className="w-5 h-5 text-black" />
                 </button>
                 <span className="text-xl font-semibold px-4 text-black">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="p-2 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
+                  className="p-3 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors"
+                  aria-label="One more"
                 >
-                  <Plus className="w-4 h-4 text-black" />
+                  <Plus className="w-5 h-5 text-black" />
                 </button>
               </div>
             </div>
