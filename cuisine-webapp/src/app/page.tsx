@@ -938,6 +938,7 @@ export default function AfricanCuisineWebsite() {
                   soup: 'Choose your soup',
                   preparation: 'Choose your preparation',
                   side: 'Served with',
+                  portion: 'How many pieces',
                 }
 
                 return SECTIONS.filter(s => bySection.has(s)).map(section => (
