@@ -1,11 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import moment from 'moment';
+import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
 
 // Scheduled orders are just orders rows with scheduled_for set — there is
 // no separate collection anymore (the old Firestore scheduled_orders one
 // stopped being written when order persistence moved to Supabase).
+interface Profile {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
 interface ScheduledOrder {
   id: string;
   order_number: string | null;
@@ -13,9 +20,15 @@ interface ScheduledOrder {
   order_type: 'delivery' | 'pickup' | null;
   payment_method: string | null;
   scheduled_for: string;
+  created_at: string | null;
+  delivery_address: string | null;
+  subtotal: number | null;
+  tax: number | null;
+  delivery_fee: number | null;
+  tip: number | null;
   total: number;
-  order_items: { name: string | null; quantity: number }[];
-  profiles: { name: string | null; email: string | null } | { name: string | null; email: string | null }[] | null;
+  order_items: { name: string | null; quantity: number; unit_price: number | null }[];
+  profiles: Profile | Profile[] | null;
 }
 
 const STATUS_OPTIONS = [
@@ -26,14 +39,21 @@ const STATUS_OPTIONS = [
 export default function ScheduledOrders() {
   const [orders, setOrders] = useState<ScheduledOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
       .from('orders')
-      .select('id, order_number, status, order_type, payment_method, scheduled_for, total, order_items(name, quantity), profiles!user_id(name, email)')
+      .select(
+        'id, order_number, status, order_type, payment_method, scheduled_for, created_at, ' +
+        'delivery_address, subtotal, tax, delivery_fee, tip, total, ' +
+        'order_items(name, quantity, unit_price), profiles!user_id(name, email, phone)'
+      )
       .not('scheduled_for', 'is', null)
       .order('scheduled_for', { ascending: true });
-    if (!error) setOrders((data ?? []) as ScheduledOrder[]);
+    // Cast through unknown: the select is built by concatenation, so
+    // supabase-js cannot infer the row shape from the string literal.
+    if (!error) setOrders((data ?? []) as unknown as ScheduledOrder[]);
     setLoading(false);
   }, []);
 
@@ -52,8 +72,15 @@ export default function ScheduledOrders() {
     try {
       const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
       if (error) throw error;
+      toast.success(`Marked ${newStatus}.`, { position: 'top-right', autoClose: 2000 });
     } catch (error) {
+      // This silently failed before, so a dropdown could snap back with no
+      // explanation and staff would assume the change had saved.
       console.error('Error updating order status:', error);
+      toast.error('Could not update the status. Please try again.', {
+        position: 'top-right',
+        autoClose: 4000,
+      });
     }
   };
 
@@ -62,9 +89,11 @@ export default function ScheduledOrders() {
     return profile?.name || profile?.email?.split('@')[0] || 'Unknown Customer';
   };
 
-  const showOrderDetails = (order: ScheduledOrder) => {
-    alert(`Order Details:\n\nOrder #: ${order.order_number || 'N/A'}\nCustomer: ${getCustomerName(order)}\nItems: ${order.order_items?.length || 0}\nTotal: $${Number(order.total ?? 0).toFixed(2)}\nPayment: ${order.payment_method || 'N/A'}\nScheduled: ${moment(order.scheduled_for).format('MMM D, YYYY h:mm A')}`);
-  };
+
+  const getProfile = (order: ScheduledOrder): Profile | null =>
+    Array.isArray(order.profiles) ? order.profiles[0] ?? null : order.profiles;
+
+  const selected = orders.find((o) => o.id === selectedId) ?? null;
 
   if (loading) {
     return (
@@ -147,7 +176,7 @@ export default function ScheduledOrders() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
                       <button
                         className="hover:text-blue-800 mr-2"
-                        onClick={() => showOrderDetails(order)}
+                        onClick={() => setSelectedId(order.id)}
                       >
                         View Details
                       </button>
@@ -156,6 +185,132 @@ export default function ScheduledOrders() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Details. Replaces a window.alert that reported a count of items
+          without naming any of them — the one thing the kitchen needs. */}
+      {selected && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center backdrop-blur-sm p-4"
+          onClick={() => setSelectedId(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-6 pb-4 sticky top-0 bg-white border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Order #{selected.order_number || selected.id.slice(0, 8)}
+                </h2>
+                <p className="text-sm text-amber-700 font-medium mt-0.5">
+                  {selected.order_type === 'pickup' ? 'Pickup' : 'Delivery'} &middot;{' '}
+                  {moment(selected.scheduled_for).format('ddd D MMM, h:mm A')}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedId(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 pt-4 space-y-5">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Customer</p>
+                <p className="text-sm text-gray-900">{getCustomerName(selected)}</p>
+                {/* Tap-to-call: a scheduled order is the one most likely to
+                    need a phone call, and staff are often on a phone. */}
+                {getProfile(selected)?.phone && (
+                  <a
+                    href={`tel:${getProfile(selected)?.phone}`}
+                    className="text-sm text-amber-700 hover:underline"
+                  >
+                    {getProfile(selected)?.phone}
+                  </a>
+                )}
+                {getProfile(selected)?.email && (
+                  <p className="text-sm text-gray-500 break-all">{getProfile(selected)?.email}</p>
+                )}
+              </div>
+
+              {selected.order_type === 'delivery' && selected.delivery_address && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">Deliver to</p>
+                  <p className="text-sm text-gray-900">{selected.delivery_address}</p>
+                </div>
+              )}
+
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-sm font-medium text-gray-500 mb-3">
+                  Items ({selected.order_items?.length ?? 0})
+                </p>
+                <div className="space-y-2">
+                  {(selected.order_items ?? []).map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.quantity > 1 && (
+                            <span className="text-amber-700 font-bold">{item.quantity} &times; </span>
+                          )}
+                          {item.name || 'Unknown item'}
+                        </p>
+                      </div>
+                      <p className="text-sm text-gray-900 whitespace-nowrap">
+                        ${((item.unit_price ?? 0) * (item.quantity || 1)).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                  {(selected.order_items?.length ?? 0) === 0 && (
+                    <p className="text-sm text-red-600">
+                      No items recorded on this order.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="text-gray-900">${Number(selected.subtotal ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tax</span>
+                  <span className="text-gray-900">${Number(selected.tax ?? 0).toFixed(2)}</span>
+                </div>
+                {Number(selected.delivery_fee ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Delivery</span>
+                    <span className="text-gray-900">${Number(selected.delivery_fee).toFixed(2)}</span>
+                  </div>
+                )}
+                {Number(selected.tip ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tip</span>
+                    <span className="text-gray-900">${Number(selected.tip).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 border-t border-gray-200">
+                  <span className="font-semibold text-gray-900">Total</span>
+                  <span className="font-bold text-gray-900">${Number(selected.total ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between pt-1">
+                  <span className="text-gray-600">Payment</span>
+                  <span className={selected.payment_method === 'cash' ? 'text-amber-700 font-medium' : 'text-gray-900'}>
+                    {selected.payment_method === 'cash' ? 'Cash on collection' : 'Paid by card'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
