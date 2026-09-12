@@ -43,8 +43,16 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Firebase Init
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // 🔥 Firebase Init — guarded for the same reason as Stripe below. An
+  // unhandled exception here aborts main() before runApp() and the user gets a
+  // black screen with no explanation. Firebase is only used for push
+  // notifications now; the app is entirely usable without it, so failing to
+  // start it must never stop the app starting.
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    debugPrint('Firebase initialization skipped/failed: $e');
+  }
 
   // 🟢 Supabase Init — coexists with Firebase during the migration; auth,
   // orders, meals etc. are moving over table-by-table, not all at once.
