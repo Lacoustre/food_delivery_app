@@ -62,7 +62,26 @@ async function sendWelcomeEmail(email: string, name: string): Promise<void> {
 export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, name: string): Promise<UserProfile> {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // Without this Supabase uses the project's Site URL for the
+        // confirmation link, which was still pointing at a development
+        // address — every customer clicking it got "server can't be reached".
+        // window.location.origin means the link comes back to wherever they
+        // actually signed up.
+        emailRedirectTo:
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/login?confirmed=1`
+            : undefined,
+        // The name has to live here to survive confirmation. With email
+        // confirmation on, signup returns no session, so the profile row
+        // cannot be written yet and the name was simply lost — the welcome
+        // email then greeted people by the part of their address before the @.
+        data: { name }
+      }
+    })
     if (error) throw error
     const user = data.user
     if (!user) throw new Error('Signup failed')
@@ -109,9 +128,14 @@ export const authService = {
         .eq('id', user.id)
         .maybeSingle()
       if (!existing) {
-        await supabase.from('profiles').upsert({ id: user.id, email, role: 'customer' })
+        // The name was stashed in auth metadata at signup precisely so it
+        // would still be here.
+        const name =
+          (user.user_metadata?.name as string | undefined)?.trim() ||
+          email.split('@')[0]
+        await supabase.from('profiles').upsert({ id: user.id, name, email, role: 'customer' })
         // First confirmed sign-in — the signup call had no session to send with.
-        await sendWelcomeEmail(email, email.split('@')[0])
+        await sendWelcomeEmail(email, name)
       }
     } catch (e) {
       console.error('Profile ensure failed:', e)

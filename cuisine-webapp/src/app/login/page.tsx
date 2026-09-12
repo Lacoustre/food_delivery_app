@@ -18,6 +18,9 @@ function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect')
+  // Arriving from the confirmation link. Without this the customer clicks the
+  // link, lands on a plain sign-in form, and has no idea whether it worked.
+  const justConfirmed = searchParams.get('confirmed') === '1'
 
   useEffect(() => {
     // Store redirect info for after login
@@ -71,6 +74,12 @@ function LoginContent() {
             <h1 className="font-display text-3xl text-ink mb-2">Welcome Back!</h1>
             <p className="text-sand-700">Sign in to order delicious African cuisine</p>
           </div>
+
+          {justConfirmed && !error && (
+            <div className="mb-6 p-4 bg-sand-100 border border-kente/20 text-kente rounded-xl text-sm">
+              Your email is confirmed. Sign in and you can order.
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
