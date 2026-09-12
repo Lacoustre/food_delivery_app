@@ -70,3 +70,44 @@ leaves the domain resolving nowhere.
 |---|---|---|---|
 | A ×3 | `@` | `185.230.63.107 / .186 / .171` | Vercel's IP |
 | CNAME | `www` | `cdn1.wixdns.net` | `cname.vercel-dns.com` |
+
+---
+
+# Stripe webhook
+
+Two environment variables are needed, in `.env.local` and in Vercel:
+
+    STRIPE_WEBHOOK_SECRET=whsec_...      # Stripe dashboard, see below
+    SUPABASE_SERVICE_ROLE_KEY=eyJ...     # Supabase > Project Settings > API
+
+The service role key is unavoidable here: a webhook arrives with no user
+session, so row-level security has nothing to apply.
+
+## Adding the endpoint
+
+1. Stripe dashboard > **Developers > Webhooks > Add endpoint**
+2. URL: `https://<your-site>/api/webhooks/stripe`
+3. Event: **`payment_intent.succeeded`** — that one alone
+4. Copy the **signing secret** it shows and set `STRIPE_WEBHOOK_SECRET`
+
+Make sure the dashboard is in **live** mode. A test-mode endpoint produces a
+different signing secret and live payments will never reach it.
+
+## What it does
+
+Checkout confirms the card and then calls `/api/create-order`. If the browser
+dies in between, the customer is charged and no order exists — the kitchen
+never sees it and the first anyone hears is a chargeback.
+
+The webhook is the backstop. It acts only when no order already carries the
+PaymentIntent, so a browser that finished the job wins and the webhook does
+nothing. What it writes comes from `pending_orders`, recorded by
+create-payment-intent after the server priced the items, validated the promo
+and quoted Uber — nothing is taken from the client.
+
+If a payment arrives with no order *and* no pending record, it logs
+`ORPHANED PAYMENT <id>` and returns 200. Worth searching the Vercel logs for
+occasionally; it means somebody paid for food nobody knows about.
+
+`scripts/reconcile-payments.mjs` still earns its place as a daily check,
+because it catches anything the webhook itself missed.

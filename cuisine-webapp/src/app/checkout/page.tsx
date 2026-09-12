@@ -262,7 +262,10 @@ function CheckoutContent() {
       items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
       orderType: orderData.orderType,
       deliveryAddress: orderData.deliveryAddress,
-      promoCode: appliedPromo?.promotion.code
+      promoCode: appliedPromo?.promotion.code,
+      // Recorded against the intent so the webhook can build the order if this
+      // browser never reaches create-order.
+      customerInfo: orderData.customerInfo
     })
       .then(({ clientSecret }) => {
         if (!cancelled) setClientSecret(clientSecret)

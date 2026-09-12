@@ -1,4 +1,5 @@
 import { loadStripe } from '@stripe/stripe-js'
+import { getAuthHeaders } from './authHeaders'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
@@ -9,6 +10,7 @@ interface CreatePaymentIntentParams {
   scheduledFor?: string
   promoCode?: string
   currency?: string
+  customerInfo?: { name: string; email: string; phone: string }
 }
 
 // The server recomputes the charge amount from authoritative meal prices
@@ -21,12 +23,17 @@ export const createPaymentIntent = async ({
   deliveryAddress,
   scheduledFor,
   promoCode,
-  currency = 'usd'
+  currency = 'usd',
+  customerInfo
 }: CreatePaymentIntentParams) => {
   const response = await fetch('/api/create-payment-intent', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency })
+    // Authenticated now: the route records who the order is for, so the
+    // Stripe webhook can create it if this browser never gets as far as
+    // calling create-order. It also stops strangers minting payment intents
+    // and live Uber quotes on the account.
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+    body: JSON.stringify({ items, orderType, deliveryAddress, scheduledFor, promoCode, currency, customerInfo })
   })
 
   const data = await response.json().catch(() => null)
