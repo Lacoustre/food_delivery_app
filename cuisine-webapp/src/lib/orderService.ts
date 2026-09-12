@@ -22,6 +22,10 @@ export interface Order {
   deliveryFee: number
   tax: number
   total: number
+  /** Money already sent back. Absent on an order being created — nothing has
+   *  been refunded yet — and a customer must never be shown a figure their
+   *  bank statement contradicts. */
+  refundAmount?: number
   paymentMethod: 'card' | 'cash'
   status: 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'completed' | 'cancelled'
   uberTrackingUrl?: string | null
@@ -70,6 +74,7 @@ function rowToOrder(row: any, profile: ProfileInfo | null): Order {
     deliveryFee: Number(row.delivery_fee ?? 0),
     tax: Number(row.tax ?? 0),
     total: Number(row.total ?? 0),
+    refundAmount: Number(row.refund_amount ?? 0),
     paymentMethod: (row.payment_method as Order['paymentMethod']) ?? 'card',
     status: STATUS_FROM_DB[row.status as string] ?? 'confirmed',
     uberTrackingUrl: row.uber_tracking_url ?? null,

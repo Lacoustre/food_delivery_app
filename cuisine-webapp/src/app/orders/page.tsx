@@ -136,7 +136,14 @@ function OrdersContent() {
                 </p>
               </div>
               <div className="text-right">
-                <div className="font-display text-2xl text-gold-600">${order.total.toFixed(2)}</div>
+                <div className="font-display text-2xl text-gold-600">
+                  ${(order.total - (order.refundAmount ?? 0)).toFixed(2)}
+                </div>
+                {(order.refundAmount ?? 0) > 0 && (
+                  <div className="text-xs text-clay">
+                    ${(order.refundAmount ?? 0).toFixed(2)} refunded
+                  </div>
+                )}
                 <div className="text-sm text-sand-500">Total Amount</div>
               </div>
             </div>
@@ -314,7 +321,7 @@ function OrdersContent() {
                   </div>
                   <div>
                     <div className="font-display text-2xl text-ink">
-                      ${orders.reduce((sum, order) => sum + order.total, 0).toFixed(0)}
+                      ${orders.reduce((sum, order) => sum + order.total - (order.refundAmount ?? 0), 0).toFixed(0)}
                     </div>
                     <div className="text-sm text-sand-700">Total Spent</div>
                   </div>
@@ -368,7 +375,14 @@ function OrdersContent() {
                         {getStatusIcon(order.status)}
                         <span className="font-bold text-ink">{getStatusText(order.status)}</span>
                       </div>
-                      <div className="font-display text-2xl text-gold-600 mb-3">${order.total.toFixed(2)}</div>
+                      <div className="font-display text-2xl text-gold-600 mb-1">
+                        ${(order.total - (order.refundAmount ?? 0)).toFixed(2)}
+                      </div>
+                      {(order.refundAmount ?? 0) > 0 && (
+                        <div className="text-xs text-clay mb-3">
+                          ${(order.refundAmount ?? 0).toFixed(2)} refunded of ${order.total.toFixed(2)}
+                        </div>
+                      )}
                       
                       <div className="flex flex-col gap-2">
                         {isActive && (
