@@ -95,7 +95,28 @@ on this project paired Rice Ball with fried rice.
 Two dishes removed from the site are still orderable on Clover:
 **Alvaro (Malt Drink)** $3.99 and **Fried Plantain & Tomato Stew (Veg)** $24.99.
 
-## Printing — the open question
+## Printing — answered
+
+**Orders print automatically.** Staff confirmed that online orders from
+tasteofafrican.cloveronline.com produce a kitchen ticket with nobody tapping
+anything. Orders pushed through the API arrive by the same path, so they will
+print too. This was the make-or-break question and it came back green.
+
+## Order status — answered, and the answer is no
+
+**Clover has no "ready for pickup" state.** Querying the merchant's real
+orders returns only `open` and `locked` — Clover's payment lifecycle, not a
+kitchen one. There is nothing for staff to tap when food is ready, which is
+why asking them produced no answer.
+
+Consequences:
+
+- Nothing can be read back from Clover to tell a customer their order is ready.
+- Customer notifications have to be driven from the admin panel, where someone
+  marks the order. The two-way sync described below is not buildable.
+- The integration is therefore one-way: orders out to Clover, nothing back.
+
+## Old notes on printing
 
 One printer, type `MY_LOCAL`: the receipt printer built into the Clover
 terminal. No separate networked kitchen printer. One routing tag,
