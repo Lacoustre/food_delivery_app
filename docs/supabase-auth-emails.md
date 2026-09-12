@@ -88,16 +88,15 @@ the allow-list:
   - `https://tasteofafricancuisine.com/**`
   - `https://www.tasteofafricancuisine.com/**`
   - `https://food-delivery-app-teal-five.vercel.app/**`
-  - the admin panel's own URL, with `/**` on the end
+  - `https://admin-nine-delta-37.vercel.app/**`
 
 The `/**` matters. The signup code sends people to `/login?confirmed=1` and a
 reset sends them to `/reset-password`; without the wildcard Supabase rejects
 the path and silently falls back to the Site URL.
 
 **The admin panel's URL has to be on that list too.** Its reset link now points
-at its own `/reset-password` page rather than the customer site, using whatever
-origin the panel is served from. Until that origin is allowed, an admin reset
-lands back on the customer website instead.
+at its own `/reset-password` page rather than the customer site. Until that
+origin is allowed, an admin reset lands back on the customer website instead.
 
 While the Site URL still says `http://localhost:3000`, every confirmation link
 sent to a real customer points at their own machine, and their browser says the

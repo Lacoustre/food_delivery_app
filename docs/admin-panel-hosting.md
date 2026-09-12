@@ -1,8 +1,10 @@
 # Hosting the admin panel
 
-The admin panel has never been deployed — it has only ever run on a laptop with
-`npm run dev`. That means the restaurant cannot take an order on a phone, and
-the password reset link has nowhere to land.
+Live at **https://admin-nine-delta-37.vercel.app**.
+
+Until September 2026 it had never been deployed at all — it only ever ran on a
+laptop with `npm run dev`, which is why nothing in the repo recorded where it
+lived.
 
 It is a Vite single-page app, so it builds to static files. Put it on Vercel
 alongside the customer site: same repo, same dashboard, same bill.
@@ -67,10 +69,14 @@ do — unlike MX records, which is why Resend is verified over CNAME instead.
 
 ## After it is live
 
-Add the panel's URL to Supabase → Authentication → URL Configuration →
-Redirect URLs, with `/**` on the end. Until that is there, an admin password
-reset lands on the customer site rather than the panel. See
-[supabase-auth-emails.md](./supabase-auth-emails.md).
+Add this to Supabase → Authentication → URL Configuration → Redirect URLs:
+
+```
+https://admin-nine-delta-37.vercel.app/**
+```
+
+Until that is there, an admin password reset lands on the customer site rather
+than the panel. See [supabase-auth-emails.md](./supabase-auth-emails.md).
 
 Then check, on a phone: sign in, open an order, and use the reset link from the
 sign-in form to confirm it lands on a form rather than a 404.
