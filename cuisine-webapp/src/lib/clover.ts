@@ -6,9 +6,11 @@
  * with no notion of food being ready — so there is nothing useful to read back
  * and customer notifications stay in the admin panel.
  *
- * Tickets print by themselves: staff confirmed that orders arriving from the
- * hosted ordering page produce a kitchen ticket with nobody tapping anything,
- * and these arrive by the same path.
+ * Tickets do not print by themselves. That was assumed when this was written —
+ * on the basis that orders from Clover's own hosted ordering page print with
+ * nobody tapping anything — and it is wrong for orders created through the
+ * API. They appear on the Clover screen and sit there. A print event has to be
+ * asked for explicitly, which is what printCloverOrder does.
  *
  * Never throws. A POS that is unreachable must not fail an order the customer
  * has already paid for — the order exists in Supabase either way, and the
@@ -157,6 +159,8 @@ export interface CloverPushResult {
   cloverOrderId?: string
   matchedItems?: number
   totalItems?: number
+  /** Whether a print event was accepted. The ticket is on screen either way. */
+  printed?: boolean
   error?: string
 }
 
@@ -279,11 +283,20 @@ export async function pushOrderToClover(
       }
     }
 
+    // Last, so the ticket that prints is the finished one: all line items, the
+    // total set, and the payment recorded. Printing earlier would put a
+    // half-built order in the kitchen's hands.
+    const printed = await printCloverOrder(cloverOrder.id)
+    if (!printed.ok) {
+      console.error(`Clover order ${cloverOrder.id} did not print: ${printed.error}`)
+    }
+
     return {
       ok: true,
       cloverOrderId: cloverOrder.id,
       matchedItems: matched,
-      totalItems: order.items.length
+      totalItems: order.items.length,
+      printed: printed.ok
     }
   } catch (err) {
     return {
@@ -342,5 +355,43 @@ export async function cancelCloverOrder(
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Clover cancel failed' }
+  }
+}
+
+
+/**
+ * Asks Clover to print the ticket.
+ *
+ * An order created through the API shows up on the Clover screen but never
+ * reaches the printer on its own, so the kitchen only sees it if somebody is
+ * watching the screen. This queues a print event, which the merchant's own
+ * printer picks up.
+ *
+ * Never throws. A printer that is offline or out of paper must not fail an
+ * order — the ticket is on screen, the order is in Supabase, and the
+ * restaurant also gets an email.
+ */
+export async function printCloverOrder(
+  cloverOrderId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const cfg = config()
+  if (!cfg) return { ok: false, error: 'Clover is not configured' }
+
+  try {
+    const res = await cloverFetch(`${cfg.url}/print_event`, {
+      method: 'POST',
+      headers: cfg.headers,
+      body: JSON.stringify({ orderRef: { id: cloverOrderId } })
+    })
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Clover print failed: ${res.status} ${(await res.text()).slice(0, 200)}`
+      }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Clover print failed' }
   }
 }
