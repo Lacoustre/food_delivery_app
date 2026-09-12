@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { computeOrderTotals } from '@/lib/pricing'
 import { getUberQuote } from '@/lib/uberDirect'
@@ -7,6 +7,7 @@ import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { createUberDelivery } from '@/lib/uberDirect'
 import { pushOrderToClover } from '@/lib/clover'
+import { emailService } from '@/lib/emailService'
 
 interface CartItemInput {
   id: string
@@ -228,7 +229,65 @@ export async function POST(request: NextRequest) {
     // Put the ticket in front of the kitchen. Never throws, and a failure is
     // logged rather than surfaced: the customer has paid and the order exists
     // in Supabase, so a POS that is down must not fail their checkout.
-    pushOrderToClover({
+    // Tell the restaurant. The Clover ticket is the primary signal; this is
+    // the one that still arrives when the POS is offline or the printer is
+    // out of paper — which is how order #1006 came in with nobody notified.
+    //
+    // The address comes from the settings row so it can be changed from the
+    // admin panel without a deploy.
+    after((async () => {
+      try {
+        const { data: settingsRow } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'restaurant')
+          .maybeSingle()
+
+        const to = settingsRow?.value?.email || process.env.RESTAURANT_ALERT_EMAIL
+        if (!to) {
+          console.error(`No restaurant address configured — order #${orderNumber} not announced`)
+          return
+        }
+
+        const result = await emailService.sendNewOrderAlert(
+          {
+            customerEmail: customerInfo?.email ?? '',
+            customerName: customerInfo?.name || 'Customer',
+            customerPhone: customerInfo?.phone ?? undefined,
+            orderNumber,
+            orderType,
+            items: validatedItems.map(i => ({
+              id: i.id,
+              name: i.name,
+              quantity: i.quantity,
+              price: i.price
+            })),
+            subtotal: totals.subtotal,
+            deliveryFee: totals.deliveryFee,
+            tax: totals.tax,
+            total: totals.total,
+            deliveryAddress: orderType === 'delivery' ? deliveryAddress ?? undefined : undefined,
+            status: 'confirmed',
+            scheduledFor,
+            paymentMethod
+          },
+          to
+        )
+        if (!result.success) {
+          console.error(`Restaurant alert failed for order #${orderNumber}`)
+        }
+      } catch (err) {
+        // Never fail an order over a notification.
+        console.error(`Restaurant alert threw for order #${orderNumber}:`, err)
+      }
+    })())
+
+    // after() keeps the function alive until this finishes. Previously this
+    // was fire-and-forget, and the platform froze the instance the moment the
+    // response was returned — so the push died partway through. Order #1006
+    // reached Clover with one of its four dishes, no total and no payment,
+    // because the remaining requests were never allowed to run.
+    after(pushOrderToClover({
       orderNumber,
       orderType,
       items: validatedItems.map(i => ({
@@ -247,8 +306,13 @@ export async function POST(request: NextRequest) {
         console.error(`Clover push failed for order ${orderNumber}: ${result.error}`)
       } else if (result.error) {
         console.error(`Clover order ${result.cloverOrderId}: ${result.error}`)
+      } else {
+        console.log(
+          `Clover order ${result.cloverOrderId} created for #${orderNumber}: ` +
+          `${result.matchedItems}/${result.totalItems} items matched to inventory`
+        )
       }
-    })
+    }))
 
     let uberTrackingUrl: string | null = null
     if (orderType === 'delivery' && (!deliveryTime || deliveryTime === 'asap')) {

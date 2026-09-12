@@ -209,6 +209,91 @@ export const emailService = {
     }
   },
 
+  /**
+   * Tells the restaurant an order has come in.
+   *
+   * Nothing did this before — every email the system sent went to the
+   * customer, so an order could sit on the site with nobody at the restaurant
+   * aware of it unless somebody happened to be watching the admin panel. The
+   * Clover ticket is the primary signal; this is the one that survives a POS
+   * that is offline or a printer out of paper.
+   *
+   * Deliberately plain. It is read on a phone in a kitchen, usually in a
+   * hurry, so what matters is at the top and nothing needs scrolling past.
+   */
+  async sendNewOrderAlert(
+    data: OrderEmailData & { customerPhone?: string; scheduledFor?: string | null; paymentMethod?: string },
+    to: string
+  ) {
+    try {
+      const rows = data.items.map(item => `
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid ${C.sandLine};font-size:15px;">
+            <strong style="color:${C.clay};">${item.quantity} &times;</strong> ${esc(item.name)}
+          </td>
+          <td style="padding:7px 0;border-bottom:1px solid ${C.sandLine};text-align:right;font-size:15px;white-space:nowrap;">
+            $${(item.price * item.quantity).toFixed(2)}
+          </td>
+        </tr>`).join('')
+
+      const when = data.scheduledFor
+        ? new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York',
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit'
+          }).format(new Date(data.scheduledFor))
+        : null
+
+      const cash = data.paymentMethod === 'cash'
+
+      const result = await sendEmail({
+        to,
+        subject:
+          `${when ? `[${when}] ` : ''}New ${data.orderType} order #${data.orderNumber}` +
+          ` — $${data.total.toFixed(2)}${cash ? ' CASH' : ''}`,
+        html: layout(
+          `${data.orderType} · $${data.total.toFixed(2)}${when ? ` · for ${when}` : ''}`,
+          `
+          ${heading(`Order #${esc(data.orderNumber)}`)}
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px 0;">
+            <tr>
+              <td style="padding:12px 14px;background:${C.sand};border-left:4px solid ${C.gold};font-size:15px;line-height:1.6;">
+                <strong style="color:${C.kente};text-transform:uppercase;letter-spacing:0.5px;">
+                  ${data.orderType}
+                </strong>${when ? ` &middot; <strong>for ${when}</strong>` : ' &middot; as soon as possible'}
+                <br>
+                ${esc(data.customerName)}${data.customerPhone
+                  ? ` &middot; <a href="tel:${esc(data.customerPhone)}" style="color:${C.clay};">${esc(data.customerPhone)}</a>`
+                  : ''}
+                ${data.deliveryAddress ? `<br>${esc(data.deliveryAddress)}` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            ${rows}
+            <tr>
+              <td style="padding:12px 0 0 0;font-size:17px;font-weight:700;">Total</td>
+              <td style="padding:12px 0 0 0;text-align:right;font-size:17px;font-weight:700;">
+                $${data.total.toFixed(2)}
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:16px 0 0 0;font-size:15px;${cash ? `color:${C.clay};font-weight:700;` : `color:${C.muted};`}">
+            ${cash ? `Collect $${data.total.toFixed(2)} in cash on collection.` : 'Already paid by card.'}
+          </p>
+        `)
+      })
+      return { success: true, data: result }
+    } catch (error) {
+      console.error('New order alert failed:', error)
+      return { success: false, error }
+    }
+  },
+
   async sendOrderConfirmation(data: OrderEmailData) {
     try {
       const rows = data.items.map(item => `
