@@ -184,7 +184,9 @@ export default function CartPage() {
                   <Navigation className="w-6 h-6 text-gold" />
                   Order Type
                 </h3>
-                <div className="grid grid-cols-2 gap-6">
+                {/* Two p-6 cards side by side left about 150px each on a
+                    phone, so the labels wrapped mid-word. Stacked below sm. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <button
                     onClick={() => deliveryAvailable && setOrderType('delivery')}
                     disabled={!deliveryAvailable}

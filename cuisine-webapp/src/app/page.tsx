@@ -389,7 +389,7 @@ export default function AfricanCuisineWebsite() {
                   placeholder="Search dishes"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 text-sm rounded-control border transition-colors focus:outline-none ${
+                  className={`w-full pl-10 pr-4 py-2 text-base sm:text-sm rounded-control border transition-colors focus:outline-none ${
                     scrolled
                       ? 'bg-sand-50 border-sand-200 text-ink placeholder-sand-500 focus:border-gold'
                       : 'bg-white/10 border-white/20 text-white placeholder-white/60 focus:border-gold-300'
@@ -1026,7 +1026,7 @@ export default function AfricanCuisineWebsite() {
                                       id={`v-${slug}`}
                                       value={active.id}
                                       onChange={(e) => setSelectedVariant(prev => ({ ...prev, [slug]: e.target.value }))}
-                                      className="w-full px-2.5 py-2 rounded-control border border-sand-200 bg-sand-50 text-ink text-sm focus:outline-none focus:border-gold"
+                                      className="w-full px-2.5 py-2.5 rounded-control border border-sand-200 bg-sand-50 text-ink text-base sm:text-sm focus:outline-none focus:border-gold"
                                     >
                                       {variants.map(v => (
                                         <option key={v.id} value={v.id}>
