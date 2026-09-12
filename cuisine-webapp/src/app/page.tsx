@@ -1204,6 +1204,23 @@ export default function AfricanCuisineWebsite() {
             </div>
           </div>
         </div>
+
+          {/* Reviews on our own page are only as trustworthy as we are. This
+              sends people to the source, where they can see all of them and
+              the rating we actually have. Google's documented Maps URL format
+              — no key, no account, nothing to expire. */}
+          <div className="mt-10 text-center">
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=Taste+of+African+Cuisine%2C+200+Hartford+Turnpike%2C+Vernon%2C+CT+06066"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-kente border-b border-gold pb-0.5 hover:text-gold transition-colors"
+            >
+              Read our reviews on Google
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+          </div>
+
         
         <style jsx>{`
           @keyframes scroll {
