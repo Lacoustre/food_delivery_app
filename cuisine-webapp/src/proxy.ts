@@ -60,5 +60,10 @@ export default function proxy(request: NextRequest) {
 export const config = {
   // Only the routes the admin panel calls. The Stripe webhook is server to
   // server and has no origin, so it is untouched either way.
-  matcher: ['/api/notify-order-status', '/api/refund', '/api/cancel-clover-order']
+  matcher: [
+    '/api/notify-order-status',
+    '/api/refund',
+    '/api/cancel-clover-order',
+    '/api/dispatch-delivery'
+  ]
 }

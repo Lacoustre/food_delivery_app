@@ -193,6 +193,38 @@ export default function Orders() {
   };
 
   /**
+   * Calls a courier, now that the food exists.
+   *
+   * Uber used to be dispatched the moment the customer paid, so a driver was
+   * sent to collect food nobody had started. On order #1008 the courier
+   * arrived mid-preparation and the delivery had to be cancelled and the fee
+   * refunded. Dispatch now happens here, when staff mark the order ready.
+   *
+   * Safe to call twice: the route refuses to send a second courier to an order
+   * that already has one.
+   */
+  const dispatchCourier = async (orderId: string): Promise<string | null> => {
+    const base = import.meta.env.VITE_WEBAPP_URL;
+    if (!base) return "VITE_WEBAPP_URL is not set";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${base}/api/dispatch-delivery`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok) return null;
+      return body?.error ?? `HTTP ${res.status}`;
+    } catch {
+      return "could not reach the site";
+    }
+  };
+
+  /**
    * Tells the customer their order moved on. The toasts used to claim
    * "Customer will be notified" while nothing was sent at all — a customer got
    * a confirmation when they ordered and then silence, including when a pickup
@@ -278,6 +310,24 @@ export default function Orders() {
       };
 
       const message = statusMessages[finalStatus as keyof typeof statusMessages] || `Order status updated to ${finalStatus}.`;
+
+      // Ready means the food exists, which is the only moment it makes sense
+      // to call a courier. The route ignores pickup orders and refuses to send
+      // a second driver to an order that already has one.
+      if (finalStatus === "ready for pickup" && order?.order_type === "delivery") {
+        const problem = await dispatchCourier(orderId);
+        if (problem) {
+          toast.warning(`Order marked ready, but NO courier was called: ${problem}`, {
+            position: "top-center",
+            autoClose: 10000
+          });
+        } else {
+          toast.success("Order marked ready. A courier is on the way to collect.", {
+            position: "top-center",
+            autoClose: 5000
+          });
+        }
+      }
 
       // Only the states a customer cares about. Nobody needs an email saying
       // their order went from "pending" to "confirmed" thirty seconds apart.

@@ -5,7 +5,6 @@ import { getUberQuote } from '@/lib/uberDirect'
 import { getOpenState, getScheduleStateAt } from '@/lib/hours'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
-import { createUberDelivery } from '@/lib/uberDirect'
 import { pushOrderToClover } from '@/lib/clover'
 import { emailService } from '@/lib/emailService'
 
@@ -370,35 +369,18 @@ export async function POST(request: NextRequest) {
       }
     }))
 
-    let uberTrackingUrl: string | null = null
-    if (orderType === 'delivery' && (!deliveryTime || deliveryTime === 'asap')) {
-      try {
-        const uber = await createUberDelivery({
-          orderNumber,
-          dropoffAddress: deliveryAddress!,
-          dropoffName: customerInfo?.name || 'Customer',
-          dropoffPhone: customerInfo?.phone || null,
-          items: validatedItems.map(i => ({ name: i.name, quantity: i.quantity }))
-        })
-
-        uberTrackingUrl = uber.trackingUrl
-        const { error: uberUpdateError } = await supabase
-          .from('orders')
-          .update({
-            delivery_provider: 'uber_direct',
-            uber_delivery_id: uber.deliveryId,
-            uber_tracking_url: uber.trackingUrl,
-            uber_delivery_status: uber.status,
-            uber_fee: uber.fee
-          })
-          .eq('id', order.id)
-        if (uberUpdateError) {
-          console.error(`Uber dispatch record failed for order ${order.id}:`, uberUpdateError)
-        }
-      } catch (uberError) {
-        console.error(`Uber dispatch failed for order ${order.id}:`, uberError)
-      }
-    }
+    // No courier is dispatched here any more.
+    //
+    // Uber used to be called the moment the customer paid, so a driver was
+    // sent to collect food nobody had started cooking. On order #1008 the
+    // courier arrived while the kitchen was still preparing it, and the
+    // delivery had to be cancelled and the fee refunded.
+    //
+    // Dispatch now happens when staff mark the order ready — see
+    // /api/dispatch-delivery, called by the admin panel. The quote taken at
+    // checkout still decides what the customer is charged; only the courier
+    // waits.
+    const uberTrackingUrl: string | null = null
 
     return NextResponse.json({
       orderId: order.id,
