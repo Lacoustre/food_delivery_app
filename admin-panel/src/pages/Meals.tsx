@@ -400,50 +400,69 @@ export default function Meals() {
       </div>
 
       {/* Summary Cards */}
+      {/*
+        Each figure is a filter. They were plain cards, so the obvious question
+        a count raises — "which ones?" — had no answer; then only Hidden was
+        clickable, which is worse, because an inert card next to a live one
+        reads as broken. Avg Price is the exception: there is nothing to filter
+        to, so it stays a plain card rather than pretending.
+      */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("all"); setAvailabilityFilter("all"); setCategoryFilter("all"); setSearchTerm(""); }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Meals</p>
               <p className="text-2xl font-bold text-gray-900">{totalMeals}</p>
+              <p className="text-xs text-gray-500 mt-0.5">show everything</p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
               <Plus className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("active"); setAvailabilityFilter("available"); setCategoryFilter("all"); setSearchTerm(""); }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">On the menu</p>
               <p className="text-2xl font-bold text-green-600">{availableMeals}</p>
+              <p className="text-xs text-gray-500 mt-0.5">customers can order</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("active"); setAvailabilityFilter("unavailable"); setCategoryFilter("all"); setSearchTerm(""); }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Sold out</p>
               <p className="text-2xl font-bold text-red-600">{soldOutMeals}</p>
+              <p className="text-xs text-gray-500 mt-0.5">on the menu, out of stock</p>
             </div>
             <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-600" />
             </div>
           </div>
-        </div>
+        </button>
 
-        {/* Hidden dishes are not sold out — they are off the menu entirely.
-            The number is a button because the only reason to look at it is to
-            go and find them. */}
         <button
           type="button"
-          onClick={() => { setStatusFilter("inactive"); setAvailabilityFilter("all"); }}
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-gray-400 transition-colors"
+          onClick={() => { setStatusFilter("inactive"); setAvailabilityFilter("all"); setCategoryFilter("all"); setSearchTerm(""); }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -462,6 +481,7 @@ export default function Meals() {
             <div>
               <p className="text-sm font-medium text-gray-600">Avg Price</p>
               <p className="text-2xl font-bold text-gray-900">${avgPrice.toFixed(2)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">across {totalMeals} dishes</p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
               <span className="text-yellow-600 font-bold text-lg">$</span>
