@@ -159,16 +159,28 @@ export async function POST(request: NextRequest) {
 
     if (meals?.length) {
       const byId = new Map(meals.map(m => [m.id, m]))
-      await supabase.from('order_items').insert(
+      // Columns are unit_price and name, matching create-order. An earlier
+      // version wrote `price`, which does not exist — it failed silently and
+      // left the order with no line items at all.
+      const { error: itemsError } = await supabase.from('order_items').insert(
         p.items
           .filter(i => byId.has(i.id))
           .map(i => ({
             order_id: order.id,
             meal_id: i.id,
+            name: byId.get(i.id)!.name,
             quantity: i.quantity,
-            price: byId.get(i.id)!.price
+            unit_price: byId.get(i.id)!.price
           }))
       )
+      if (itemsError) {
+        // The order exists and the customer has paid; losing the lines means
+        // the kitchen sees an order with nothing in it.
+        console.error(
+          `Webhook created order ${order.order_number} but its items failed:`,
+          itemsError
+        )
+      }
     }
 
     await supabase.from('pending_orders').delete().eq('payment_intent_id', intent.id)

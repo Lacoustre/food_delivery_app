@@ -65,11 +65,22 @@ function statusLabel(status: string): { title: string; blurb: string } {
       return { title: 'Order confirmed', blurb: 'The kitchen has your order.' }
     case 'preparing':
       return { title: 'Being prepared', blurb: 'Your food is being cooked fresh.' }
+    // The admin panel writes "on the way" and "picked up"; the mobile app and
+    // the original schema use out_for_delivery. Both vocabularies are live, so
+    // both are handled — a status that falls through gets emailed to the
+    // customer verbatim, in lowercase, which is how "out_for_delivery" once
+    // ended up in a subject line.
     case 'out_for_delivery':
+    case 'on the way':
       return { title: 'Out for delivery', blurb: 'Your driver is on the way.' }
     case 'delivered':
       return { title: 'Delivered', blurb: 'Enjoy your meal.' }
+    case 'picked up':
+      return { title: 'Picked up', blurb: 'Thanks for collecting — enjoy your meal.' }
+    case 'completed':
+      return { title: 'Order complete', blurb: 'Thanks for ordering with us.' }
     case 'ready':
+    case 'ready for pickup':
       return { title: 'Ready for pickup', blurb: 'Your order is ready to collect.' }
     case 'cancelled':
       return { title: 'Order cancelled', blurb: 'This order has been cancelled. If you paid by card, the refund has been issued and usually reaches your bank within 5-10 days. Anything unclear, reply to this email.' }

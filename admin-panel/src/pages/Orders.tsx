@@ -158,6 +158,36 @@ export default function Orders() {
     }
   };
 
+  /**
+   * Tells the customer their order moved on. The toasts used to claim
+   * "Customer will be notified" while nothing was sent at all — a customer got
+   * a confirmation when they ordered and then silence, including when a pickup
+   * order was sitting ready on the counter.
+   *
+   * Clover cannot do this: its orders only carry open/locked/paid, a payment
+   * lifecycle with no notion of food being ready. So it has to happen here.
+   */
+  const notifyCustomer = async (orderId: string): Promise<string | null> => {
+    const base = import.meta.env.VITE_WEBAPP_URL;
+    if (!base) return "VITE_WEBAPP_URL is not set";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${base}/api/notify-order-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      if (res.ok) return null;
+      const body = await res.json().catch(() => null);
+      return body?.error ?? `HTTP ${res.status}`;
+    } catch {
+      return "could not reach the site";
+    }
+  };
+
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       const order = orders?.find((o) => o.id === orderId);
@@ -194,6 +224,26 @@ export default function Orders() {
       };
 
       const message = statusMessages[finalStatus as keyof typeof statusMessages] || `Order status updated to ${finalStatus}.`;
+
+      // Only the states a customer cares about. Nobody needs an email saying
+      // their order went from "pending" to "confirmed" thirty seconds apart.
+      const worthTelling = ["preparing", "ready for pickup", "on the way", "delivered", "picked up"];
+
+      if (worthTelling.includes(finalStatus)) {
+        const problem = await notifyCustomer(orderId);
+        if (problem) {
+          toast.warning(`${message} The customer was NOT emailed: ${problem}`, {
+            position: "top-center",
+            autoClose: 8000
+          });
+        } else {
+          toast.success(`${message} Customer emailed.`, {
+            position: "top-center",
+            autoClose: 3000
+          });
+        }
+        return;
+      }
 
       toast.success(message, {
         position: "top-center",
