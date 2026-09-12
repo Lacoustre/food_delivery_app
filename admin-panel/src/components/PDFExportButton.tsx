@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import dayjs from "dayjs";
+import { netPaid } from "../lib/money";
 
 export default function PDFExportButton() {
   const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
@@ -18,7 +19,7 @@ export default function PDFExportButton() {
     // Fulfilled orders come in three terminal statuses, not just "completed".
     const { data } = await supabase
       .from("orders")
-      .select("id, order_number, created_at, total, profiles!user_id(name, email)")
+      .select("id, order_number, created_at, total, refund_amount, profiles!user_id(name, email)")
       .in("status", ["completed", "delivered", "picked up"])
       .gte("created_at", start.toISOString())
       .lte("created_at", end.toISOString())
@@ -29,7 +30,7 @@ export default function PDFExportButton() {
       return {
         orderId: row.order_number || row.id.slice(0, 8),
         customerName: profile?.name || profile?.email || "N/A",
-        total: Number(row.total ?? 0).toFixed(2),
+        total: netPaid(row).toFixed(2),
         date: row.created_at ? dayjs(row.created_at).format("MMM D, YYYY") : "—",
       };
     });

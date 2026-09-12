@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Star } from "lucide-react";
+import { netPaid } from "../lib/money";
 
 interface Order {
   id: string;
@@ -32,7 +33,7 @@ export default function Analytics() {
         const [ordersRes, usersRes] = await Promise.all([
           supabase
             .from("orders")
-            .select("id, status, created_at, total, order_items(name, quantity)")
+            .select("id, status, created_at, total, refund_amount, order_items(name, quantity)")
             .order("created_at", { ascending: false }),
           supabase.from("profiles").select("id, created_at").order("created_at", { ascending: false }),
         ]);
@@ -42,6 +43,7 @@ export default function Analytics() {
             status: row.status,
             createdAtMs: row.created_at ? new Date(row.created_at).getTime() : null,
             total: Number(row.total ?? 0),
+            refund_amount: Number(row.refund_amount ?? 0),
             items: (row.order_items ?? []).map((i: { name: string | null; quantity: number }) => ({
               name: i.name ?? undefined,
               quantity: i.quantity,
@@ -98,11 +100,11 @@ export default function Analytics() {
 
     // Revenue calculations
     const currentRevenue = completedOrders.reduce((sum, order) => 
-      sum + (order.total || 0), 0
+      sum + netPaid(order), 0
     );
     
     const prevRevenue = prevCompletedOrders.reduce((sum, order) => 
-      sum + (order.total || 0), 0
+      sum + netPaid(order), 0
     );
 
     const revenueGrowth = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
@@ -158,7 +160,7 @@ export default function Analytics() {
       });
       
       const revenue = dayOrders.reduce((sum, order) => 
-        sum + (order.total || 0), 0
+        sum + netPaid(order), 0
       );
       
       dailyRevenue.push({

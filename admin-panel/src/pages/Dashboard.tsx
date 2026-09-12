@@ -16,6 +16,7 @@ import {
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
+import { netPaid } from "../lib/money";
 
 interface OrderItemRow {
   name: string | null;
@@ -62,7 +63,7 @@ export default function Dashboard() {
     const fetchOrders = async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, created_at, total, order_type, order_items(name, quantity, unit_price), profiles!user_id(name, email)")
+        .select("id, status, created_at, total, refund_amount, order_type, order_items(name, quantity, unit_price), profiles!user_id(name, email)")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -167,10 +168,10 @@ export default function Dashboard() {
     return moment(order.created_at).isSame(moment().subtract(1, "day"), "day");
   });
 
-  const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
-  const weeklyRevenue = weekOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
-  const monthlyRevenue = monthOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
-  const yesterdayRevenue = yesterdayOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
+  const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + netPaid(order), 0);
+  const weeklyRevenue = weekOrders.reduce((sum: number, order: Order) => sum + netPaid(order), 0);
+  const monthlyRevenue = monthOrders.reduce((sum: number, order: Order) => sum + netPaid(order), 0);
+  const yesterdayRevenue = yesterdayOrders.reduce((sum: number, order: Order) => sum + netPaid(order), 0);
   const totalRevenue = completedOrders.reduce((sum: number, order: Order) => sum + (order.total || 0), 0);
 
   const revenueGrowth =
@@ -470,7 +471,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-gray-900">
-                        ${(order.total || 0).toFixed(2)}
+                        ${netPaid(order).toFixed(2)}
                       </div>
                     </div>
                   </div>

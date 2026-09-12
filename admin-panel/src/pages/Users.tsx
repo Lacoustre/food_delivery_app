@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
+import { netPaid } from "../lib/money";
 
 interface User {
   id: string;
@@ -34,7 +35,7 @@ export default function Users() {
           .select("id, name, email, phone, created_at")
           .eq("role", "customer")
           .order("created_at", { ascending: false }),
-        supabase.from("orders").select("id, user_id, status, created_at, total")
+        supabase.from("orders").select("id, user_id, status, created_at, total, refund_amount")
       ]);
 
       if (usersRes.error) {
@@ -63,7 +64,7 @@ export default function Users() {
     const completedOrders = userOrders.filter(
       (order) => order.status === "delivered" || order.status === "picked up" || order.status === "completed"
     );
-    const totalSpent = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const totalSpent = completedOrders.reduce((sum, order) => sum + netPaid(order), 0);
     const avgOrderValue = completedOrders.length > 0 ? totalSpent / completedOrders.length : 0;
 
     return {
@@ -259,7 +260,7 @@ export default function Users() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium text-gray-900">${(order.total || 0).toFixed(2)}</p>
+                              <p className="font-medium text-gray-900">${netPaid(order).toFixed(2)}</p>
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 order.status === 'delivered' || order.status === 'picked up' || order.status === 'completed' ? 'bg-green-100 text-green-800' :
                                   order.status === 'cancelled' ? 'bg-red-100 text-red-800' :

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import moment from 'moment';
 import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
+import { netPaid } from '../lib/money';
 
 // Scheduled orders are just orders rows with scheduled_for set — there is
 // no separate collection anymore (the old Firestore scheduled_orders one
@@ -27,6 +28,7 @@ interface ScheduledOrder {
   delivery_fee: number | null;
   tip: number | null;
   total: number;
+  refund_amount: number | null;
   order_items: { name: string | null; quantity: number; unit_price: number | null }[];
   profiles: Profile | Profile[] | null;
 }
@@ -46,7 +48,7 @@ export default function ScheduledOrders() {
       .from('orders')
       .select(
         'id, order_number, status, order_type, payment_method, scheduled_for, created_at, ' +
-        'delivery_address, subtotal, tax, delivery_fee, tip, total, ' +
+        'delivery_address, subtotal, tax, delivery_fee, tip, total, refund_amount, ' +
         'order_items(name, quantity, unit_price), profiles!user_id(name, email, phone)'
       )
       .not('scheduled_for', 'is', null)
@@ -150,7 +152,7 @@ export default function ScheduledOrders() {
                       {moment(order.scheduled_for).format('MMM D, YYYY h:mm A')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      ${Number(order.total ?? 0).toFixed(2)}
+                      ${netPaid(order).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {order.order_type === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
@@ -301,7 +303,7 @@ export default function ScheduledOrders() {
                 )}
                 <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="font-semibold text-gray-900">Total</span>
-                  <span className="font-bold text-gray-900">${Number(selected.total ?? 0).toFixed(2)}</span>
+                  <span className="font-bold text-gray-900">${netPaid(selected).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between pt-1">
                   <span className="text-gray-600">Payment</span>

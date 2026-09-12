@@ -7,6 +7,7 @@ import { User, Truck } from "lucide-react";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { netPaid } from "../lib/money";
 
 const statusFilters = ["all", "pending", "confirmed", "preparing", "ready for pickup", "on the way", "delivered", "picked up", "completed", "cancelled"];
 
@@ -49,18 +50,6 @@ type Order = {
   order_items: OrderItemRow[];
   profiles: ProfileRow | ProfileRow[] | null;
 };
-
-/**
- * What the customer is actually out of pocket.
- *
- * Every figure on this page used to show `total`, so a refunded order still
- * read as its full price — order #1008 showed $63.79 after $7.99 had been
- * given back. Worse, the revenue line added up the same way and overstated
- * takings by the value of every refund ever issued.
- */
-function netPaid(order: { total: number; refund_amount: number | null }): number {
-  return Math.max(0, Number(order.total ?? 0) - Number(order.refund_amount ?? 0));
-}
 
 export default function Orders() {
   const [filter, setFilter] = useState("all");
