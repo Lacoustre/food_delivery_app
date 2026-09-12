@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
-import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign } from "lucide-react";
+import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign, EyeOff } from "lucide-react";
 
 interface Meal {
   id: string;
@@ -137,9 +137,17 @@ export default function Meals() {
   });
 
   // Summary calculations
+  //
+  // "available" and "active" are different things and were being added
+  // together into one "Unavailable" figure, which read as "sold out". It
+  // counted three dishes that are not sold out at all — they are hidden from
+  // the menu, the duplicates left behind by the menu merge. Filtering by
+  // Unavailable then found nothing, because that filter only looks at
+  // `available`. Counted separately now, so each number means one thing.
   const totalMeals = meals.length;
   const availableMeals = meals.filter(m => m.available && m.active).length;
-  const unavailableMeals = meals.filter(m => !m.available || !m.active).length;
+  const soldOutMeals = meals.filter(m => m.active && !m.available).length;
+  const hiddenMeals = meals.filter(m => !m.active).length;
   const avgPrice = meals.length > 0 ? meals.reduce((sum, m) => sum + m.price, 0) / meals.length : 0;
 
   const exportMealsToPDF = () => {
@@ -392,7 +400,7 @@ export default function Meals() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -408,7 +416,7 @@ export default function Meals() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Available</p>
+              <p className="text-sm font-medium text-gray-600">On the menu</p>
               <p className="text-2xl font-bold text-green-600">{availableMeals}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -420,14 +428,34 @@ export default function Meals() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Unavailable</p>
-              <p className="text-2xl font-bold text-red-600">{unavailableMeals}</p>
+              <p className="text-sm font-medium text-gray-600">Sold out</p>
+              <p className="text-2xl font-bold text-red-600">{soldOutMeals}</p>
             </div>
             <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-600" />
             </div>
           </div>
         </div>
+
+        {/* Hidden dishes are not sold out — they are off the menu entirely.
+            The number is a button because the only reason to look at it is to
+            go and find them. */}
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("inactive"); setAvailabilityFilter("all"); }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-left hover:border-gray-400 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Hidden</p>
+              <p className="text-2xl font-bold text-gray-700">{hiddenMeals}</p>
+              <p className="text-xs text-gray-500 mt-0.5">not shown to customers</p>
+            </div>
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <EyeOff className="w-6 h-6 text-gray-600" />
+            </div>
+          </div>
+        </button>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
