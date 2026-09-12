@@ -5,6 +5,8 @@ import Loader from "../components/Loader";
 
 interface RestaurantSettings {
   isOpen: boolean;
+  /** Set by the toggle. The only override the site and checkout honour. */
+  manuallyClosed?: boolean;
   name: string;
   address: string;
   phone: string;
@@ -92,15 +94,24 @@ export default function Settings() {
 
   const toggleRestaurant = async () => {
     const newStatus = !settings.isOpen;
-    const next = { ...settings, isOpen: newStatus };
+    // manuallyClosed is the field the site and the checkout actually honour.
+    // This toggle used to write only isOpen, which getOpenState ignores by
+    // design — it is derived from businessHours and written back by the mobile
+    // app, so it is a cache rather than a decision. The toggle therefore did
+    // nothing, and the restaurant could not be closed early.
+    const next = { ...settings, isOpen: newStatus, manuallyClosed: !newStatus };
     setSettings(next);
 
     try {
       await persistSettings(next);
-      toast.success(`Restaurant ${newStatus ? 'opened' : 'closed'}`);
+      toast.success(
+        newStatus
+          ? 'Open — normal hours apply again'
+          : 'Closed — the site will refuse orders until you reopen'
+      );
     } catch {
       toast.error("Failed to update restaurant status");
-      setSettings(prev => ({ ...prev, isOpen: !newStatus }));
+      setSettings(prev => ({ ...prev, isOpen: !newStatus, manuallyClosed: newStatus }));
     }
   };
 

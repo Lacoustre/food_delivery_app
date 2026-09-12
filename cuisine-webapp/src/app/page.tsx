@@ -34,7 +34,12 @@ export default function AfricanCuisineWebsite() {
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
   const [navigating, setNavigating] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [restaurantStatus, setRestaurantStatus] = useState<RestaurantStatus>({ isOpen: true, message: '', updatedAt: new Date() })
+  // Starts unknown rather than open. Defaulting to open meant the page said
+  // "Open now" before it had checked, and went on saying it if the check
+  // failed — telling customers the restaurant was open while it was shut.
+  const [restaurantStatus, setRestaurantStatus] = useState<RestaurantStatus | null>(null)
+  const statusKnown = restaurantStatus !== null
+  const isOpen = restaurantStatus?.isOpen ?? false
   
   const { user, userProfile, signOut } = useAuth()
 
@@ -193,7 +198,7 @@ export default function AfricanCuisineWebsite() {
   }, [reviews.length])
 
   const addToCart = async (meal: Meal) => {
-    if (!restaurantStatus.isOpen) {
+    if (statusKnown && !isOpen) {
       alert('Restaurant is currently closed. Please check back later.')
       return
     }
@@ -328,7 +333,7 @@ export default function AfricanCuisineWebsite() {
           normal flow while the nav was fixed on top of it, so the closed
           notice rendered straight through the middle of the header. */}
       <header className="fixed top-0 left-0 right-0 z-50">
-        {!restaurantStatus.isOpen && (
+        {statusKnown && !isOpen && (
           <div className="bg-clay-700 text-sand-50 py-2 px-4 text-center text-[13px]">
             <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
             {restaurantStatus.message || 'You can still schedule an order for later.'}
@@ -363,7 +368,7 @@ export default function AfricanCuisineWebsite() {
                 </span>
                 {/* When closed, the banner directly above already says so —
                     repeating it here just crowds the mark. */}
-                {restaurantStatus.isOpen && (
+                {statusKnown && isOpen && (
                   <span className={`hidden sm:flex items-center gap-1.5 mt-0.5 text-[11px] tracking-[0.12em] uppercase ${navSolid ? 'text-sand-500' : 'text-sand-200/75'}`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-kente-300"></span>
                     Open now
@@ -526,12 +531,12 @@ export default function AfricanCuisineWebsite() {
           <div
             onClick={() => setMobileMenuOpen(false)}
             className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 ${
-              restaurantStatus.isOpen ? 'top-16' : 'top-[6.25rem]'
+              statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
             }`}
           />
           <div
             className={`md:hidden fixed right-0 bottom-0 z-40 w-[80%] max-w-xs flex flex-col bg-sand-50 border-l border-sand-200 shadow-lift ${
-              restaurantStatus.isOpen ? 'top-16' : 'top-[6.25rem]'
+              statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
             }`}
           >
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
@@ -1041,15 +1046,15 @@ export default function AfricanCuisineWebsite() {
                                 </div>
                                 <button
                                   onClick={() => { window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}` }}
-                                  disabled={soldOut || !restaurantStatus.isOpen}
+                                  disabled={soldOut || (statusKnown && !isOpen)}
                                   className={`px-4 py-2 rounded-control text-sm font-semibold flex items-center gap-1.5 transition-colors ${
-                                    !soldOut && restaurantStatus.isOpen
+                                    !soldOut && !(statusKnown && !isOpen)
                                       ? 'bg-gold text-ink hover:bg-gold-300'
                                       : 'bg-sand-200 text-sand-500 cursor-not-allowed'
                                   }`}
                                 >
                                   <Plus className="w-4 h-4" />
-                                  {!restaurantStatus.isOpen ? 'Closed' : 'Add'}
+                                  {statusKnown && !isOpen ? 'Closed' : 'Add'}
                                 </button>
                               </div>
                             </div>

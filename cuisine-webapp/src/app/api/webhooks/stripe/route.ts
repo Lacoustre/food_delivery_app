@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { pushOrderToClover } from '@/lib/clover'
 
 /**
  * Creates the order when the browser could not.
@@ -180,6 +181,32 @@ export async function POST(request: NextRequest) {
           `Webhook created order ${order.order_number} but its items failed:`,
           itemsError
         )
+      }
+    }
+
+    // A rescued order still needs to reach the kitchen — arguably more so,
+    // since nobody was watching a browser when it came in.
+    if (meals?.length) {
+      const byId = new Map(meals.map(m => [m.id, m]))
+      const result = await pushOrderToClover({
+        orderNumber: String(order.order_number),
+        orderType: p.orderType,
+        items: p.items
+          .filter(i => byId.has(i.id))
+          .map(i => ({
+            name: byId.get(i.id)!.name,
+            quantity: i.quantity,
+            unitPrice: byId.get(i.id)!.price
+          })),
+        total: p.total,
+        paid: true,
+        customerName: profile?.name ?? p.customerInfo?.name ?? undefined,
+        customerPhone: profile?.phone ?? p.customerInfo?.phone ?? undefined,
+        deliveryAddress: p.deliveryAddress ?? undefined,
+        note: 'Recovered by webhook'
+      })
+      if (!result.ok) {
+        console.error(`Clover push failed for rescued order ${order.order_number}: ${result.error}`)
       }
     }
 

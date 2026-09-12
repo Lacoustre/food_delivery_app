@@ -6,6 +6,7 @@ import { getOpenState } from '@/lib/hours'
 import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { createUberDelivery } from '@/lib/uberDirect'
+import { pushOrderToClover } from '@/lib/clover'
 
 interface CartItemInput {
   id: string
@@ -201,6 +202,30 @@ export async function POST(request: NextRequest) {
     // arrive before the food is wanted; those are handled manually until
     // scheduled dispatch lands. A dispatch failure must not fail the order —
     // it's already created — so it's caught and logged instead.
+    // Put the ticket in front of the kitchen. Never throws, and a failure is
+    // logged rather than surfaced: the customer has paid and the order exists
+    // in Supabase, so a POS that is down must not fail their checkout.
+    pushOrderToClover({
+      orderNumber,
+      orderType,
+      items: validatedItems.map(i => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.price
+      })),
+      total: totals.total,
+      paid: paymentMethod === 'card',
+      customerName: customerInfo?.name,
+      customerPhone: customerInfo?.phone,
+      deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined
+    }).then(result => {
+      if (!result.ok) {
+        console.error(`Clover push failed for order ${orderNumber}: ${result.error}`)
+      } else if (result.error) {
+        console.error(`Clover order ${result.cloverOrderId}: ${result.error}`)
+      }
+    })
+
     let uberTrackingUrl: string | null = null
     if (orderType === 'delivery' && (!deliveryTime || deliveryTime === 'asap')) {
       try {
