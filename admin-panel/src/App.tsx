@@ -11,6 +11,7 @@ import Analytics from "./pages/Analytics";
 import Support from "./pages/Support";
 import Reviews from "./pages/Reviews";
 import LoginPage from "./pages/LoginPage";
+import ResetPassword from "./pages/ResetPassword";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -20,6 +21,9 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Public on purpose: someone who has lost their password
+            cannot get through ProtectedRoute to reach it. */}
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/"
           element={

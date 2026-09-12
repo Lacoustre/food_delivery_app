@@ -72,9 +72,14 @@ export default function LoginPage() {
       return;
     }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      // Without redirectTo the link uses the project's Site URL, which is the
+      // customer website — a site with no page for setting a password, so the
+      // reset silently went nowhere useful.
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
       if (error) throw error;
-      toast.success("Password reset link sent!", {
+      toast.success("Check your email for the reset link.", {
         position: "top-right",
         autoClose: 3000,
       });

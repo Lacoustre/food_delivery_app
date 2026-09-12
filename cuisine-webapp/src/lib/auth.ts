@@ -144,6 +144,37 @@ export const authService = {
     return { uid: user.id, email: user.email ?? null }
   },
 
+  /**
+   * Sends the "set a new password" link.
+   *
+   * Says nothing about whether the address has an account, and the calling
+   * page shows the same confirmation either way. Supabase returns success
+   * regardless for the same reason: a form that answered honestly would be a
+   * way for anyone to check which addresses are registered here.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // Same reasoning as the signup link: without this the project's Site URL
+      // decides where the customer lands, and that is not a page that can set
+      // a password.
+      redirectTo:
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/reset-password`
+          : undefined
+    })
+    if (error) throw error
+  },
+
+  /**
+   * Sets a new password for whoever the current session belongs to. On the
+   * reset page that session comes from the emailed link, which Supabase turns
+   * into a real session before this is called.
+   */
+  async updatePassword(password: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) throw error
+  },
+
   // Sign out
   async signOut(): Promise<void> {
     await supabase.auth.signOut()

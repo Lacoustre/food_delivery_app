@@ -1,7 +1,8 @@
 # Supabase auth emails
 
-Two emails come from Supabase rather than from our own code: the signup
-confirmation and the admin password reset. Order confirmations and status
+Three emails come from Supabase rather than from our own code: the signup
+confirmation, the customer password reset and the admin password reset. The
+last two share one template. Order confirmations and status
 updates are ours (`cuisine-webapp/src/lib/emailService.ts`) and are not affected
 by anything on this page.
 
@@ -50,6 +51,9 @@ revoked on its own.
 | Confirm signup | `Confirm your email — Taste of African Cuisine` | `docs/email-templates/confirm-signup.html` |
 | Reset password | `Reset your password — Taste of African Cuisine` | `docs/email-templates/reset-password.html` |
 
+Customers and admins both receive the reset template. It is worded so it reads
+correctly either way, and the link itself decides where each lands.
+
 Open the file, copy all of it, and paste it over whatever is in the message
 body box. Save each one separately.
 
@@ -84,10 +88,16 @@ the allow-list:
   - `https://tasteofafricancuisine.com/**`
   - `https://www.tasteofafricancuisine.com/**`
   - `https://food-delivery-app-teal-five.vercel.app/**`
+  - the admin panel's own URL, with `/**` on the end
 
-The `/**` matters. The signup code sends people to `/login?confirmed=1`, and
-without the wildcard Supabase rejects the path and silently falls back to the
-Site URL.
+The `/**` matters. The signup code sends people to `/login?confirmed=1` and a
+reset sends them to `/reset-password`; without the wildcard Supabase rejects
+the path and silently falls back to the Site URL.
+
+**The admin panel's URL has to be on that list too.** Its reset link now points
+at its own `/reset-password` page rather than the customer site, using whatever
+origin the panel is served from. Until that origin is allowed, an admin reset
+lands back on the customer website instead.
 
 While the Site URL still says `http://localhost:3000`, every confirmation link
 sent to a real customer points at their own machine, and their browser says the
@@ -103,3 +113,9 @@ login page with the confirmed banner.
 Worth doing once from a Gmail address and once from an Outlook or iCloud one —
 they render mail differently, and Outlook in particular is the one that breaks
 layouts.
+
+Then test a reset from both sides: "Forgot?" on the customer sign-in page, and
+the reset link on the admin sign-in form. Each should land on its own
+`/reset-password` page with a form, not on a sign-in screen. Clicking the same
+link a second time should say the link has expired rather than showing a form
+that fails on submit.

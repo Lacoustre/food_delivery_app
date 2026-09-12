@@ -98,27 +98,40 @@ function LoginContent() {
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-12 pr-4 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
+                  className="w-full pl-12 pr-4 py-5 text-base border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Enter your email"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-sand-700 mb-3">
-                Password
-              </label>
+              <div className="flex items-baseline justify-between mb-3">
+                <label className="block text-sm font-semibold text-sand-700">
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-clay hover:underline"
+                >
+                  Forgot?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gold" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-12 pr-12 py-5 border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
+                  className="w-full pl-12 pr-12 py-5 text-base border border-sand-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-gold outline-none transition-all bg-white backdrop-blur text-ink placeholder-gray-500"
                   placeholder="Enter your password"
                 />
                 <button
