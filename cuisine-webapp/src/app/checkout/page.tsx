@@ -250,11 +250,22 @@ function CheckoutContent() {
     promoDiscount,
   })
 
+  // Cash pickup orders never touch Stripe, so they must not reserve a payment
+  // for it. Without this check a cash order still created a PaymentIntent —
+  // pickup defaults to card, so one was raised before the customer had even
+  // chosen how to pay, and it sat in Stripe as Incomplete forever along with a
+  // pending_orders row the webhook could later have turned into a duplicate.
   const readyToPay =
+    orderData.paymentMethod === 'card' &&
     total > 0 && (orderData.orderType !== 'delivery' || (!!quoteAddress && !quoteError && !quoting))
 
   useEffect(() => {
-    if (!readyToPay) return
+    if (!readyToPay) {
+      // Switching to cash drops any intent already prepared, so a stale
+      // client secret cannot be confirmed by a card form reappearing later.
+      setClientSecret(null)
+      return
+    }
     let cancelled = false
     setPaymentError(null)
 
@@ -282,7 +293,7 @@ function CheckoutContent() {
     // Re-runs on address changes too: the fee can move without the total
     // changing, and a previously refused address may now be quotable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total, readyToPay, orderData.deliveryAddress, orderData.orderType])
+  }, [total, readyToPay, orderData.deliveryAddress, orderData.orderType, orderData.paymentMethod])
 
   const getCurrentLocation = async () => {
     setLocationLoading(true)
