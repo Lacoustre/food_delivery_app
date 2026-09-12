@@ -13,7 +13,7 @@ function OrdersContent() {
   const [loading, setLoading] = useState(true)
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
   const [trackingOrder, setTrackingOrder] = useState<string | null>(null)
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const searchParams = useSearchParams()
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { authService } from '@/lib/auth'
 
 export default function ProfilePage() {
-  const { user, userProfile } = useAuth()
+  const { user, loading: authLoading, userProfile } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -23,6 +23,10 @@ export default function ProfilePage() {
   })
 
   useEffect(() => {
+    // Same as the cart: user is null until the session has been restored, so
+    // redirecting on it alone signs the customer out of their own profile.
+    if (authLoading) return
+
     if (!user) {
       router.push('/login')
       return

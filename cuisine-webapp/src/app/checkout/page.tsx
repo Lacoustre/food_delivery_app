@@ -133,7 +133,7 @@ function CheckoutContent() {
     paymentMethod: 'card'
   })
   
-  const { user, userProfile } = useAuth()
+  const { user, userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -148,13 +148,20 @@ function CheckoutContent() {
   }, [])
 
   useEffect(() => {
-    // Enhanced authentication check with session recovery
+    // AuthContext is still restoring the session on the first render, so user
+    // is null then whether or not the customer is signed in. Acting on it
+    // early sent someone with a full cart back to the login page on a refresh
+    // — at the last step before paying.
+    //
+    // The old guard also read a localStorage key called "authToken", which
+    // nothing writes: supabase-js stores its session under
+    // sb-<project>-auth-token. That condition was always true, so the redirect
+    // rested entirely on the race.
+    if (authLoading) return
+
     if (!user && typeof window !== 'undefined') {
       const hasCart = localStorage.getItem('cart')
-      const authToken = localStorage.getItem('authToken')
-      
-      if (hasCart && !authToken) {
-        // Preserve checkout flow
+      if (hasCart) {
         localStorage.setItem('checkoutRedirect', 'true')
         router.push('/login?redirect=checkout')
         return

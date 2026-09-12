@@ -28,7 +28,7 @@ export default function CartPage() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
   const [locationError, setLocationError] = useState('')
   const [deliveryAvailable, setDeliveryAvailable] = useState(true)
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
 
   // Restaurant location - 200 Hartford Turnpike, Vernon, CT (matches mobile app)
@@ -71,6 +71,13 @@ export default function CartPage() {
   }, [cartItems])
 
   useEffect(() => {
+    // AuthContext starts with loading: true and user: null while it restores
+    // the session from storage. Redirecting on !user alone therefore bounced a
+    // signed-in customer to the login page — reliably on a fresh load or a
+    // refresh of this page, which is exactly when someone returns to their
+    // cart. Wait for the answer before acting on it.
+    if (authLoading) return
+
     if (!user) {
       router.push('/login')
       return
@@ -88,7 +95,7 @@ export default function CartPage() {
     // address is quoted at checkout, and answers for the real address rather
     // than wherever the phone happens to be.
     setLoading(false)
-  }, [user, router])
+  }, [user, authLoading, router])
 
 
   const updateQuantity = (id: string, newQuantity: number) => {
