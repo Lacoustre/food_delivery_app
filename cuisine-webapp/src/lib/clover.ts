@@ -51,6 +51,31 @@ export interface CloverOrderInput {
   note?: string
 }
 
+/**
+ * Clover rate-limits aggressively. A 429 partway through a push leaves a
+ * ticket missing dishes, or — worse — created but not marked paid, so staff
+ * ask a customer for money Stripe already took. Retry with backoff.
+ */
+async function cloverFetch(
+  url: string,
+  init: RequestInit,
+  attempts = 4
+): Promise<Response> {
+  let res = await fetch(url, init)
+  for (let i = 1; i < attempts && res.status === 429; i++) {
+    await new Promise(r => setTimeout(r, 500 * 2 ** i))
+    res = await fetch(url, init)
+  }
+  return res
+}
+
+// Inventory and tenders change rarely but were fetched on every single order —
+// 500 items each time, most of the rate budget spent before the order is even
+// created. Cached per warm instance.
+const CACHE_TTL_MS = 10 * 60 * 1000
+let inventoryCache: { at: number; map: Map<string, string> } | null = null
+let tenderCache: { at: number; id: string | null } | null = null
+
 function config() {
   const merchantId = process.env.CLOVER_MERCHANT_ID
   const token = process.env.CLOVER_API_TOKEN
@@ -82,18 +107,45 @@ function normalise(name: string): string {
     .trim()
 }
 
+/**
+ * The payments API wants the tender's id, not its labelKey. Looked up rather
+ * than hardcoded so it survives the tender being recreated.
+ */
+async function externalPaymentTenderId(
+  cfg: NonNullable<ReturnType<typeof config>>
+): Promise<string | null> {
+  if (tenderCache && Date.now() - tenderCache.at < CACHE_TTL_MS) return tenderCache.id
+  try {
+    const res = await cloverFetch(`${cfg.url}/tenders`, { headers: cfg.headers })
+    if (!res.ok) return null
+    const body = await res.json()
+    const tender = (body.elements ?? []).find(
+      (t: { labelKey?: string; enabled?: boolean }) =>
+        t.labelKey === EXTERNAL_PAYMENT && t.enabled !== false
+    )
+    tenderCache = { at: Date.now(), id: tender?.id ?? null }
+    return tenderCache.id
+  } catch {
+    return null
+  }
+}
+
 async function inventoryByName(
   cfg: NonNullable<ReturnType<typeof config>>
 ): Promise<Map<string, string>> {
+  if (inventoryCache && Date.now() - inventoryCache.at < CACHE_TTL_MS) {
+    return inventoryCache.map
+  }
   const map = new Map<string, string>()
   try {
-    const res = await fetch(`${cfg.url}/items?limit=500`, { headers: cfg.headers })
+    const res = await cloverFetch(`${cfg.url}/items?limit=500`, { headers: cfg.headers })
     if (!res.ok) return map
     const body = await res.json()
     for (const item of body.elements ?? []) {
       const key = normalise(item.name ?? '')
       if (key && !map.has(key)) map.set(key, item.id)
     }
+    inventoryCache = { at: Date.now(), map }
   } catch {
     // An empty map just means every line is sent ad-hoc.
   }
@@ -127,7 +179,7 @@ export async function pushOrderToClover(
       order.note
     ].filter(Boolean)
 
-    const createRes = await fetch(`${cfg.url}/orders`, {
+    const createRes = await cloverFetch(`${cfg.url}/orders`, {
       method: 'POST',
       headers: cfg.headers,
       body: JSON.stringify({
@@ -149,42 +201,64 @@ export async function pushOrderToClover(
     const cloverOrder = await createRes.json()
     let matched = 0
 
+    // Clover expresses quantity as one line item per unit — unitQty is for
+    // goods sold by weight. Sending unitQty: 3 put a single item on the ticket
+    // and the kitchen would have made one of three.
+    //
     // Sequential on purpose: Clover rate-limits hard, and a 429 halfway
     // through would leave a ticket missing dishes.
     for (const line of order.items) {
       const itemId = inventory.get(normalise(line.name))
       if (itemId) matched++
 
+      // The price is always sent, including for matched inventory items. If
+      // Clover's price has drifted from ours, the customer pays what our site
+      // quoted, not what the POS happens to hold.
       const body = itemId
-        ? { item: { id: itemId }, unitQty: line.quantity }
-        : {
-            name: line.name,
-            price: Math.round(line.unitPrice * 100),
-            unitQty: line.quantity
-          }
+        ? { item: { id: itemId }, price: Math.round(line.unitPrice * 100) }
+        : { name: line.name, price: Math.round(line.unitPrice * 100) }
 
-      const lineRes = await fetch(`${cfg.url}/orders/${cloverOrder.id}/line_items`, {
-        method: 'POST',
-        headers: cfg.headers,
-        body: JSON.stringify(body)
-      })
+      for (let n = 0; n < line.quantity; n++) {
+        const lineRes = await cloverFetch(`${cfg.url}/orders/${cloverOrder.id}/line_items`, {
+          method: 'POST',
+          headers: cfg.headers,
+          body: JSON.stringify(body)
+        })
 
-      if (!lineRes.ok) {
-        console.error(
-          `Clover line item failed for "${line.name}" on ${cloverOrder.id}: ${lineRes.status}`
-        )
+        if (!lineRes.ok) {
+          console.error(
+            `Clover line item failed for "${line.name}" (${n + 1} of ${line.quantity}) on ${cloverOrder.id}: ${lineRes.status}`
+          )
+        }
       }
+    }
+
+    // Clover does not recompute an order's total when line items are added
+    // through the API — it stayed at $0.00 while the lines summed correctly,
+    // which would have shown every website order as zero in the POS reports.
+    // Our total is the authoritative one anyway: it includes tax and any
+    // delivery fee, neither of which Clover knows about.
+    const totalRes = await cloverFetch(`${cfg.url}/orders/${cloverOrder.id}`, {
+      method: 'POST',
+      headers: cfg.headers,
+      body: JSON.stringify({ total: Math.round(order.total * 100) })
+    })
+    if (!totalRes.ok) {
+      console.error(
+        `Clover order ${cloverOrder.id} total not set: ${totalRes.status} — it will report as $0`
+      )
     }
 
     // Mark it paid, so nobody at the counter tries to collect money Stripe
     // already took. A cash pickup order is deliberately left open.
     if (order.paid) {
-      const payRes = await fetch(`${cfg.url}/orders/${cloverOrder.id}/payments`, {
+      const tenderId = await externalPaymentTenderId(cfg)
+      const payRes = await cloverFetch(`${cfg.url}/orders/${cloverOrder.id}/payments`, {
         method: 'POST',
         headers: cfg.headers,
         body: JSON.stringify({
           amount: Math.round(order.total * 100),
-          tender: { labelKey: EXTERNAL_PAYMENT },
+          tender: tenderId ? { id: tenderId } : { labelKey: EXTERNAL_PAYMENT },
           externalPaymentId: `web-${order.orderNumber}`
         })
       })

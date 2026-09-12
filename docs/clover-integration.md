@@ -144,3 +144,60 @@ Rate limits bite: bulk reads returned 429 during discovery. Back off and retry.
 The push belongs wherever the Stripe webhook lands — both trigger on "payment
 definitely succeeded". Build them together. Nothing here touches the existing
 payment path.
+
+---
+
+# Built, and what testing taught us
+
+`cuisine-webapp/src/lib/clover.ts` pushes paid orders into the POS. Called from
+`create-order` and from the Stripe webhook, so a rescued order reaches the
+kitchen too. It never throws: a POS that is down must not fail an order the
+customer has already paid for.
+
+Set `CLOVER_MERCHANT_ID` and `CLOVER_API_TOKEN` in Vercel to switch it on.
+Without them it returns "not configured" and does nothing.
+
+## Four things only a real test would have found
+
+**Quantity is one line item per unit.** `unitQty` is for goods sold by weight.
+Sending `unitQty: 3` put a single item on the ticket, so a customer ordering
+three jollof would have had one made.
+
+**Clover does not recompute the order total** when line items are added through
+the API. It stayed at $0.00 while the lines summed correctly, which would have
+shown every website order as zero in the POS reports. The total is now set
+explicitly — and ours is the authoritative figure anyway, since it includes tax
+and delivery, neither of which Clover knows about.
+
+**Rate limits bite immediately.** The first test got a 429 while marking the
+order paid, which would have left staff asking a customer for money Stripe had
+already taken. Inventory and tenders are now cached for ten minutes and every
+call retries with backoff.
+
+**The payments API wants the tender's id, not its labelKey.** Looked up rather
+than hardcoded, so it survives the tender being recreated.
+
+## Item matching
+
+About three quarters of the menu matches Clover's inventory by name once
+"Item" and "(Veg)" are normalised away, and every match has an identical price.
+Unmatched dishes are sent as ad-hoc line items: they print correctly but are
+not attributed to an inventory item in Clover's reports. Nothing breaks as the
+menus drift.
+
+## Order state
+
+Reaches `locked` once paid, but not instantly — a read immediately after the
+push can still say `open`. Do not treat that as a failure.
+
+## Test orders to void
+
+Three test orders are on the POS from building this, each $30 marked paid by
+External Payment, all noted TEST-DELETE-ME:
+
+    Y8VNYP6V8F1CY
+    7Y8X0T4VEYRDA
+    GQ6T7YJKW4DWW
+
+The API cannot delete a paid order. **Void them on the POS**, or they will
+count as $90 of revenue that never happened.
