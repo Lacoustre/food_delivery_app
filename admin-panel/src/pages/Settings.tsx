@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
 import Loader from "../components/Loader";
+import { openRightNow } from "../lib/openState";
 
 interface RestaurantSettings {
   isOpen: boolean;
@@ -151,12 +152,30 @@ export default function Settings() {
           </button>
         </div>
         <div className="mt-4">
-          <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-            settings.isOpen ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${settings.isOpen ? 'bg-green-500' : 'bg-red-500'}`} />
-            {settings.isOpen ? 'Open for Orders' : 'Closed'}
-          </span>
+          {(() => {
+            // What a customer sees, worked out from the schedule — not the
+            // stored isOpen flag, which is a cache the mobile app writes back.
+            // At ten to ten on a Saturday this panel said "Open for Orders"
+            // while the website correctly said closed, and staff had no way to
+            // tell which was true.
+            const state = openRightNow(settings.businessHours, settings.manuallyClosed);
+            return (
+              <>
+                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                  state.open ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${state.open ? 'bg-green-500' : 'bg-red-500'}`} />
+                  {state.open ? 'Open for orders now' : 'Closed to orders now'}
+                </span>
+                <p className="text-sm text-gray-500 mt-2">{state.reason}</p>
+                {!settings.manuallyClosed && !state.open && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    The toggle is on, but today's hours have ended. It reopens on its own.
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
