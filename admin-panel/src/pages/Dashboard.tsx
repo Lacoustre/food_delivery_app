@@ -17,6 +17,7 @@ import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
 import { netPaid } from "../lib/money";
+import { openRightNow, type DaySchedule } from "../lib/openState";
 
 interface OrderItemRow {
   name: string | null;
@@ -112,8 +113,14 @@ export default function Dashboard() {
         setMeals((mealsRes.data ?? []) as Meal[]);
         setUsers((usersRes.data ?? []) as User[]);
         setReviews((reviewsRes.data ?? []) as Review[]);
-        const value = settingsRes.data?.value as { isOpen?: boolean } | null;
-        setIsRestaurantOpen(value?.isOpen ?? true);
+        // Derived from the schedule, not the stored isOpen flag — that is a
+        // cache the mobile app writes back, and it left the dashboard saying
+        // the restaurant was open at ten o'clock on a Saturday night while the
+        // website was correctly refusing orders.
+        const value = settingsRes.data?.value as
+          | { isOpen?: boolean; manuallyClosed?: boolean; businessHours?: Record<string, DaySchedule> }
+          | null;
+        setIsRestaurantOpen(openRightNow(value?.businessHours, value?.manuallyClosed).open);
       } catch (e) {
         setStatsError(e as Error);
       } finally {

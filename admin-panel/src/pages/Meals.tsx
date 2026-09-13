@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
 import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign, EyeOff } from "lucide-react";
+import { openRightNow, type DaySchedule } from "../lib/openState";
 
 interface Meal {
   id: string;
@@ -81,8 +82,12 @@ export default function Meals() {
   useEffect(() => {
     const fetchRestaurantStatus = async () => {
       const { data } = await supabase.from("settings").select("value").eq("key", "restaurant").single();
-      const isOpen = (data?.value as { isOpen?: boolean } | null)?.isOpen;
-      setRestaurantOpen(isOpen ?? true);
+      // Derived from the schedule for the same reason as the dashboard: the
+      // stored isOpen flag is a cache and goes stale.
+      const value = data?.value as
+        | { manuallyClosed?: boolean; businessHours?: Record<string, DaySchedule> }
+        | null;
+      setRestaurantOpen(openRightNow(value?.businessHours, value?.manuallyClosed).open);
     };
     fetchRestaurantStatus();
   }, []);
@@ -380,12 +385,33 @@ export default function Meals() {
 
   const toggleRestaurantStatus = async () => {
     try {
+      // Read, merge, write. This used to upsert value: { isOpen } outright,
+      // which replaces the whole settings record — one click would have wiped
+      // the opening hours, the tax rate, the address and the coordinates the
+      // site and Uber depend on, leaving a row with a single boolean in it.
+      const { data: current, error: readError } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "restaurant")
+        .maybeSingle();
+      if (readError) throw readError;
+
+      const value = (current?.value ?? {}) as Record<string, unknown>;
+      const nowOpen = !restaurantOpen;
+
       const { error } = await supabase
         .from("settings")
-        .upsert({ key: "restaurant", value: { isOpen: !restaurantOpen }, updated_at: new Date().toISOString() });
+        .update({
+          // manuallyClosed is what the site honours; isOpen is a cache the
+          // mobile app writes back. Both move together so nothing disagrees.
+          value: { ...value, isOpen: nowOpen, manuallyClosed: !nowOpen },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("key", "restaurant");
       if (error) throw error;
-      setRestaurantOpen(!restaurantOpen);
-      toast.success(`Restaurant ${!restaurantOpen ? "opened" : "closed"}`);
+
+      setRestaurantOpen(nowOpen);
+      toast.success(nowOpen ? "Restaurant opened" : "Restaurant closed");
     } catch (err) {
       console.error(err);
       toast.error("Failed to update restaurant status");
