@@ -1583,9 +1583,13 @@ export default function AfricanCuisineWebsite() {
       {/* Footer */}
       <footer id="contact" className="bg-ink text-sand-100 py-16" style={{ scrollMarginTop: headerH }}>
         <div className="page-shell">
-          <div className="grid md:grid-cols-3 gap-12">
+          {/* Centred on phones to match the centred copyright line below.
+              Left-aligned there, the short blocks hugged the left edge and
+              left the right half of the screen empty. Desktop keeps its three
+              left-aligned columns. */}
+          <div className="grid md:grid-cols-3 gap-10 md:gap-12 text-center md:text-left">
             <div>
-              <div className="flex items-center space-x-3 mb-6">
+              <div className="flex items-center justify-center md:justify-start gap-3 mb-6">
                 <Image
                   src="/assets/images/logo.png"
                   alt="Logo"
@@ -1594,19 +1598,22 @@ export default function AfricanCuisineWebsite() {
                   className="object-contain"
                   unoptimized
                 />
-                <div>
+                <div className="text-left">
                   <h3 className="font-display text-2xl text-sand-50">Taste of African Cuisine</h3>
                   <p className="text-gold-300 text-sm">Authentic African cooking</p>
                 </div>
               </div>
-              <p className="text-sand-300 leading-relaxed">
+              <p className="text-sand-300 leading-relaxed max-w-sm mx-auto md:mx-0">
                 Bringing authentic West African flavors to your doorstep with love and tradition.
               </p>
             </div>
 
             <div>
               <h4 className="text-xl font-bold mb-6 text-gold-300">Contact Us</h4>
-              <div className="space-y-4">
+              {/* Centred as one group so the icons stay in a column; centring
+                  each row on its own would scatter them, since the rows are
+                  different widths. */}
+              <div className="inline-block md:block text-left space-y-4">
                 <div className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-gold-300" />
                   <a href="tel:+18608055121" className="text-sand-300 hover:text-gold-300 transition-colors font-medium underline decoration-dotted">
@@ -1639,7 +1646,7 @@ export default function AfricanCuisineWebsite() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center md:justify-start gap-4">
                 <a href="https://www.instagram.com/tasteofafrican_cuisinee/?hl=en" target="_blank" rel="noopener noreferrer" className="bg-gold hover:bg-gold-600 p-3 rounded-full transition-colors">
                   <Instagram className="w-6 h-6 text-white" />
                 </a>
