@@ -51,27 +51,27 @@ export function openRightNow(
   manuallyClosed?: boolean
 ): { open: boolean; reason: string } {
   if (manuallyClosed === true) {
-    return { open: false, reason: "Closed by hand — customers cannot order" };
+    return { open: false, reason: "Closed by hand" };
   }
-  if (!businessHours) return { open: true, reason: "No schedule set" };
+  if (!businessHours) return { open: true, reason: "" };
 
   const { dayKey, minutes } = nowInRestaurantTz();
   const today = businessHours[dayKey];
   const label = dayKey.charAt(0).toUpperCase() + dayKey.slice(1);
 
   if (!today || today.closed === true) {
-    return { open: false, reason: `Closed on ${label}s` };
+    return { open: false, reason: `${label}: closed` };
   }
 
   const openM = minutesOf(today.open);
   const closeM = minutesOf(today.close);
-  if (openM === null || closeM === null) return { open: true, reason: "Hours not set for today" };
+  if (openM === null || closeM === null) return { open: true, reason: "" };
 
   // A close at or before the open means the day runs past midnight.
   const open =
     closeM > openM ? minutes >= openM && minutes < closeM : minutes >= openM || minutes < closeM;
 
-  return open
-    ? { open: true, reason: `${label} hours ${today.open}–${today.close}` }
-    : { open: false, reason: `Outside ${label} hours (${today.open}–${today.close})` };
+  // Same line either way: the hours are the useful fact, not a sentence
+  // explaining them.
+  return { open, reason: `${label} ${today.open}–${today.close}` };
 }

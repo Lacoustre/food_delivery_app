@@ -136,7 +136,7 @@ export default function Settings() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Restaurant Status</h2>
-            <p className="text-gray-600">Control whether customers can place orders</p>
+            <p className="text-gray-600">Close early or stay shut for the day.</p>
           </div>
           <button
             onClick={toggleRestaurant}
@@ -167,11 +167,8 @@ export default function Settings() {
                   <div className={`w-2 h-2 rounded-full ${state.open ? 'bg-green-500' : 'bg-red-500'}`} />
                   {state.open ? 'Open for orders now' : 'Closed to orders now'}
                 </span>
-                <p className="text-sm text-gray-500 mt-2">{state.reason}</p>
-                {!settings.manuallyClosed && !state.open && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    The toggle is on, but today's hours have ended. It reopens on its own.
-                  </p>
+                {state.reason && (
+                  <span className="text-sm text-gray-500 ml-3">{state.reason}</span>
                 )}
               </>
             );
