@@ -334,7 +334,11 @@ export default function Orders() {
 
       // Only the states a customer cares about. Nobody needs an email saying
       // their order went from "pending" to "confirmed" thirty seconds apart.
-      const worthTelling = ["preparing", "ready for pickup", "on the way", "delivered", "picked up"];
+      // "delivered" and "picked up" are folded into "completed" above, so
+      // listing them here matched nothing and the customer was told nothing at
+      // the one moment they most expect to hear: when the food arrives. The
+      // email says Delivered or Picked up depending on the order type.
+      const worthTelling = ["preparing", "ready for pickup", "on the way", "completed"];
 
       if (worthTelling.includes(finalStatus)) {
         const problem = await notifyCustomer(orderId);

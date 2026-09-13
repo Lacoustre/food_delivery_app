@@ -57,8 +57,21 @@ function esc(v: unknown): string {
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
 
 /** The database stores snake_case; customers should not have to read it. */
-function statusLabel(status: string): { title: string; blurb: string } {
-  switch (String(status).toLowerCase()) {
+function statusLabel(
+  status: string,
+  orderType?: 'delivery' | 'pickup'
+): { title: string; blurb: string } {
+  // The admin panel folds "delivered" and "picked up" into "completed", so by
+  // the time this runs the specific word is gone. The order type still says
+  // which happened, and "Delivered — enjoy your meal" is worth more to a
+  // customer than a generic "order complete".
+  const s = String(status).toLowerCase()
+  if (s === 'completed') {
+    if (orderType === 'delivery') return { title: 'Delivered', blurb: 'Enjoy your meal.' }
+    if (orderType === 'pickup') return { title: 'Picked up', blurb: 'Thanks for collecting — enjoy your meal.' }
+  }
+
+  switch (s) {
     case 'pending':
       return { title: 'Order received', blurb: 'We have your order and will confirm it shortly.' }
     case 'confirmed':
@@ -370,7 +383,7 @@ export const emailService = {
 
   async sendStatusUpdate(data: OrderEmailData) {
     try {
-      const { title, blurb } = statusLabel(data.status)
+      const { title, blurb } = statusLabel(data.status, data.orderType)
       const result = await sendEmail({
         to: data.customerEmail,
         subject: `Order #${data.orderNumber} — ${title}`,
