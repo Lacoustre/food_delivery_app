@@ -39,6 +39,9 @@ export default function AfricanCuisineWebsite() {
   // happens in a sheet that slides up, and a sticky bar jumps between
   // sections.
   const [sheetSlug, setSheetSlug] = useState<string | null>(null)
+  // Where a swipe on the reviews started. The arrows are hidden on phones,
+  // where they sat on top of the review text, so swiping replaces them.
+  const reviewTouchX = useRef<number | null>(null)
   const [sheetAdded, setSheetAdded] = useState(false)
   const [activeSection, setActiveSection] = useState<string | null>(null)
   // The fixed header grows when the closed banner shows, so the sticky bar
@@ -1370,9 +1373,9 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Customer Reviews Section */}
-      <section className="py-20 bg-sand-100 overflow-hidden">
+      <section className="py-12 sm:py-20 bg-sand-100 overflow-hidden">
         <div className="page-shell">
-          <div className="mb-12 max-w-2xl">
+          <div className="mb-8 sm:mb-12 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Reviews</p>
             <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">What people say</h2>
             <p className="text-sand-700 leading-relaxed">From customers who order with us regularly.</p>
@@ -1383,48 +1386,64 @@ export default function AfricanCuisineWebsite() {
             {/* Navigation Arrows */}
             <button
               onClick={prevReview}
-              className="absolute left-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
+              aria-label="Previous review"
+              className="hidden sm:block absolute left-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
             >
               <ChevronLeft className="w-6 h-6 text-gold-600" />
             </button>
             <button
               onClick={nextReview}
-              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
+              aria-label="Next review"
+              className="hidden sm:block absolute right-0 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg hover:shadow-xl transition-all backdrop-blur-sm border border-sand-200"
             >
               <ChevronRight className="w-6 h-6 text-gold-600" />
             </button>
 
             {/* Reviews Container */}
-            <div className="overflow-hidden rounded-3xl">
+            <div
+              className="overflow-hidden rounded-3xl"
+              onTouchStart={(e) => { reviewTouchX.current = e.touches[0].clientX }}
+              onTouchEnd={(e) => {
+                const start = reviewTouchX.current
+                reviewTouchX.current = null
+                if (start == null) return
+                const dx = e.changedTouches[0].clientX - start
+                if (dx > 40) prevReview()
+                else if (dx < -40) nextReview()
+              }}
+            >
               <div 
                 className="flex transition-transform duration-700 ease-in-out"
                 style={{ transform: `translateX(-${currentReview * 100}%)` }}
               >
                 {reviews.map((review, index) => (
-                  <div key={index} className="w-full flex-shrink-0 px-4">
-                    <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-sand-200 mx-auto max-w-4xl">
+                  <div key={index} className="w-full flex-shrink-0 px-1 sm:px-4">
+                    {/* Sized down on phones, where one review used to take
+                        two-thirds of the screen: 30px star emoji, 20px quote
+                        text, a 64px avatar and 32px padding all round. */}
+                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-md sm:shadow-xl border border-sand-200 mx-auto max-w-4xl">
                       <div className="text-center">
                         {/* Stars */}
-                        <div className="flex justify-center mb-6">
+                        <div className="flex justify-center mb-3 sm:mb-6">
                           {[...Array(review.rating)].map((_, i) => (
-                            <span key={i} className="text-3xl text-gold">⭐</span>
+                            <span key={i} className="text-base sm:text-3xl text-gold">⭐</span>
                           ))}
                         </div>
                         
                         {/* Review Text */}
-                        <blockquote className="text-xl md:text-2xl text-sand-700 mb-8 leading-relaxed font-medium italic">
+                        <blockquote className="text-base sm:text-xl md:text-2xl text-sand-700 mb-4 sm:mb-8 leading-relaxed font-medium italic">
                           "{review.review}"
                         </blockquote>
                         
                         {/* Customer Info */}
-                        <div className="flex items-center justify-center space-x-4">
-                          <div className="w-16 h-16 bg-gold rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                        <div className="flex items-center justify-center gap-3 sm:gap-4">
+                          <div className="w-10 h-10 sm:w-16 sm:h-16 shrink-0 bg-gold rounded-full flex items-center justify-center text-white font-bold text-base sm:text-xl shadow-lg">
                             {review.name.charAt(0)}
                           </div>
                           <div className="text-left">
-                            <h4 className="text-xl font-bold text-ink">{review.name}</h4>
-                            <div className="flex items-center space-x-3 text-sm text-sand-700">
-                              <span className="bg-gold text-white px-3 py-1 rounded-full font-medium">{review.dish}</span>
+                            <h4 className="text-base sm:text-xl font-bold text-ink">{review.name}</h4>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-sand-700">
+                              <span className="bg-gold text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">{review.dish}</span>
                               <span>•</span>
                               <span>{review.date}</span>
                             </div>
@@ -1438,11 +1457,12 @@ export default function AfricanCuisineWebsite() {
             </div>
 
             {/* Dots Indicator */}
-            <div className="flex justify-center mt-8 space-x-2">
+            <div className="flex justify-center mt-5 sm:mt-8 space-x-2">
               {reviews.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentReview(index)}
+                  aria-label={`Review ${index + 1}`}
                   className={`w-3 h-3 rounded-full transition-all duration-300 ${
                     index === currentReview 
                       ? 'bg-gold w-8' 
