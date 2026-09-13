@@ -133,47 +133,44 @@ export default function Settings() {
 
       {/* Restaurant Status */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Restaurant Status</h2>
-            <p className="text-gray-600">Close early or stay shut for the day.</p>
-          </div>
-          <button
-            onClick={toggleRestaurant}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              settings.isOpen ? 'bg-green-600' : 'bg-gray-200'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                settings.isOpen ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        <div className="mt-4">
-          {(() => {
-            // What a customer sees, worked out from the schedule — not the
-            // stored isOpen flag, which is a cache the mobile app writes back.
-            // At ten to ten on a Saturday this panel said "Open for Orders"
-            // while the website correctly said closed, and staff had no way to
-            // tell which was true.
-            const state = openRightNow(settings.businessHours, settings.manuallyClosed);
-            return (
-              <>
+        {(() => {
+          // Two separate facts. openNow is what a customer sees. withinHours
+          // ignores the manual switch, so the toggle can be disabled when the
+          // schedule has already closed the restaurant — there is nothing for
+          // it to do then, and a switch that does nothing invites fiddling.
+          const openNow = openRightNow(settings.businessHours, settings.manuallyClosed).open;
+          const withinHours = openRightNow(settings.businessHours, false).open;
+
+          return (
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold text-gray-900">Restaurant Status</h2>
+                <button
+                  onClick={toggleRestaurant}
+                  disabled={!withinHours}
+                  title={withinHours ? undefined : "Closed by the schedule"}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                    settings.isOpen ? 'bg-green-600' : 'bg-gray-200'
+                  } ${withinHours ? '' : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      settings.isOpen ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="mt-4">
                 <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                  state.open ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  openNow ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 }`}>
-                  <div className={`w-2 h-2 rounded-full ${state.open ? 'bg-green-500' : 'bg-red-500'}`} />
-                  {state.open ? 'Open for orders now' : 'Closed to orders now'}
+                  <div className={`w-2 h-2 rounded-full ${openNow ? 'bg-green-500' : 'bg-red-500'}`} />
+                  {openNow ? 'Open' : 'Closed'}
                 </span>
-                {state.reason && (
-                  <span className="text-sm text-gray-500 ml-3">{state.reason}</span>
-                )}
-              </>
-            );
-          })()}
-        </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* Restaurant Info */}
