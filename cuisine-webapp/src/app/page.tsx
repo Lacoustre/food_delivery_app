@@ -977,7 +977,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Menu Section */}
-      <section id="menu" className="order-1 sm:order-none py-12 sm:py-20 bg-sand-50">
+      <section id="menu" className="order-1 sm:order-none py-12 sm:py-20 bg-sand-50" style={{ scrollMarginTop: headerH }}>
         <div className="page-shell">
           <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
             <div className="max-w-xl">
@@ -1338,7 +1338,7 @@ export default function AfricanCuisineWebsite() {
       </div>
 
       {/* About Section */}
-      <section id="about" className="py-20 bg-ink text-sand-100">
+      <section id="about" className="py-20 bg-ink text-sand-100" style={{ scrollMarginTop: headerH }}>
         <div className="page-shell">
           <div className="mb-14 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 mb-3">Our story</p>
@@ -1539,7 +1539,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="bg-ink text-sand-100 py-16">
+      <footer id="contact" className="bg-ink text-sand-100 py-16" style={{ scrollMarginTop: headerH }}>
         <div className="page-shell">
           <div className="grid md:grid-cols-3 gap-12">
             <div>
