@@ -189,50 +189,16 @@ export const orderService = {
       })
     })
 
-    // Send email status update
-    await this.sendStatusUpdateEmail(order)
-  },
-
-  async sendStatusUpdateEmail(order: Order) {
-    try {
-      const statusMessages = {
-        confirmed: { message: 'Order Confirmed', estimatedTime: '30-45 minutes' },
-        preparing: { message: 'Preparing Your Order', estimatedTime: '20-30 minutes' },
-        ready: { message: 'Order Ready for Pickup', estimatedTime: 'Ready now' },
-        out_for_delivery: { message: 'Out for Delivery', estimatedTime: '15-25 minutes' },
-        delivered: { message: 'Order Delivered', estimatedTime: 'Completed' },
-        completed: { message: 'Order Completed', estimatedTime: 'Thank you!' },
-        cancelled: { message: 'Order Cancelled', estimatedTime: '' }
-      }
-
-      const statusInfo = statusMessages[order.status] || { message: order.status, estimatedTime: '' }
-
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
-        body: JSON.stringify({
-          type: 'status_update',
-          orderData: {
-            customerEmail: order.customerInfo.email,
-            customerName: order.customerInfo.name,
-            orderNumber: order.orderNumber,
-            orderType: order.orderType,
-            items: order.items,
-            subtotal: order.subtotal,
-            deliveryFee: order.deliveryFee,
-            tax: order.tax,
-            total: order.total,
-            deliveryAddress: order.deliveryAddress,
-            status: statusInfo.message,
-            estimatedTime: statusInfo.estimatedTime
-          }
-        })
-      })
-
-      console.log(`Status update email sent for order ${order.orderNumber}: ${order.status}`)
-    } catch (error) {
-      console.error('Failed to send status update email:', error)
-    }
+    // No email from here.
+    //
+    // This ran in the customer's own browser and emailed them about their own
+    // order, so whether they heard anything depended on whether they still had
+    // the site open. Anyone who closed the tab — most people, once they have
+    // ordered — got silence.
+    //
+    // The admin panel sends it server-side now, when staff move the order on,
+    // which reaches the customer either way. Keeping both would send two
+    // emails to anyone with the tab open.
   },
 
   async sendOrderConfirmation(order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>) {
