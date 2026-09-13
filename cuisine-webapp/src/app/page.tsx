@@ -47,6 +47,11 @@ export default function AfricanCuisineWebsite() {
   // where they sat on top of the review text, so swiping replaces them.
   const reviewTouchX = useRef<number | null>(null)
   const [sheetAdded, setSheetAdded] = useState(false)
+  // The exact dish a sheet was opened on, when it came from outside the menu
+  // grid — a favourite. Without it the sheet matched by dish family, so
+  // tapping "Waakye with Fried Chicken" with the vegetarian filter on offered
+  // vegetarian Waakye instead of the dish that was tapped.
+  const [sheetPinned, setSheetPinned] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<string | null>(null)
   // The fixed header grows when the closed banner shows, so the sticky bar
   // is placed from its measured height rather than a guess.
@@ -342,8 +347,9 @@ export default function AfricanCuisineWebsite() {
     setMobileMenuOpen(false)
   }
 
-  const openSheet = (slug: string) => {
+  const openSheet = (slug: string, pinnedId: string | null = null) => {
     setSheetAdded(false)
+    setSheetPinned(pinnedId)
     setSheetSlug(slug)
   }
 
@@ -466,7 +472,10 @@ export default function AfricanCuisineWebsite() {
     if (!sheetSlug) return null
     const inView = (vegOnly ? filteredMeals.filter(m => m.isVegetarian) : filteredMeals)
       .filter(m => m.baseSlug === sheetSlug)
-    const group = inView.length ? inView : meals.filter(m => m.baseSlug === sheetSlug)
+    // A pinned dish the filtered view doesn't include means the sheet was
+    // opened from outside it, so it shows every option the dish has.
+    const outsideView = !inView.length || (sheetPinned !== null && !inView.some(m => m.id === sheetPinned))
+    const group = outsideView ? meals.filter(m => m.baseSlug === sheetSlug) : inView
     return group.length ? resolveGroup(group, sheetSlug) : null
   })()
 
@@ -967,7 +976,7 @@ export default function AfricanCuisineWebsite() {
                        // on this exact dish.
                        if (isPhone()) {
                          setSelectedVariant(prev => ({ ...prev, [meal.baseSlug]: meal.id }))
-                         openSheet(meal.baseSlug)
+                         openSheet(meal.baseSlug, meal.id)
                          return
                        }
                        const mealData = encodeURIComponent(JSON.stringify(meal))
