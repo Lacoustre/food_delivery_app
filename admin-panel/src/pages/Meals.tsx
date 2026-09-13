@@ -703,8 +703,11 @@ export default function Meals() {
           <p className="text-gray-600 text-lg font-medium mb-2">No meals found</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-full">
+          {/* max-w-full on the scroller: without it the 1848px table dragged
+              the whole page sideways on the restaurant's Kindle instead of
+              scrolling inside its own card. */}
+          <div className="overflow-x-auto max-w-full">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>

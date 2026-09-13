@@ -14,11 +14,30 @@ const navItems = [
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
-export default function Sidebar({ className = "" }) {
+interface SidebarProps {
+  className?: string;
+  /** Open on a tablet or phone, where the sidebar slides over the content. */
+  open?: boolean;
+  /** Called when a link is followed, so the sidebar gets out of the way. */
+  onNavigate?: () => void;
+}
+
+/**
+ * Fixed at 256px on a desktop; a slide-over below lg.
+ *
+ * It used to be fixed and always visible at every width, with the content
+ * permanently indented by 256px behind it. On the restaurant's Kindle — about
+ * 600px wide — that left roughly 340px for tables of eight columns.
+ */
+export default function Sidebar({ className = "", open = false, onNavigate }: SidebarProps) {
   const location = useLocation();
 
   return (
-    <aside className={`w-64 bg-white border-r border-gray-200 h-screen fixed top-0 left-0 z-40 shadow-sm transition-all duration-300 ${className}`}>
+    <aside
+      className={`w-64 bg-white border-r border-gray-200 h-screen fixed top-0 left-0 z-40 shadow-sm
+        transition-transform duration-300
+        ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 ${className}`}
+    >
       <div className="p-6 border-b border-gray-200 flex items-center gap-3">
         <img 
           src={logo} 
@@ -43,6 +62,7 @@ export default function Sidebar({ className = "" }) {
                   : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
               }`}
               aria-current={isActive ? "page" : undefined}
+              onClick={onNavigate}
             >
               <Icon className="w-5 h-5" />
               {item.name}

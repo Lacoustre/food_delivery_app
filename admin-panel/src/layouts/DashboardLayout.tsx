@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Menu, X } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import NotificationCenter from "../components/NotificationCenter";
 import { supabase } from "../lib/supabase";
@@ -16,6 +16,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [showModal, setShowModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // The sidebar is a slide-over below lg. On the restaurant's Kindle, ~600px
+  // wide, a permanently visible 256px sidebar left about 340px for the tables.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -52,14 +55,39 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+      <Sidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
 
-      <div className="flex-1 pl-64">
+      {/* Tapping the page behind the open sidebar closes it, which is what
+          everyone tries first. */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* min-w-0 is load-bearing. A flex item defaults to min-width:auto, so
+          this wrapper grew to the width of the widest table instead of letting
+          that table scroll inside its own overflow-x-auto container — which
+          dragged the header, the headings and the whole page sideways. At
+          800px the h1 was rendering 1232px wide. */}
+      <div className="flex-1 min-w-0 overflow-x-hidden lg:pl-64">
         {/* Topbar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 fixed top-0 left-64 right-0 z-30 shadow-sm">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">
-            Dashboard
-          </h1>
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 fixed top-0 left-0 lg:left-64 right-0 z-30 shadow-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-gray-700 hover:bg-gray-100"
+              aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+              aria-expanded={sidebarOpen}
+            >
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 tracking-tight truncate">
+              Dashboard
+            </h1>
+          </div>
 
           <div className="flex items-center gap-4">
             {/* Notification Center */}
@@ -93,7 +121,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Main Content */}
-        <main className="p-6 mt-16 bg-white min-h-[calc(100vh-4rem)]">
+        <main className="p-4 sm:p-6 mt-16 bg-white min-h-[calc(100vh-4rem)] overflow-x-hidden">
           {children}
         </main>
 
