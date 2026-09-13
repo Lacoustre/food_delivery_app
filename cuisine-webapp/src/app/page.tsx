@@ -32,6 +32,19 @@ export default function AfricanCuisineWebsite() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [currentReview, setCurrentReview] = useState(0)
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
+
+  // Phone menu. Every dish used to get a full-width, 610px card, so the menu
+  // ran to roughly fifty screens on an iPhone and Drinks started 37 screens
+  // down. Phones now get two compact cards per row; choosing and adding
+  // happens in a sheet that slides up, and a sticky bar jumps between
+  // sections.
+  const [sheetSlug, setSheetSlug] = useState<string | null>(null)
+  const [sheetAdded, setSheetAdded] = useState(false)
+  const [activeSection, setActiveSection] = useState<string | null>(null)
+  // The fixed header grows when the closed banner shows, so the sticky bar
+  // is placed from its measured height rather than a guess.
+  const headerRef = useRef<HTMLElement>(null)
+  const [headerH, setHeaderH] = useState(64)
   const [navigating, setNavigating] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   // Starts unknown rather than open. Defaulting to open meant the page said
@@ -249,6 +262,60 @@ export default function AfricanCuisineWebsite() {
     }
   }
 
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const update = () => setHeaderH(el.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // While the dish sheet is open the page behind it must not scroll, and
+  // Escape closes it the way every other sheet on a phone behaves.
+  useEffect(() => {
+    if (!sheetSlug) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSheetSlug(null) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [sheetSlug])
+
+  // Highlights the section you are scrolling through in the sticky bar.
+  useEffect(() => {
+    let frame = 0
+    const onScroll = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const edge = headerH + 72
+        let current: string | null = null
+        document.querySelectorAll<HTMLElement>('[data-menu-section]').forEach(el => {
+          if (el.getBoundingClientRect().top <= edge) current = el.dataset.menuSection ?? null
+        })
+        setActiveSection(current)
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', onScroll)
+    }
+  }, [headerH])
+
+  const isPhone = () =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+
+  const openSheet = (slug: string) => {
+    setSheetAdded(false)
+    setSheetSlug(slug)
+  }
+
   // The header is light-on-transparent over the hero; with the mobile sheet
   // open it sits on cream instead, so it has to switch to its solid styling
   // or the brand and icons disappear.
@@ -332,7 +399,7 @@ export default function AfricanCuisineWebsite() {
       {/* Banner and nav share one fixed stack. Previously the banner sat in
           normal flow while the nav was fixed on top of it, so the closed
           notice rendered straight through the middle of the header. */}
-      <header className="fixed top-0 left-0 right-0 z-50">
+      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
         {statusKnown && !isOpen && (
           <div className="bg-clay-700 text-sand-50 py-2 px-4 text-center text-[13px]">
             <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
@@ -736,8 +803,13 @@ export default function AfricanCuisineWebsite() {
         </div>
       </section>
 
+      {/* On a phone the menu comes straight after the hero: someone opening
+          the site on their phone has come to order, and the two sections
+          below used to put the first dish five screens down. The desktop
+          order is unchanged. */}
+      <div className="flex flex-col">
       {/* Features */}
-      <section className="py-20 bg-sand-100">
+      <section className="order-2 sm:order-none py-20 bg-sand-100">
         <div className="page-shell">
           {/* Left-aligned to share the edge the header and hero sit on —
               centred headings above left-aligned content read as misaligned. */}
@@ -785,7 +857,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Popular Items Section */}
-      <section className="py-20 bg-sand-50">
+      <section className="order-3 sm:order-none py-20 bg-sand-50">
         <div className="page-shell">
           <div className="mb-12 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Popular right now</p>
@@ -860,7 +932,8 @@ export default function AfricanCuisineWebsite() {
             </div>
           )}
           
-          <div className="text-center mt-12">
+          {/* Points back up at the menu, which on a phone is now above it. */}
+          <div className="hidden sm:block text-center mt-12">
             <button 
               onClick={() => document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' })}
               className="inline-flex items-center gap-2 border border-sand-300 text-ink px-6 py-3 rounded-control font-semibold hover:bg-sand-100 transition-colors"
@@ -872,7 +945,7 @@ export default function AfricanCuisineWebsite() {
       </section>
 
       {/* Menu Section */}
-      <section id="menu" className="py-20 bg-sand-50">
+      <section id="menu" className="order-1 sm:order-none py-12 sm:py-20 bg-sand-50">
         <div className="page-shell">
           <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
             <div className="max-w-xl">
@@ -912,7 +985,7 @@ export default function AfricanCuisineWebsite() {
               <p className="text-sand-500">Try a dish, a category like &ldquo;drinks&rdquo;, or an ingredient.</p>
             </div>
           ) : (
-            <div className="space-y-14">
+            <div className="space-y-10 sm:space-y-14">
               {(() => {
                 // One card per base dish. 126 dishes become 68 cards, because a
                 // customer choosing jollof wants to pick a protein, not scroll
@@ -933,6 +1006,38 @@ export default function AfricanCuisineWebsite() {
                   bySection.set(s, [...(bySection.get(s) ?? []), slug])
                 }
 
+                // One place that works out which variant a card is showing, so
+                // the card and the phone sheet can never disagree about it.
+                const resolve = (slug: string) => {
+                  const group = cards.get(slug)!
+                  const variants = group.filter(m => m.variantLabel)
+                    .sort((a, b) => a.price - b.price)
+                  const chosenId = selectedVariant[slug]
+                  // Prefer a variant that can actually be ordered. Picking
+                  // purely by "first non-vegetarian" made a whole card read
+                  // "Sold out" whenever that one option happened to be off —
+                  // Fried Rice looked unavailable while five proteins were fine.
+                  const defaultVariant =
+                    variants.find(v => !v.isVegetarian && v.available !== false)
+                    ?? variants.find(v => v.available !== false)
+                    ?? variants.find(v => !v.isVegetarian)
+                    ?? variants[0]
+                  const active = group.find(m => m.id === chosenId)
+                    ?? (variants.length ? defaultVariant : group[0])
+                  const cheapest = Math.min(...group.map(m => m.price))
+                  const soldOut = active.available === false
+                  const allSoldOut = group.every(m => m.available === false)
+                  return { group, variants, active, cheapest, soldOut, allSoldOut }
+                }
+
+                const SHORT: Record<string, string> = {
+                  'Main Dishes': 'Mains',
+                  'Side Dishes': 'Sides',
+                  Desserts: 'Desserts',
+                  Drinks: 'Drinks',
+                }
+                const sectionId = (s: string) => `menu-${s.toLowerCase().replace(/\s+/g, '-')}`
+
                 const HEADINGS: Record<string, string> = {
                   protein: 'Choose your protein',
                   soup: 'Choose your soup',
@@ -941,38 +1046,69 @@ export default function AfricanCuisineWebsite() {
                   portion: 'How many pieces',
                 }
 
-                return SECTIONS.filter(s => bySection.has(s)).map(section => (
-                  <div key={section}>
+                const present = SECTIONS.filter(s => bySection.has(s))
+                const sheet = sheetSlug && cards.has(sheetSlug) ? resolve(sheetSlug) : null
+
+                const addFromSheet = async () => {
+                  if (!sheet) return
+                  await addToCart(sheet.active)
+                  setSheetAdded(true)
+                  setTimeout(() => { setSheetSlug(null); setSheetAdded(false) }, 900)
+                }
+
+                return (
+                  <>
+                  {/* Sticks under the header while you are in the menu.
+                      Drinks used to be 37 screens down on a phone. */}
+                  {present.length > 1 && (
+                    <div
+                      className="sticky z-30 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 bg-sand-50/95 backdrop-blur border-b border-sand-200"
+                      style={{ top: headerH }}
+                    >
+                      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+                        {present.map(s => {
+                          const on = (activeSection ?? present[0]) === s
+                          return (
+                            <button
+                              key={s}
+                              onClick={() => document.getElementById(sectionId(s))?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                              aria-current={on ? 'true' : undefined}
+                              className={`shrink-0 px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                                on ? 'bg-ink text-sand-50 border-ink' : 'bg-white text-ink-soft border-sand-200'
+                              }`}
+                            >
+                              {SHORT[s] ?? s}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {present.map(section => (
+                  <div
+                    key={section}
+                    id={sectionId(section)}
+                    data-menu-section={section}
+                    style={{ scrollMarginTop: headerH + 64 }}
+                  >
                     <div className="flex items-baseline gap-3 mb-7">
                       <h3 className="font-display text-3xl sm:text-4xl text-ink">{section}</h3>
                       <div className="flex-1 h-px bg-sand-200" />
                     </div>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
                       {bySection.get(section)!.map(slug => {
-                        const group = cards.get(slug)!
-                        const variants = group.filter(m => m.variantLabel)
-                          .sort((a, b) => a.price - b.price)
-                        const chosenId = selectedVariant[slug]
-                        // Prefer a variant that can actually be ordered. Picking
-                        // purely by "first non-vegetarian" made a whole card read
-                        // "Sold out" whenever that one option happened to be off —
-                        // Fried Rice looked unavailable while five proteins were fine.
-                        const defaultVariant =
-                          variants.find(v => !v.isVegetarian && v.available !== false)
-                          ?? variants.find(v => v.available !== false)
-                          ?? variants.find(v => !v.isVegetarian)
-                          ?? variants[0]
-                        const active = group.find(m => m.id === chosenId)
-                          ?? (variants.length ? defaultVariant : group[0])
-                        const cheapest = Math.min(...group.map(m => m.price))
-                        const soldOut = active.available === false
+                        const { group, variants, active, cheapest, soldOut, allSoldOut } = resolve(slug)
 
                         return (
                           <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card">
                             <div
                               className="relative aspect-square cursor-pointer"
-                              onClick={() => { window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}` }}
+                              onClick={() => {
+                                if (isPhone()) openSheet(slug)
+                                else window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}`
+                              }}
                             >
                               <Image
                                 src={getImageUrl(active)}
@@ -990,18 +1126,34 @@ export default function AfricanCuisineWebsite() {
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleFavorite(active.id) }}
                                 aria-label="Save this dish"
-                                className="absolute top-3 right-3 p-2 bg-sand-50/90 backdrop-blur rounded-full"
+                                className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1.5 sm:p-2 bg-sand-50/90 backdrop-blur rounded-full"
                               >
                                 <Heart className={`w-4 h-4 ${favorites.has(active.id) ? 'fill-clay text-clay' : 'text-sand-700'}`} />
                               </button>
                               {group.every(m => m.isVegetarian) && (
-                                <span className="absolute top-3 left-3 bg-kente text-sand-50 text-[11px] font-semibold px-2 py-1 rounded">
+                                <span className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-kente text-sand-50 text-[10px] sm:text-[11px] font-semibold px-2 py-1 rounded">
                                   Vegetarian
                                 </span>
                               )}
                             </div>
 
-                            <div className="flex flex-col flex-1 p-5">
+                            {/* Phone: name and price only. Choosing happens in the sheet. */}
+                            <button
+                              type="button"
+                              onClick={() => openSheet(slug)}
+                              className="sm:hidden flex flex-col flex-1 text-left p-3"
+                            >
+                              <span className="font-display text-base text-ink leading-tight line-clamp-2">{active.baseName}</span>
+                              <span className="mt-auto pt-2 text-sm font-semibold text-ink tabular-nums">
+                                {allSoldOut
+                                  ? 'Sold out'
+                                  : variants.length > 1
+                                    ? `from $${cheapest.toFixed(2)}`
+                                    : `$${active.price?.toFixed(2)}`}
+                              </span>
+                            </button>
+
+                            <div className="hidden sm:flex flex-col flex-1 p-5">
                               <h4 className="font-display text-xl text-ink leading-tight">{active.baseName}</h4>
                               {/* Describe the dish, not the selected variant.
                                   Showing active.description put "Jollof rice
@@ -1064,12 +1216,94 @@ export default function AfricanCuisineWebsite() {
                       })}
                     </div>
                   </div>
-                ))
+                ))}
+
+                  {/* The phone's choose-and-add step. It adds straight to the
+                      cart; the old Add button opened a separate page where
+                      you had to choose and press Add a second time. */}
+                  {sheet && (
+                    <div className="sm:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={sheet.active.baseName}>
+                      <div className="absolute inset-0 bg-ink/50" onClick={() => setSheetSlug(null)} />
+                      <div className="absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
+                        <div className="relative aspect-[4/3] w-full">
+                          <Image
+                            src={getImageUrl(sheet.active)}
+                            alt={sheet.active.baseName}
+                            fill
+                            className="object-cover rounded-t-2xl"
+                            unoptimized
+                          />
+                          <button
+                            onClick={() => setSheetSlug(null)}
+                            aria-label="Close"
+                            className="absolute top-3 right-3 p-2 bg-sand-50/90 rounded-full"
+                          >
+                            <X className="w-5 h-5 text-ink" />
+                          </button>
+                        </div>
+
+                        <div className="p-5">
+                          <h3 className="font-display text-2xl text-ink leading-tight">{sheet.active.baseName}</h3>
+                          <p className="mt-1.5 text-sm text-sand-700">
+                            {sheet.active.baseDescription ?? sheet.active.description}
+                          </p>
+
+                          {sheet.variants.length > 1 && (
+                            <div className="mt-4">
+                              <label htmlFor="sheet-variant" className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-sand-500 mb-1.5">
+                                {HEADINGS[sheet.active.variantType ?? 'protein'] ?? 'Choose an option'}
+                              </label>
+                              <select
+                                id="sheet-variant"
+                                value={sheet.active.id}
+                                onChange={(e) => setSelectedVariant(prev => ({ ...prev, [sheetSlug!]: e.target.value }))}
+                                className="w-full px-3 py-3 rounded-control border border-sand-200 bg-white text-ink text-base focus:outline-none focus:border-gold"
+                              >
+                                {sheet.variants.map(v => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · sold out' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          <div className="mt-5 flex items-center justify-between gap-4">
+                            <span className="text-2xl font-semibold text-ink tabular-nums">${sheet.active.price.toFixed(2)}</span>
+                            <button
+                              onClick={addFromSheet}
+                              disabled={sheet.soldOut || (statusKnown && !isOpen) || addingToCart === sheet.active.id || sheetAdded}
+                              className={`flex-1 max-w-[13rem] py-3.5 rounded-control text-base font-semibold transition-colors ${
+                                sheetAdded
+                                  ? 'bg-kente text-sand-50'
+                                  : !sheet.soldOut && !(statusKnown && !isOpen)
+                                    ? 'bg-gold text-ink active:bg-gold-300'
+                                    : 'bg-sand-200 text-sand-500'
+                              }`}
+                            >
+                              {sheetAdded
+                                ? 'Added ✓'
+                                : addingToCart === sheet.active.id
+                                  ? 'Adding…'
+                                  : statusKnown && !isOpen
+                                    ? 'Closed'
+                                    : sheet.soldOut
+                                      ? 'Sold out'
+                                      : 'Add to cart'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  </>
+                )
               })()}
             </div>
           )}
         </div>
       </section>
+      </div>
 
       {/* About Section */}
       <section id="about" className="py-20 bg-ink text-sand-100">
