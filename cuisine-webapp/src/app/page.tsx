@@ -39,6 +39,10 @@ export default function AfricanCuisineWebsite() {
   // happens in a sheet that slides up, and a sticky bar jumps between
   // sections.
   const [sheetSlug, setSheetSlug] = useState<string | null>(null)
+  // Where to go once an overlay has closed. The page is frozen while the
+  // drawer is open, so a link inside it can't move the page itself — the
+  // unlock would put you straight back where you were.
+  const pendingScrollId = useRef<string | null>(null)
   // Where a swipe on the reviews started. The arrows are hidden on phones,
   // where they sat on top of the review text, so swiping replaces them.
   const reviewTouchX = useRef<number | null>(null)
@@ -275,19 +279,37 @@ export default function AfricanCuisineWebsite() {
     return () => ro.disconnect()
   }, [])
 
-  // While the dish sheet is open the page behind it must not scroll, and
-  // Escape closes it the way every other sheet on a phone behaves.
+  // Escape closes the dish sheet the way every other sheet on a phone behaves.
   useEffect(() => {
     if (!sheetSlug) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSheetSlug(null) }
     window.addEventListener('keydown', onKey)
-    return () => {
-      document.body.style.overflow = prev
-      window.removeEventListener('keydown', onKey)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [sheetSlug])
+
+  // Freezes the page while the drawer or the dish sheet is open. The drawer
+  // had no lock at all, so the page scrolled behind it. The sheet used
+  // overflow:hidden on the body, which iOS Safari ignores for touch
+  // scrolling — so the body is pinned in place instead, and the scroll
+  // position put back exactly when it is released.
+  const pageLocked = mobileMenuOpen || sheetSlug !== null
+  useEffect(() => {
+    if (!pageLocked) return
+    const y = window.scrollY
+    const b = document.body.style
+    const prev = { position: b.position, top: b.top, width: b.width, overflow: b.overflow }
+    b.position = 'fixed'
+    b.top = `-${y}px`
+    b.width = '100%'
+    b.overflow = 'hidden'
+    return () => {
+      Object.assign(b, prev)
+      window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior })
+      const target = pendingScrollId.current
+      pendingScrollId.current = null
+      if (target) document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [pageLocked])
 
   // Highlights the section you are scrolling through in the sticky bar.
   useEffect(() => {
@@ -313,6 +335,12 @@ export default function AfricanCuisineWebsite() {
 
   const isPhone = () =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+
+  // Close the drawer, then — once the page is unlocked — go to a section.
+  const closeDrawerTo = (id?: string) => {
+    pendingScrollId.current = id ?? null
+    setMobileMenuOpen(false)
+  }
 
   const openSheet = (slug: string) => {
     setSheetAdded(false)
@@ -344,7 +372,8 @@ export default function AfricanCuisineWebsite() {
   useEffect(() => {
     const has = searchQuery.trim().length > 0
     if (has && !hadQuery.current) {
-      document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (mobileMenuOpen) pendingScrollId.current = 'menu'
+      else document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
     hadQuery.current = has
   }, [searchQuery])
@@ -600,7 +629,7 @@ export default function AfricanCuisineWebsite() {
         <>
           <div
             onClick={() => setMobileMenuOpen(false)}
-            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 ${
+            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 touch-none ${
               statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
             }`}
           />
@@ -618,13 +647,13 @@ export default function AfricanCuisineWebsite() {
                 placeholder="Search dishes"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') setMobileMenuOpen(false) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') closeDrawerTo(searchQuery.trim() ? 'menu' : undefined) }}
                 className="w-full pl-10 pr-4 py-3 text-[15px] rounded-control border border-sand-200 bg-white text-ink placeholder-sand-500 focus:outline-none focus:border-gold"
               />
             </div>
 
             <button
-              onClick={() => { setMobileMenuOpen(false); document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth' }) }}
+              onClick={() => closeDrawerTo('menu')}
               className="mt-4 w-full bg-gold text-ink py-3.5 rounded-control font-semibold hover:bg-gold-300 transition-colors"
             >
               Order now
@@ -639,7 +668,7 @@ export default function AfricanCuisineWebsite() {
               <a
                 key={item.label}
                 href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(e) => { e.preventDefault(); closeDrawerTo(item.href.slice(1)) }}
                 className="flex items-center justify-between py-3.5 border-b border-sand-200 text-ink font-medium"
               >
                 {item.label}
@@ -1226,8 +1255,8 @@ export default function AfricanCuisineWebsite() {
                       you had to choose and press Add a second time. */}
                   {sheet && (
                     <div className="sm:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={sheet.active.baseName}>
-                      <div className="absolute inset-0 bg-ink/50" onClick={() => setSheetSlug(null)} />
-                      <div className="absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
+                      <div className="absolute inset-0 bg-ink/50 touch-none" onClick={() => setSheetSlug(null)} />
+                      <div className="absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto overscroll-contain shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
                         <div className="relative aspect-[4/3] w-full">
                           <Image
                             src={getImageUrl(sheet.active)}
