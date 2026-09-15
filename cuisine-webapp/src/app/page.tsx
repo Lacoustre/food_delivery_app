@@ -11,6 +11,7 @@ import { orderService } from '@/lib/orderService'
 import { favoritesService } from '@/lib/favoritesService'
 import { useAuth } from '@/lib/AuthContext'
 import OrderNotifications from '@/components/OrderNotifications'
+import { mealImageSrc } from '@/lib/mealImage'
 
 interface CartItem extends Meal {
   quantity: number
@@ -89,9 +90,10 @@ export default function AfricanCuisineWebsite() {
     if (!meal.imageUrl) {
       return '/assets/images/logo.png'
     }
-    // Remote URL (Supabase Storage) — use as-is
+    // Remote URL. Supabase photos go through our own /menu-images/ route,
+    // because Supabase marks them noindex and Google Images skipped them.
     if (meal.imageUrl.startsWith('http')) {
-      return meal.imageUrl
+      return mealImageSrc(meal.imageUrl)
     }
     // If it's a local asset path, use it
     if (meal.imageUrl.startsWith('/assets/')) {
@@ -990,7 +992,7 @@ export default function AfricanCuisineWebsite() {
                   <div className="relative aspect-square overflow-hidden">
                     <Image
                       src={getImageUrl(meal)}
-                      alt={meal.name}
+                      alt={`${meal.name} at Taste of African Cuisine`}
                       fill
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
                       unoptimized
@@ -1185,7 +1187,7 @@ export default function AfricanCuisineWebsite() {
                             >
                               <Image
                                 src={getImageUrl(active)}
-                                alt={active.baseName}
+                                alt={`${active.baseName} at Taste of African Cuisine`}
                                 fill
                                 className="object-cover"
                                 unoptimized
@@ -1310,7 +1312,7 @@ export default function AfricanCuisineWebsite() {
             <div className="relative aspect-[4/3] w-full">
               <Image
                 src={getImageUrl(sheet.active)}
-                alt={sheet.active.baseName}
+                alt={`${sheet.active.baseName} at Taste of African Cuisine`}
                 fill
                 className="object-cover rounded-t-2xl"
                 unoptimized

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, Minus } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { mealExtras } from '@/lib/mealExtras'
+import { mealImageSrc } from '@/lib/mealImage'
 
 interface Extra {
   name: string
@@ -55,9 +56,10 @@ function MealDetailContent() {
     if (!meal.imageUrl) {
       return '/assets/images/logo.png'
     }
-    // Remote URL (Supabase Storage) — use as-is
+    // Remote URL. Supabase photos go through our own /menu-images/ route,
+    // because Supabase marks them noindex and Google Images skipped them.
     if (meal.imageUrl.startsWith('http')) {
-      return meal.imageUrl
+      return mealImageSrc(meal.imageUrl)
     }
     // If it's a local asset path, use it
     if (meal.imageUrl.startsWith('/assets/')) {
