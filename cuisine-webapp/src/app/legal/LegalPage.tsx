@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import type { ReactNode } from 'react'
 
 /**
@@ -24,13 +25,22 @@ export function LegalPage({
           text beneath it instead of starting further left. */}
       <header className="border-b border-sand-200">
         <div className="page-shell-narrow py-10">
-          <Link
-            href="/"
-            className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 hover:text-ink"
-          >
-            &larr; Taste of African Cuisine
+          {/* The logo carries the brand the green banner used to, and takes you
+              home the way the logo does everywhere else on the site. */}
+          <Link href="/" className="group inline-flex items-center gap-3" aria-label="Taste of African Cuisine — home">
+            <Image
+              src="/assets/images/logo.png"
+              alt=""
+              width={48}
+              height={48}
+              className="object-contain"
+              unoptimized
+            />
+            <span className="font-display text-lg text-ink leading-tight group-hover:text-gold-600 transition-colors">
+              Taste of African Cuisine
+            </span>
           </Link>
-          <h1 className="font-display text-4xl sm:text-5xl text-ink mt-3">{title}</h1>
+          <h1 className="font-display text-4xl sm:text-5xl text-ink mt-6">{title}</h1>
           <p className="text-sand-500 text-sm mt-2">Last updated {updated}</p>
         </div>
       </header>
