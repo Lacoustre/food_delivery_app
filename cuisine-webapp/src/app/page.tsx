@@ -26,6 +26,9 @@ export default function AfricanCuisineWebsite() {
   const [searchQuery, setSearchQuery] = useState('')
   // Which variant is selected per menu card, keyed by baseSlug.
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({})
+  // Sections the customer has opened past the preview. Everything starts
+  // collapsed to its first few dishes; see PREVIEW below.
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
   const [vegOnly, setVegOnly] = useState(false)
   const [year, setYear] = useState(2025)
   useEffect(() => setYear(new Date().getFullYear()), [])
@@ -1131,6 +1134,41 @@ export default function AfricanCuisineWebsite() {
 
 
                 const present = SECTIONS.filter(s => bySection.has(s))
+
+                // Each section opens on its first few dishes with a "See all"
+                // button, so a phone isn't scrolling through all 26 mains to
+                // reach the drinks. The restaurant chose which lead each
+                // section; the rest follow in their usual order.
+                const PREVIEW = 6
+                const FEATURED: Record<string, string[]> = {
+                  'Main Dishes': ['jollof', 'waakye', 'fried-rice', 'kenkey', 'fufu', 'banku'],
+                  'Side Dishes': ['fufu-ball', 'rice-ball-side', 'fried-plantain-individual-'],
+                }
+                // Searching or filtering means the customer is looking for
+                // something specific, so every match is shown — hiding some of
+                // their results behind a button would defeat the search.
+                const browsing = !searchQuery.trim() && !vegOnly
+                const orderedSlugs = (section: string) => {
+                  const slugs = bySection.get(section)!
+                  const lead = FEATURED[section] ?? []
+                  const rank = (slug: string) =>
+                    lead.includes(slug) ? lead.indexOf(slug) : lead.length + slugs.indexOf(slug)
+                  return [...slugs].sort((a, b) => rank(a) - rank(b))
+                }
+                const visibleSlugs = (section: string) => {
+                  const all = orderedSlugs(section)
+                  return !browsing || expandedSections[section] || all.length <= PREVIEW ? all : all.slice(0, PREVIEW)
+                }
+                const toggleSection = (section: string) => {
+                  const collapsing = !!expandedSections[section]
+                  setExpandedSections(prev => ({ ...prev, [section]: !collapsing }))
+                  // Folding a long section back up would otherwise leave you
+                  // far below it, looking at the next one.
+                  if (collapsing) {
+                    setTimeout(() => document.getElementById(sectionId(section))
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+                  }
+                }
                 return (
                   <>
                   {/* Sticks under the header while you are in the menu.
@@ -1173,7 +1211,7 @@ export default function AfricanCuisineWebsite() {
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
-                      {bySection.get(section)!.map(slug => {
+                      {visibleSlugs(section).map(slug => {
                         const { group, variants, active, cheapest, soldOut, allSoldOut } = resolve(slug)
 
                         return (
@@ -1290,6 +1328,21 @@ export default function AfricanCuisineWebsite() {
                         )
                       })}
                     </div>
+
+                    {browsing && orderedSlugs(section).length > PREVIEW && (
+                      <div className="mt-5 sm:mt-6 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(section)}
+                          aria-expanded={!!expandedSections[section]}
+                          className="px-6 py-3 rounded-full border border-sand-300 bg-white text-ink text-sm font-semibold hover:border-ink transition-colors"
+                        >
+                          {expandedSections[section]
+                            ? 'Show fewer'
+                            : `See all ${orderedSlugs(section).length} ${(SHORT[section] ?? section).toLowerCase()}`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
 
