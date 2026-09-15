@@ -29,6 +29,34 @@ interface DaySchedule {
 export interface OpenState {
   open: boolean
   reason?: string
+  /** When closed on the schedule: "tomorrow at 11 AM", "Tuesday at 11 AM". */
+  opensAt?: string
+}
+
+// "11:00" -> "11 AM", "21:30" -> "9:30 PM". Customers read American time.
+export function formatTime(hhmm: string | undefined): string {
+  const m = minutesOf(hhmm)
+  if (m === null) return String(hhmm ?? '')
+  const h = Math.floor(m / 60), min = m % 60
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}${min ? ':' + String(min).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`
+}
+
+// The next time the doors open, so a closed banner can say something useful
+// rather than repeat that it is closed.
+function nextOpening(hours: Record<string, DaySchedule>, dayKey: string, minutes: number): string | undefined {
+  const start = DAY_KEYS.indexOf(dayKey)
+  for (let offset = 0; offset < 7; offset++) {
+    const key = DAY_KEYS[(start + offset) % 7]
+    const day = hours[key]
+    if (!day || day.closed === true) continue
+    const openM = minutesOf(day.open)
+    if (openM === null) continue
+    if (offset === 0 && minutes >= openM) continue
+    const when = offset === 0 ? 'today' : offset === 1 ? 'tomorrow' : key.charAt(0).toUpperCase() + key.slice(1)
+    return `${when} at ${formatTime(day.open)}`
+  }
+  return undefined
 }
 
 function minutesOf(hhmm: unknown): number | null {
@@ -92,7 +120,7 @@ export async function getOpenState(): Promise<OpenState> {
 
   const today = hours[dayKey]
   if (!today || today.closed === true) {
-    return { open: false, reason: 'The restaurant is closed today.' }
+    return { open: false, reason: 'The restaurant is closed today.', opensAt: nextOpening(hours, dayKey, minutes) }
   }
 
   const openM = minutesOf(today.open)
@@ -108,7 +136,8 @@ export async function getOpenState(): Promise<OpenState> {
     ? { open: true }
     : {
       open: false,
-      reason: `The restaurant is closed right now. Today's hours are ${today.open}–${today.close}.`
+      reason: `The restaurant is closed right now. Today's hours are ${formatTime(today.open)}–${formatTime(today.close)}.`,
+      opensAt: nextOpening(hours, dayKey, minutes)
     }
 }
 
@@ -165,6 +194,6 @@ export async function getScheduleStateAt(when: Date): Promise<OpenState> {
     ? { open: true }
     : {
       open: false,
-      reason: `We close at ${day.close} on ${label}s, so we cannot have that ready in time.`
+      reason: `We close at ${formatTime(day.close)} on ${label}s, so we cannot have that ready in time.`
     }
 }

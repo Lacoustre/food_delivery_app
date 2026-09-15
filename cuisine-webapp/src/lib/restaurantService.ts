@@ -4,6 +4,8 @@ import { getOpenState } from './hours'
 export interface RestaurantStatus {
   isOpen: boolean
   message?: string
+  /** Set when closed on the schedule, e.g. "tomorrow at 11 AM". */
+  opensAt?: string
   updatedAt: Date
 }
 
@@ -26,6 +28,7 @@ export const restaurantService = {
       callback({
         isOpen: state.open,
         message: state.open ? '' : (state.reason ?? ''),
+        opensAt: state.open ? undefined : state.opensAt,
         updatedAt: data?.updated_at ? new Date(data.updated_at) : new Date(),
       })
     }

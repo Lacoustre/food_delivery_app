@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook } from 'lucide-react'
+import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook, Star } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { googleReviewsService, relativeDate, type GoogleReview } from '@/lib/googleReviewsService'
@@ -13,6 +13,9 @@ import { useAuth } from '@/lib/AuthContext'
 import OrderNotifications from '@/components/OrderNotifications'
 import { mealImageSrc } from '@/lib/mealImage'
 import { DishPhoto } from '@/components/DishPhoto'
+
+// The restaurant's Google listing, opened on its reviews tab.
+const GOOGLE_REVIEWS_URL = 'https://www.google.com/maps/place/TASTE+OF+AFRICAN+CUISINE/@41.8244336,-72.4977335,17z/data=!4m17!1m8!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!2sTASTE+OF+AFRICAN+CUISINE!8m2!3d41.8244336!4d-72.4977335!10e9!16s%2Fg%2F11vb0yh4nv!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!8m2!3d41.8244336!4d-72.4977335!9m1!1b1!16s%2Fg%2F11vb0yh4nv?entry=ttu&g_ep=EgoyMDI2MDkwOS4wIKXMDSoASAFQAw%3D%3D'
 
 interface CartItem extends Meal {
   quantity: number
@@ -500,8 +503,18 @@ export default function AfricanCuisineWebsite() {
       <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
         {statusKnown && !isOpen && (
           <div className="bg-clay-700 text-sand-50 py-2 px-4 text-center text-[13px]">
-            <span className="font-semibold">We&rsquo;re closed right now.</span>{' '}
-            {restaurantStatus.message || 'You can still schedule an order for later.'}
+            {/* One line. It used to read "We're closed right now." followed by
+                "The restaurant is closed today." — the same thing twice — and
+                on a closed day fell back to offering to schedule an order,
+                which the schedule check refuses. */}
+            {restaurantStatus.opensAt ? (
+              <>
+                <span className="font-semibold">Closed now</span>
+                {' · '}Opens {restaurantStatus.opensAt}
+              </>
+            ) : (
+              <span className="font-semibold">{restaurantStatus.message || 'Closed right now'}</span>
+            )}
           </div>
         )}
 
@@ -789,6 +802,10 @@ export default function AfricanCuisineWebsite() {
               className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
               <Mail className="w-4 h-4 text-sand-500 shrink-0" />
               <span className="break-all text-[15px]">orders@tasteofafricancuisine.com</span>
+            </a>
+            <a href={GOOGLE_REVIEWS_URL} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              <Star className="w-4 h-4 text-sand-500 shrink-0" /> Google reviews
             </a>
             <div className="flex items-start gap-3 py-3.5 text-sand-700">
               <Clock className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
@@ -1255,8 +1272,8 @@ export default function AfricanCuisineWebsite() {
                               <span className="mt-auto pt-2 text-sm font-semibold text-ink tabular-nums">
                                 {allSoldOut
                                   ? 'Sold out'
-                                  : variants.length > 1
-                                    ? `from $${cheapest.toFixed(2)}`
+                                  : variants.length > 1 && Math.max(...group.map(m => m.price)) !== cheapest
+                                    ? `$${cheapest.toFixed(2)}–$${Math.max(...group.map(m => m.price)).toFixed(2)}`
                                     : `$${active.price?.toFixed(2)}`}
                               </span>
                             </button>
@@ -1300,9 +1317,6 @@ export default function AfricanCuisineWebsite() {
 
                               <div className="mt-auto pt-5 flex items-end justify-between gap-3">
                                 <div>
-                                  {variants.length > 1 && active.price !== cheapest && (
-                                    <span className="block text-[11px] text-sand-500">from ${cheapest.toFixed(2)}</span>
-                                  )}
                                   <span className="text-xl font-semibold text-ink tabular-nums">${active.price?.toFixed(2)}</span>
                                 </div>
                                 <button
@@ -1426,65 +1440,36 @@ export default function AfricanCuisineWebsite() {
         </div>
       )}
 
-      {/* About Section */}
-      <section id="about" className="py-20 bg-ink text-sand-100" style={{ scrollMarginTop: headerH }}>
+      {/* About Section.
+          Rewritten as plain text. It was built from green icon cards and
+          emoji, and it made claims nothing supports — a Hartford Courant
+          feature, "three generations", sauces "made fresh each morning" — as
+          well as "Born in Ghana", when the restaurant describes itself as
+          African rather than Ghanaian. Everything here is said elsewhere on
+          the site. Add the restaurant's own story when they give it. */}
+      <section id="about" className="py-16 sm:py-20 bg-ink text-sand-100" style={{ scrollMarginTop: headerH }}>
         <div className="page-shell">
-          <div className="mb-14 max-w-2xl">
-            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 mb-3">Our story</p>
-            <h2 className="font-display text-4xl sm:text-5xl text-sand-50 leading-[1.05]">
-              A family kitchen, brought to Connecticut
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-10 mb-16">
-            <div className="group">
-              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
-                <span className="text-3xl">🇬🇭</span>
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+            <div className="max-w-xl">
+              <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 mb-3">Our story</p>
+              <h2 className="font-display text-4xl sm:text-5xl text-sand-50 leading-[1.05] mb-6">
+                A family kitchen in Vernon
+              </h2>
+              <div className="space-y-4 text-sand-300 text-lg leading-relaxed">
+                <p>
+                  Taste of African Cuisine cooks African food the way it&rsquo;s made at
+                  home: jollof, waakye, banku and fufu, with the soups and stews that go
+                  with them, from family recipes.
+                </p>
+                <p>
+                  Everything is cooked to order, with seasonings and staples from African
+                  markets. Pick it up on Hartford Turnpike, or have it delivered around
+                  Vernon.
+                </p>
               </div>
-              <h3 className="font-display text-2xl text-gold-300 mb-2">Born in Ghana</h3>
-              <p className="text-sand-300 text-[15px] leading-relaxed">Authentic recipes from Ghana, brought to Connecticut with love and tradition</p>
             </div>
-            <div className="group">
-              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
-                <span className="text-3xl">👨‍👩‍👧‍👦</span>
-              </div>
-              <h3 className="font-display text-2xl text-gold-300 mb-2">Family Legacy</h3>
-              <p className="text-sand-300 text-[15px] leading-relaxed">Three generations of culinary wisdom passed down through our family kitchen</p>
-            </div>
-            <div className="group">
-              <div className="w-14 h-14 bg-kente-800 border border-kente rounded-card flex items-center justify-center mb-4">
-                <span className="text-3xl">🌶️</span>
-              </div>
-              <h3 className="font-display text-2xl text-gold-300 mb-2">Authentic Spices</h3>
-              <p className="text-sand-300 text-[15px] leading-relaxed">Imported seasonings and traditional cooking methods for genuine West African flavors</p>
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="font-display text-3xl sm:text-4xl leading-tight mb-5">About Us</h2>
-              <p className="text-sand-300 mb-6 text-lg">
-                At Taste of African Cuisine, we take pride in serving the most authentic West African foods. Our dishes are prepared using traditional recipes that have been passed down from generation to generation.
-              </p>
-              <p className="text-sand-300 mb-6 text-lg">
-                We use only the freshest ingredients to ensure that every dish is bursting with flavor. Whether you're a fan of jollof rice, Waakye or Banku we have something for everyone.
-              </p>
-              <p className="text-sand-300 text-lg">
-                Come and experience the taste of West Africa today!
-              </p>
-            </div>
-            <div className="space-y-6">
-              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
-                <h4 className="text-xl font-bold text-gold-300 mb-3">🏆 Community Recognition</h4>
-                <p className="text-sand-300 text-[15px] leading-relaxed">Featured in Hartford Courant as "Connecticut's Hidden Gem for Authentic African Cuisine"</p>
-              </div>
-              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
-                <h4 className="text-xl font-bold text-gold-300 mb-3">🌍 Cultural Bridge</h4>
-                <p className="text-sand-300 text-[15px] leading-relaxed">Proudly serving both homesick Africans and curious food adventurers since opening</p>
-              </div>
-              <div className="bg-kente-800/40 rounded-card p-6 border border-kente">
-                <h4 className="text-xl font-bold text-gold-300 mb-3">💚 Fresh Daily</h4>
-                <p className="text-sand-300 text-[15px] leading-relaxed">Every sauce, stew, and seasoning made fresh each morning using traditional methods</p>
-              </div>
+            <div className="relative aspect-[4/3] rounded-card overflow-hidden bg-ink">
+              <DishPhoto src="/assets/images/jollof.png" alt="Jollof at Taste of African Cuisine" />
             </div>
           </div>
         </div>
@@ -1598,7 +1583,7 @@ export default function AfricanCuisineWebsite() {
               — no key, no account, nothing to expire. */}
           <div className="mt-10 text-center">
             <a
-              href="https://www.google.com/maps/search/?api=1&query=Taste+of+African+Cuisine%2C+200+Hartford+Turnpike%2C+Vernon%2C+CT+06066"
+              href={GOOGLE_REVIEWS_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm font-semibold text-kente border-b border-gold pb-0.5 hover:text-gold transition-colors"
