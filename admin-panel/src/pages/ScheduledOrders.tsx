@@ -1,3 +1,4 @@
+import { itemDetail } from "../lib/itemDetail";
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import moment from 'moment';
@@ -30,7 +31,13 @@ interface ScheduledOrder {
   tip: number | null;
   total: number;
   refund_amount: number | null;
-  order_items: { name: string | null; quantity: number; unit_price: number | null }[];
+  order_items: {
+    name: string | null;
+    quantity: number;
+    unit_price: number | null;
+    modifiers?: { name: string; price: number }[] | null;
+    notes?: string | null;
+  }[];
   profiles: Profile | Profile[] | null;
 }
 
@@ -50,7 +57,7 @@ export default function ScheduledOrders() {
       .select(
         'id, order_number, status, order_type, payment_method, scheduled_for, created_at, ' +
         'delivery_address, subtotal, tax, delivery_fee, tip, total, refund_amount, ' +
-        'order_items(name, quantity, unit_price), profiles!user_id(name, email, phone)'
+        'order_items(name, quantity, unit_price, modifiers, notes), profiles!user_id(name, email, phone)'
       )
       .not('scheduled_for', 'is', null)
       .order('scheduled_for', { ascending: true });
@@ -267,6 +274,9 @@ export default function ScheduledOrders() {
                           )}
                           {item.name || 'Unknown item'}
                         </p>
+                        {itemDetail(item) && (
+                          <p className="text-xs text-gray-700 mt-0.5">{itemDetail(item)}</p>
+                        )}
                       </div>
                       <p className="text-sm text-gray-900 whitespace-nowrap">
                         ${((item.unit_price ?? 0) * (item.quantity || 1)).toFixed(2)}

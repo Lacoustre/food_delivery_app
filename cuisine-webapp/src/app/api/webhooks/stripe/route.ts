@@ -104,6 +104,15 @@ export async function POST(request: NextRequest) {
 
     const p = pending.payload as {
       items: { id: string; quantity: number }[]
+      /** Priced lines — dish, add-ons, note — from create-payment-intent. */
+      lines?: {
+        id: string
+        name: string
+        quantity: number
+        unitPrice: number
+        modifiers: { id: string; name: string; price: number }[]
+        notes: string | null
+      }[]
       orderType: 'delivery' | 'pickup'
       deliveryAddress: string | null
       scheduledFor: string | null
@@ -161,28 +170,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Order creation failed' }, { status: 500 })
     }
 
-    // Line items, priced from the meals table rather than the payload, so the
-    // order history shows what the kitchen should make.
-    const { data: meals } = await supabase
-      .from('meals')
-      .select('id, name, price')
-      .in('id', p.items.map(i => i.id))
+    // Line items as create-payment-intent priced them — dish, add-ons and
+    // note — so the order shows what the customer chose and paid for.
+    // Payloads written before add-ons existed carry only ids and quantities;
+    // those are priced from the meals table as before.
+    let lines = p.lines ?? []
+    if (!lines.length) {
+      const { data: meals } = await supabase
+        .from('meals')
+        .select('id, name, price')
+        .in('id', p.items.map(i => i.id))
+      const byId = new Map((meals ?? []).map(m => [m.id, m]))
+      lines = p.items
+        .filter(i => byId.has(i.id))
+        .map(i => ({
+          id: i.id,
+          name: byId.get(i.id)!.name,
+          quantity: i.quantity,
+          unitPrice: byId.get(i.id)!.price,
+          modifiers: [],
+          notes: null
+        }))
+    }
 
-    if (meals?.length) {
-      const byId = new Map(meals.map(m => [m.id, m]))
+    if (lines.length) {
       // Columns are unit_price and name, matching create-order. An earlier
       // version wrote `price`, which does not exist — it failed silently and
       // left the order with no line items at all.
       const { error: itemsError } = await supabase.from('order_items').insert(
-        p.items
-          .filter(i => byId.has(i.id))
-          .map(i => ({
-            order_id: order.id,
-            meal_id: i.id,
-            name: byId.get(i.id)!.name,
-            quantity: i.quantity,
-            unit_price: byId.get(i.id)!.price
-          }))
+        lines.map(l => ({
+          order_id: order.id,
+          meal_id: l.id,
+          name: l.name,
+          quantity: l.quantity,
+          unit_price: l.unitPrice,
+          modifiers: l.modifiers.length ? l.modifiers : null,
+          notes: l.notes
+        }))
       )
       if (itemsError) {
         // The order exists and the customer has paid; losing the lines means
@@ -196,18 +220,17 @@ export async function POST(request: NextRequest) {
 
     // A rescued order still needs to reach the kitchen — arguably more so,
     // since nobody was watching a browser when it came in.
-    if (meals?.length) {
-      const byId = new Map(meals.map(m => [m.id, m]))
+    if (lines.length) {
       const result = await pushOrderToClover({
         orderNumber: String(order.order_number),
         orderType: p.orderType,
-        items: p.items
-          .filter(i => byId.has(i.id))
-          .map(i => ({
-            name: byId.get(i.id)!.name,
-            quantity: i.quantity,
-            unitPrice: byId.get(i.id)!.price
-          })),
+        items: lines.map(l => ({
+          name: l.name,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          modifiers: l.modifiers.map(m => m.name),
+          notes: l.notes
+        })),
         total: p.total,
         paid: true,
         customerName: profile?.name ?? p.customerInfo?.name ?? undefined,

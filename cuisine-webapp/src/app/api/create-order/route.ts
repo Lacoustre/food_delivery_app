@@ -7,11 +7,7 @@ import { promotionsService } from '@/lib/promotionsService'
 import { verifyAuth } from '@/lib/verifyAuth'
 import { pushOrderToClover } from '@/lib/clover'
 import { emailService } from '@/lib/emailService'
-
-interface CartItemInput {
-  id: string
-  quantity: number
-}
+import { priceCart, type CartItemInput } from '@/lib/cartPricing'
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,31 +65,22 @@ export async function POST(request: NextRequest) {
       { global: { headers: { Authorization: request.headers.get('authorization')! } } }
     )
 
-    // Never trust client-supplied item names/prices — same authoritative
-    // lookup used for the payment intent, so the order that gets fulfilled
-    // always matches what was actually (or will be) charged.
-    let subtotal = 0
-    const validatedItems: { id: string; name: string; price: number; quantity: number }[] = []
-    for (const item of items) {
-      if (!item.id || !Number.isInteger(item.quantity) || item.quantity <= 0) {
-        return NextResponse.json({ error: 'Invalid cart item' }, { status: 400 })
-      }
-
-      const { data: meal, error: mealError } = await supabase
-        .from('meals')
-        .select('name, price, active, available')
-        .eq('id', item.id)
-        .single()
-      if (mealError || !meal) {
-        return NextResponse.json({ error: `Meal not found: ${item.id}` }, { status: 400 })
-      }
-      if (!meal.active || !meal.available) {
-        return NextResponse.json({ error: `Meal unavailable: ${item.id}` }, { status: 400 })
-      }
-
-      subtotal += meal.price * item.quantity
-      validatedItems.push({ id: item.id, name: meal.name, price: meal.price, quantity: item.quantity })
+    // Never trust client-supplied names or prices — the same pricing the
+    // payment intent used, so the order that gets fulfilled always matches
+    // what was (or will be) charged. price is per unit, add-ons included.
+    const priced = await priceCart(supabase, items)
+    if (!priced.ok) {
+      return NextResponse.json({ error: priced.error }, { status: 400 })
     }
+    const subtotal = priced.subtotal
+    const validatedItems = priced.lines.map(l => ({
+      id: l.id,
+      name: l.name,
+      price: l.unitPrice,
+      quantity: l.quantity,
+      modifiers: l.modifiers,
+      notes: l.notes
+    }))
 
     let promoDiscount = 0
     if (promoCode) {
@@ -229,7 +216,9 @@ export async function POST(request: NextRequest) {
         meal_id: item.id,
         name: item.name,
         quantity: item.quantity,
-        unit_price: item.price
+        unit_price: item.price,
+        modifiers: item.modifiers.length ? item.modifiers : null,
+        notes: item.notes
       }))
     )
 
@@ -300,7 +289,9 @@ export async function POST(request: NextRequest) {
               id: i.id,
               name: i.name,
               quantity: i.quantity,
-              price: i.price
+              price: i.price,
+              modifiers: i.modifiers,
+              notes: i.notes
             })),
             subtotal: totals.subtotal,
             deliveryFee: totals.deliveryFee,
@@ -333,7 +324,9 @@ export async function POST(request: NextRequest) {
       items: validatedItems.map(i => ({
         name: i.name,
         quantity: i.quantity,
-        unitPrice: i.price
+        unitPrice: i.price,
+        modifiers: i.modifiers.map(m => m.name),
+        notes: i.notes
       })),
       total: totals.total,
       paid: paymentMethod === 'card',

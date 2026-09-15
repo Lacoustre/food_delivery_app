@@ -175,6 +175,18 @@ async function sendEmail({ to, subject, html }: {
   return res.json()
 }
 
+/** Under a dish: what the customer added or asked for, and their note. */
+function itemDetail(
+  item: { modifiers?: { name: string }[] | null; notes?: string | null },
+  color: string
+): string {
+  const text = [
+    (item.modifiers ?? []).map(m => m.name).join(', '),
+    item.notes ? `Note: ${item.notes}` : ''
+  ].filter(Boolean).join(' · ')
+  return text ? `<br><span style="font-size:13px;color:${color};">${esc(text)}</span>` : ''
+}
+
 export interface OrderEmailData {
   customerEmail: string
   customerName: string
@@ -184,7 +196,10 @@ export interface OrderEmailData {
     id: string
     name: string
     quantity: number
+    /** Per unit, add-ons included. */
     price: number
+    modifiers?: { name: string; price: number }[] | null
+    notes?: string | null
   }>
   subtotal: number
   deliveryFee: number
@@ -242,7 +257,7 @@ export const emailService = {
       const rows = data.items.map(item => `
         <tr>
           <td style="padding:7px 0;border-bottom:1px solid ${C.sandLine};font-size:15px;">
-            <strong style="color:${C.clay};">${item.quantity} &times;</strong> ${esc(item.name)}
+            <strong style="color:${C.clay};">${item.quantity} &times;</strong> ${esc(item.name)}${itemDetail(item, C.ink)}
           </td>
           <td style="padding:7px 0;border-bottom:1px solid ${C.sandLine};text-align:right;font-size:15px;white-space:nowrap;">
             $${(item.price * item.quantity).toFixed(2)}
@@ -313,7 +328,7 @@ export const emailService = {
         <tr>
           <td style="padding:9px 0;border-bottom:1px solid ${C.sandLine};color:${C.ink};">
             ${esc(item.name)}
-            <span style="color:${C.muted};">&times;${Number(item.quantity) || 0}</span>
+            <span style="color:${C.muted};">&times;${Number(item.quantity) || 0}</span>${itemDetail(item, C.muted)}
           </td>
           <td style="padding:9px 0;border-bottom:1px solid ${C.sandLine};text-align:right;white-space:nowrap;color:${C.ink};">
             ${money(item.price * item.quantity)}

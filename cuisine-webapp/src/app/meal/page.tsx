@@ -6,16 +6,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Minus } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
-import { mealExtras } from '@/lib/mealExtras'
+import { fetchModifiers, modifiersFor, lineKey, keyOf, type Modifier } from '@/lib/modifiers'
+import { ModifierPicker } from '@/components/ModifierPicker'
 import { mealImageSrc } from '@/lib/mealImage'
 import { DishPhoto } from '@/components/DishPhoto'
-
-interface Extra {
-  name: string
-  price: number
-  required: boolean
-  group?: string
-}
 
 interface Meal {
   id: string
@@ -25,23 +19,21 @@ interface Meal {
   category: string
   description: string
   available: boolean
+  baseSlug?: string
+  isVegetarian?: boolean
 }
 
 interface CartItem {
   id: string
-  name: string
-  price: number
+  lineKey?: string
   quantity: number
-  imageUrl: string
-  category: string
-  extras: Extra[]
-  instructions: string
-  extrasTotal: number
 }
 
 function MealDetailContent() {
   const [meal, setMeal] = useState<Meal | null>(null)
-  const [selectedExtras, setSelectedExtras] = useState<Record<string, Extra>>({})
+  // Every add-on and request offered for this dish, and which are ticked.
+  const [offered, setOffered] = useState<Modifier[]>([])
+  const [chosenIds, setChosenIds] = useState<string[]>([])
   const [instructions, setInstructions] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -86,6 +78,13 @@ function MealDetailContent() {
     setLoading(false)
   }, [searchParams, router])
 
+  useEffect(() => {
+    if (!meal) return
+    fetchModifiers().then(all =>
+      setOffered(modifiersFor(all, { baseSlug: meal.baseSlug ?? meal.id, isVegetarian: !!meal.isVegetarian }))
+    )
+  }, [meal])
+
   if (loading || !meal) {
     return (
       <div className="min-h-screen bg-sand-100 flex items-center justify-center">
@@ -94,76 +93,14 @@ function MealDetailContent() {
     )
   }
 
-  const extras = mealExtras[meal.name] || []
-  const groupedExtras = extras.reduce((acc, extra) => {
-    const group = extra.group || 'optional'
-    if (!acc[group]) acc[group] = []
-    acc[group].push(extra)
-    return acc
-  }, {} as Record<string, Extra[]>)
-
-  const extrasTotal = Object.values(selectedExtras).reduce((sum, extra) => sum + extra.price, 0)
-  const totalPrice = (meal.price + extrasTotal) * quantity
-
-  const validateRequiredExtras = () => {
-    const requiredGroups = extras
-      .filter(e => e.required && e.group)
-      .map(e => e.group!)
-      .filter((group, index, arr) => arr.indexOf(group) === index)
-
-    if (requiredGroups.includes('Protein')) {
-      const selectedProteins = Object.values(selectedExtras).filter(e => e.group === 'Protein')
-      if (selectedProteins.length === 0) return false
-    }
-
-    return true
-  }
-
-  const handleExtraToggle = (extra: Extra) => {
-    setSelectedExtras(prev => {
-      const newExtras = { ...prev }
-      
-      if (extra.required && extra.group) {
-        if (extra.group === 'Protein') {
-          // Allow multiple protein selections
-          if (newExtras[extra.name]) {
-            delete newExtras[extra.name]
-          } else {
-            newExtras[extra.name] = extra
-          }
-        } else {
-          // Single selection for other required groups
-          Object.keys(newExtras).forEach(key => {
-            if (newExtras[key].group === extra.group) {
-              delete newExtras[key]
-            }
-          })
-          if (!newExtras[extra.name]) {
-            newExtras[extra.name] = extra
-          }
-        }
-      } else {
-        // Optional extras
-        if (newExtras[extra.name]) {
-          delete newExtras[extra.name]
-        } else {
-          newExtras[extra.name] = extra
-        }
-      }
-      
-      return newExtras
-    })
-  }
+  const chosen = offered.filter(m => chosenIds.includes(m.id))
+  const extrasTotal = chosen.reduce((sum, m) => sum + m.price, 0)
+  const unitPrice = Math.round((meal.price + extrasTotal) * 100) / 100
+  const totalPrice = unitPrice * quantity
 
   const addToCart = async () => {
     if (!user) {
       router.push('/login')
-      return
-    }
-
-    if (!validateRequiredExtras()) {
-      setToast({message: 'Please select required extras first', type: 'error'})
-      setTimeout(() => setToast(null), 3000)
       return
     }
 
@@ -173,27 +110,30 @@ function MealDetailContent() {
       // Simulate loading for better UX
       await new Promise(resolve => setTimeout(resolve, 800))
       
+      // The note used to be saved here and then dropped at checkout, so the
+      // kitchen never saw it. It now travels with the line to the order.
+      const note = instructions.trim().slice(0, 200)
+      const key = lineKey(meal.id, chosen.map(m => m.id), note)
+      // price is per unit with the add-ons included, so the cart and checkout
+      // total it correctly; the server prices it again from the database.
       const cartItem = {
         id: meal.id,
         name: meal.name,
-        price: meal.price,
+        price: unitPrice,
+        basePrice: meal.price,
         quantity,
         imageUrl: getImageUrl(meal), // Use proper URL handling
         category: meal.category,
-        extras: Object.values(selectedExtras),
-        instructions,
-        extrasTotal
+        modifiers: chosen.map(({ id, name, price }) => ({ id, name, price })),
+        notes: note || undefined,
+        lineKey: key
       }
 
       // Get existing cart
       const existingCart = JSON.parse(localStorage.getItem('cart') || '[]')
-      
-      // Check if same item with same extras exists
-      const existingIndex = existingCart.findIndex((item: CartItem) => 
-        item.id === cartItem.id && 
-        JSON.stringify(item.extras) === JSON.stringify(cartItem.extras) &&
-        item.instructions === cartItem.instructions
-      )
+
+      // The same dish with the same choices and note is one line.
+      const existingIndex = existingCart.findIndex((item: CartItem) => keyOf(item) === key)
 
       if (existingIndex !== -1) {
         existingCart[existingIndex].quantity += quantity
@@ -284,31 +224,7 @@ function MealDetailContent() {
               <p className="font-display text-2xl text-gold-600">${meal.price.toFixed(2)}</p>
             </div>
 
-            {/* Extras */}
-            {Object.entries(groupedExtras).map(([group, groupExtras]) => (
-              <div key={group} className="space-y-3">
-                <h3 className="text-lg font-semibold text-black">
-                  {group === 'optional' ? 'Optional Extras' : 
-                   group === 'Protein' ? `${group} (Required - Choose at least 1)` :
-                   `${group} (Required - Choose 1)`}
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {groupExtras.map((extra) => (
-                    <button
-                      key={extra.name}
-                      onClick={() => handleExtraToggle(extra)}
-                      className={`px-4 py-2.5 text-sm sm:text-base rounded-full border transition-colors ${
-                        selectedExtras[extra.name]
-                          ? 'bg-gold text-white border-gold'
-                          : 'bg-white text-black border-sand-200 hover:border-gold'
-                      }`}
-                    >
-                      {extra.price > 0 ? `${extra.name} +$${extra.price.toFixed(2)}` : extra.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <ModifierPicker offered={offered} selected={chosenIds} onChange={setChosenIds} />
 
             {/* Instructions */}
             <div className="space-y-3">

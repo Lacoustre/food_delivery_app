@@ -8,6 +8,7 @@ import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, MapPin, Clock, Store, Navi
 import { useAuth } from '@/lib/AuthContext'
 import { DEFAULT_TAX_RATE } from '@/lib/pricing'
 import { supabase } from '@/lib/supabase'
+import { keyOf, lineDetail } from '@/lib/modifiers'
 
 interface CartItem {
   id: string
@@ -18,6 +19,10 @@ interface CartItem {
   imagePath?: string
   category: string
   description?: string
+  /** Set when the dish was added with add-ons or a note; otherwise the id is the line. */
+  lineKey?: string
+  modifiers?: { id: string; name: string; price: number }[]
+  notes?: string
 }
 
 export default function CartPage() {
@@ -98,21 +103,23 @@ export default function CartPage() {
   }, [user, authLoading, router])
 
 
-  const updateQuantity = (id: string, newQuantity: number) => {
+  // Lines are keyed rather than matched by dish: the same dish can be in the
+  // cart twice, once plain and once with add-ons.
+  const updateQuantity = (key: string, newQuantity: number) => {
     if (newQuantity <= 0) {
-      removeItem(id)
+      removeItem(key)
       return
     }
     
     const updatedCart = cartItems.map(item =>
-      item.id === id ? { ...item, quantity: newQuantity } : item
+      keyOf(item) === key ? { ...item, quantity: newQuantity } : item
     )
     setCartItems(updatedCart)
     localStorage.setItem('cart', JSON.stringify(updatedCart))
   }
 
-  const removeItem = (id: string) => {
-    const updatedCart = cartItems.filter(item => item.id !== id)
+  const removeItem = (key: string) => {
+    const updatedCart = cartItems.filter(item => keyOf(item) !== key)
     setCartItems(updatedCart)
     localStorage.setItem('cart', JSON.stringify(updatedCart))
   }
@@ -269,7 +276,7 @@ export default function CartPage() {
 
                 <div className="space-y-6">
                   {cartItems.map((item) => (
-                    <div key={item.id} className="bg-white/80 rounded-card p-6 shadow-card border border-gold-50 hover:shadow-card transition-all">
+                    <div key={keyOf(item)} className="bg-white/80 rounded-card p-6 shadow-card border border-gold-50 hover:shadow-card transition-all">
                       <div className="flex gap-6">
                         <div className="relative w-20 h-20 rounded-card overflow-hidden flex-shrink-0 shadow-card">
                           <img
@@ -285,12 +292,15 @@ export default function CartPage() {
                         <div className="flex-1">
                           <h3 className="font-bold text-xl text-ink mb-2">{item.name}</h3>
                           <p className="text-gold-600 font-bold mb-3">{item.category}</p>
+                          {lineDetail(item.modifiers, item.notes) && (
+                            <p className="-mt-2 mb-3 text-sm text-sand-700">{lineDetail(item.modifiers, item.notes)}</p>
+                          )}
                           <p className="font-display text-2xl text-gold-600">${item.price.toFixed(2)}</p>
                         </div>
 
                         <div className="flex flex-col items-end gap-4">
                           <button
-                            onClick={() => removeItem(item.id)}
+                            onClick={() => removeItem(keyOf(item))}
                             className="p-2 text-clay hover:bg-clay-50 rounded-xl transition-colors"
                           >
                             <Trash2 className="w-5 h-5" />
@@ -298,7 +308,7 @@ export default function CartPage() {
                           
                           <div className="flex items-center gap-3 bg-gold-50 rounded-card p-1">
                             <button
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              onClick={() => updateQuantity(keyOf(item), item.quantity - 1)}
                               className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
                             >
                               <Minus className="w-4 h-4 text-gold-600" />
@@ -307,7 +317,7 @@ export default function CartPage() {
                               {item.quantity}
                             </span>
                             <button
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              onClick={() => updateQuantity(keyOf(item), item.quantity + 1)}
                               className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
                             >
                               <Plus className="w-4 h-4 text-gold-600" />

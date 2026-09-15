@@ -14,16 +14,21 @@ import { promotionsService, type Promotion } from '@/lib/promotionsService'
 import { createPaymentIntent, stripePromise } from '@/lib/stripeService'
 import { getAuthHeaders } from '@/lib/authHeaders'
 import { computeOrderTotals } from '@/lib/pricing'
+import { keyOf, lineDetail } from '@/lib/modifiers'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
 interface CartItem {
   id: string
   name: string
+  /** Per unit, add-ons included. Display only — the server prices the order. */
   price: number
   quantity: number
   imageUrl: string
   category: string
+  lineKey?: string
+  modifiers?: { id: string; name: string; price: number }[]
+  notes?: string
 }
 
 interface OrderData {
@@ -202,8 +207,21 @@ function CheckoutContent() {
     }
     
     setLoading(false)
-  }, [user, userProfile, router])
+    // authLoading belongs in the list: it is read above, and sign-in can
+    // finish without user or userProfile changing in the same render (no
+    // profile row, or the profile fetch failing). Without it this effect never
+    // ran again and checkout sat on its spinner for good.
+  }, [user, userProfile, authLoading, router])
 
+
+  // What the server needs to price a line: the dish, the add-ons ticked and
+  // the note. Never a price.
+  const toOrderItem = (item: CartItem) => ({
+    id: item.id,
+    quantity: item.quantity,
+    modifierIds: item.modifiers?.map(m => m.id) ?? [],
+    notes: item.notes || undefined
+  })
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
   const promoDiscount = appliedPromo?.discount || 0
@@ -279,7 +297,7 @@ function CheckoutContent() {
     setPaymentError(null)
 
     createPaymentIntent({
-      items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
+      items: cartItems.map(toOrderItem),
       orderType: orderData.orderType,
       deliveryAddress: orderData.deliveryAddress,
       promoCode: appliedPromo?.promotion.code,
@@ -395,7 +413,7 @@ function CheckoutContent() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
-        items: cartItems.map(item => ({ id: item.id, quantity: item.quantity })),
+        items: cartItems.map(toOrderItem),
         orderType: orderData.orderType,
         promoCode: appliedPromo?.promotion.code,
         customerInfo: orderData.customerInfo,
@@ -412,7 +430,14 @@ function CheckoutContent() {
     return validated as {
       orderId: string
       orderNumber: string
-      items: { id: string; name: string; price: number; quantity: number }[]
+      items: {
+        id: string
+        name: string
+        price: number
+        quantity: number
+        modifiers?: { id: string; name: string; price: number }[]
+        notes?: string | null
+      }[]
       subtotal: number
       deliveryFee: number
       tax: number
@@ -489,7 +514,9 @@ function CheckoutContent() {
               items: validated.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                price: item.price
+                price: item.price,
+                modifiers: item.modifiers,
+                notes: item.notes
               })),
               subtotal: validated.subtotal,
               deliveryFee: validated.deliveryFee,
@@ -605,7 +632,9 @@ function CheckoutContent() {
               items: validated.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                price: item.price
+                price: item.price,
+                modifiers: item.modifiers,
+                notes: item.notes
               })),
               subtotal: validated.subtotal,
               deliveryFee: validated.deliveryFee,
@@ -961,7 +990,7 @@ function CheckoutContent() {
               {/* Items */}
               <div className="space-y-4 mb-6">
                 {cartItems.map((item) => (
-                  <div key={item.id} className="flex gap-3">
+                  <div key={keyOf(item)} className="flex gap-3">
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
                       <img
                         src={item.imageUrl?.replace(/&amp;/g, '&') || '/assets/images/logo.png'}
@@ -975,6 +1004,9 @@ function CheckoutContent() {
                     <div className="flex-1">
                       <div className="font-medium text-ink-soft">{item.name}</div>
                       <div className="text-sm text-sand-700">Qty: {item.quantity}</div>
+                      {lineDetail(item.modifiers, item.notes) && (
+                        <div className="text-sm text-sand-700">{lineDetail(item.modifiers, item.notes)}</div>
+                      )}
                     </div>
                     <div className="font-bold text-ink-soft">
                       ${(item.price * item.quantity).toFixed(2)}

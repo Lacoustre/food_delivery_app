@@ -13,11 +13,17 @@ import { useAuth } from '@/lib/AuthContext'
 import OrderNotifications from '@/components/OrderNotifications'
 import { mealImageSrc } from '@/lib/mealImage'
 import { DishPhoto } from '@/components/DishPhoto'
+import { ModifierPicker } from '@/components/ModifierPicker'
+import { fetchModifiers, modifiersFor, lineKey, keyOf, type Modifier, type ChosenModifier } from '@/lib/modifiers'
 
 // The restaurant's Google listing, opened on its reviews tab.
 const GOOGLE_REVIEWS_URL = 'https://www.google.com/maps/place/TASTE+OF+AFRICAN+CUISINE/@41.8244336,-72.4977335,17z/data=!4m17!1m8!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!2sTASTE+OF+AFRICAN+CUISINE!8m2!3d41.8244336!4d-72.4977335!10e9!16s%2Fg%2F11vb0yh4nv!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!8m2!3d41.8244336!4d-72.4977335!9m1!1b1!16s%2Fg%2F11vb0yh4nv?entry=ttu&g_ep=EgoyMDI2MDkwOS4wIKXMDSoASAFQAw%3D%3D'
 
 interface CartItem extends Meal {
+  lineKey?: string
+  basePrice?: number
+  modifiers?: ChosenModifier[]
+  notes?: string
   quantity: number
 }
 
@@ -57,6 +63,9 @@ export default function AfricanCuisineWebsite() {
   const [sheetAdded, setSheetAdded] = useState(false)
   // True while the sheet plays its drop-away animation, just before it unmounts.
   const [sheetClosing, setSheetClosing] = useState(false)
+  // Add-ons and requests for every dish, and those ticked in the open sheet.
+  const [modifiers, setModifiers] = useState<Modifier[]>([])
+  const [sheetMods, setSheetMods] = useState<string[]>([])
   // The exact dish a sheet was opened on, when it came from outside the menu
   // grid — a favourite. Without it the sheet matched by dish family, so
   // tapping "Waakye with Fried Chicken" with the vegetarian filter on offered
@@ -180,6 +189,8 @@ export default function AfricanCuisineWebsite() {
     }
   }, [])
 
+  useEffect(() => { fetchModifiers().then(setModifiers) }, [])
+
   useEffect(() => {
     try {
       const unsubscribe = restaurantService.onStatusChange((status) => {
@@ -233,7 +244,7 @@ export default function AfricanCuisineWebsite() {
     return () => clearInterval(interval)
   }, [reviews.length])
 
-  const addToCart = async (meal: Meal) => {
+  const addToCart = async (meal: Meal, chosen: Modifier[] = []) => {
     if (statusKnown && !isOpen) {
       alert('Restaurant is currently closed. Please check back later.')
       return
@@ -250,14 +261,20 @@ export default function AfricanCuisineWebsite() {
     await new Promise(resolve => setTimeout(resolve, 500))
     
     setCart(prev => {
-      const existing = prev.find(item => item.id === meal.id)
+      // A dish with add-ons is its own line; the same dish plain is another.
+      const key = lineKey(meal.id, chosen.map(m => m.id))
+      const existing = prev.find(item => keyOf(item) === key)
       let updatedCart
       if (existing) {
         updatedCart = prev.map(item => 
-          item.id === meal.id ? { ...item, quantity: item.quantity + 1 } : item
+          keyOf(item) === key ? { ...item, quantity: item.quantity + 1 } : item
         )
       } else {
-        updatedCart = [...prev, { ...meal, quantity: 1 }]
+        const extras = chosen.map(({ id, name, price }) => ({ id, name, price }))
+        // price is per unit with the add-ons in, so the cart and checkout
+        // total it correctly; the server prices it again from the database.
+        const price = Math.round((meal.price + extras.reduce((s, m) => s + m.price, 0)) * 100) / 100
+        updatedCart = [...prev, { ...meal, price, basePrice: meal.price, modifiers: extras, lineKey: key, quantity: 1 }]
       }
       
       // Save to localStorage
@@ -380,6 +397,7 @@ export default function AfricanCuisineWebsite() {
     if (sheetTimer.current) { clearTimeout(sheetTimer.current); sheetTimer.current = null }
     setSheetClosing(false)
     setSheetAdded(false)
+    setSheetMods([])
     setSheetPinned(pinnedId)
     setSheetSlug(slug)
   }
@@ -510,9 +528,13 @@ export default function AfricanCuisineWebsite() {
     return group.length ? resolveGroup(group, sheetSlug) : null
   })()
 
+  const sheetOffered = sheet ? modifiersFor(modifiers, sheet.active) : []
+  const sheetChosen = sheetOffered.filter(m => sheetMods.includes(m.id))
+  const sheetPrice = sheet ? sheet.active.price + sheetChosen.reduce((s, m) => s + m.price, 0) : 0
+
   const addFromSheet = async () => {
     if (!sheet) return
-    await addToCart(sheet.active)
+    await addToCart(sheet.active, sheetChosen)
     setSheetAdded(true)
     sheetTimer.current = setTimeout(closeSheet, 900)
   }
@@ -1442,8 +1464,21 @@ export default function AfricanCuisineWebsite() {
                 </div>
               )}
 
-              <div className="mt-5 flex items-center justify-between gap-4 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_410ms_both]">
-                <span className="text-2xl font-semibold text-ink tabular-nums">${sheet.active.price.toFixed(2)}</span>
+              <ModifierPicker
+                offered={sheetOffered}
+                selected={sheetMods}
+                onChange={setSheetMods}
+                className="mt-5 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_380ms_both]"
+              />
+
+              {/* With add-ons the sheet runs long, so the price and the button
+                  stay pinned to the bottom rather than scrolling out of reach. */}
+              <div className={`flex items-center justify-between gap-4 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_420ms_both] ${
+                sheetOffered.length
+                  ? 'sticky bottom-0 z-10 -mx-5 mt-4 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-sand-50/95 backdrop-blur border-t border-sand-200'
+                  : 'mt-5'
+              }`}>
+                <span className="text-2xl font-semibold text-ink tabular-nums">${sheetPrice.toFixed(2)}</span>
                 <button
                   onClick={addFromSheet}
                   disabled={sheet.soldOut || (statusKnown && !isOpen) || addingToCart === sheet.active.id || sheetAdded}

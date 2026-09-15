@@ -1,5 +1,6 @@
 'use client'
 
+import { lineDetail, lineKey } from '@/lib/modifiers'
 import { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { orderService, type Order } from '@/lib/orderService'
@@ -410,7 +411,11 @@ function OrdersContent() {
                         <button
                           onClick={() => {
                             // Reorder functionality
-                            const cartItems = order.items.map(item => ({ ...item, quantity: item.quantity }))
+                            const cartItems = order.items.map(item => ({
+                              ...item,
+                              quantity: item.quantity,
+                              lineKey: lineKey(item.id, item.modifiers?.map(m => m.id) ?? [], item.notes ?? '')
+                            }))
                             localStorage.setItem('cart', JSON.stringify(cartItems))
                             window.location.href = '/cart'
                           }}
@@ -458,7 +463,12 @@ function OrdersContent() {
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {order.items.map((item, index) => (
                           <div key={index} className="flex justify-between items-center py-1 border-b border-sand-200 last:border-0">
-                            <span className="text-ink-soft font-medium">{item.quantity}x {item.name}</span>
+                            <span className="text-ink-soft font-medium">
+                              {item.quantity}x {item.name}
+                              {lineDetail(item.modifiers, item.notes) && (
+                                <span className="block text-xs font-normal text-sand-700">{lineDetail(item.modifiers, item.notes)}</span>
+                              )}
+                            </span>
                             <span className="font-bold text-ink">${(item.price * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}

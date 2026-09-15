@@ -13,8 +13,11 @@ export interface Order {
   items: Array<{
     id: string
     name: string
+    /** Per unit, add-ons included. */
     price: number
     quantity: number
+    modifiers?: { id: string; name: string; price: number }[]
+    notes?: string | null
   }>
   orderType: 'delivery' | 'pickup'
   deliveryAddress?: string
@@ -57,6 +60,8 @@ function rowToOrder(row: any, profile: ProfileInfo | null): Order {
     name: (i.name as string) ?? 'Item',
     price: Number(i.unit_price ?? 0),
     quantity: (i.quantity as number) ?? 1,
+    modifiers: (i.modifiers as { id: string; name: string; price: number }[] | null) ?? [],
+    notes: (i.notes as string | null) ?? null,
   }))
   return {
     id: row.id,

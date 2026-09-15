@@ -1,3 +1,4 @@
+import { itemDetail } from "../lib/itemDetail";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
@@ -17,7 +18,10 @@ type OrderItemRow = {
   meal_id: string;
   name: string | null;
   quantity: number;
+  /** Per unit, add-ons included. */
   unit_price: number;
+  modifiers?: { name: string; price: number }[] | null;
+  notes?: string | null;
 };
 
 type ProfileRow = {
@@ -782,6 +786,9 @@ export default function Orders() {
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">{item.name || "Unknown Item"}</p>
                             <p className="text-xs text-gray-600 mt-1">Quantity: {item.quantity || 1}</p>
+                            {itemDetail(item) && (
+                              <p className="text-sm text-gray-900 mt-1">{itemDetail(item)}</p>
+                            )}
                           </div>
                           <div className="text-sm font-medium text-gray-900">
                             ${((item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}

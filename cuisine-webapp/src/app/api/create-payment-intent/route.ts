@@ -7,15 +7,11 @@ import { computeOrderTotals } from '@/lib/pricing'
 import { promotionsService } from '@/lib/promotionsService'
 import { getUberQuote } from '@/lib/uberDirect'
 import { getOpenState } from '@/lib/hours'
+import { priceCart, type CartItemInput } from '@/lib/cartPricing'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-12-15.clover'
 })
-
-interface CartItemInput {
-  id: string
-  quantity: number
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,29 +63,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid order type' }, { status: 400 })
     }
 
-    // Never trust a client-supplied price. Look up each item's authoritative
-    // price from Supabase and recompute the subtotal server-side — this is
-    // what actually gets charged, regardless of what the client displayed.
-    let subtotal = 0
-    for (const item of items) {
-      if (!item.id || !Number.isInteger(item.quantity) || item.quantity <= 0) {
-        return NextResponse.json({ error: 'Invalid cart item' }, { status: 400 })
-      }
-
-      const { data: meal, error: mealError } = await supabase
-        .from('meals')
-        .select('price, active, available')
-        .eq('id', item.id)
-        .single()
-      if (mealError || !meal) {
-        return NextResponse.json({ error: `Meal not found: ${item.id}` }, { status: 400 })
-      }
-      if (!meal.active || !meal.available) {
-        return NextResponse.json({ error: `Meal unavailable: ${item.id}` }, { status: 400 })
-      }
-
-      subtotal += meal.price * item.quantity
+    // Never trust a client-supplied price. The dish and every add-on are
+    // priced from the database, and that is what gets charged, whatever the
+    // page displayed. create-order prices the same way, so they can't differ.
+    const priced = await priceCart(supabase, items)
+    if (!priced.ok) {
+      return NextResponse.json({ error: priced.error }, { status: 400 })
     }
+    const subtotal = priced.subtotal
 
     // Never trust a client-supplied discount either — validate the promo
     // code server-side and derive the real discount from it.
@@ -192,7 +173,15 @@ export async function POST(request: NextRequest) {
         payment_intent_id: paymentIntent.id,
         user_id: caller.uid,
         payload: {
-          items: items.map(i => ({ id: i.id, quantity: i.quantity })),
+          items: priced.lines.map(l => ({
+            id: l.id,
+            quantity: l.quantity,
+            modifierIds: l.modifiers.map(m => m.id),
+            notes: l.notes
+          })),
+          // As priced here — dish, add-ons and note — so the webhook records
+          // exactly what was charged for without pricing anything again.
+          lines: priced.lines,
           orderType,
           deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
           scheduledFor: scheduledFor ?? null,

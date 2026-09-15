@@ -35,8 +35,12 @@ const EXTERNAL_PAYMENT = 'com.clover.tender.external_payment'
 export interface CloverLineItem {
   name: string
   quantity: number
-  /** Dollars. Converted to cents here. */
+  /** Dollars, per unit, add-ons included. Converted to cents here. */
   unitPrice: number
+  /** Add-ons and requests as chosen: "Extra Shito", "No Coleslaw". */
+  modifiers?: string[]
+  /** The customer's own note on this dish. */
+  notes?: string | null
 }
 
 export interface CloverOrderInput {
@@ -218,9 +222,19 @@ export async function pushOrderToClover(
       // The price is always sent, including for matched inventory items. If
       // Clover's price has drifted from ours, the customer pays what our site
       // quoted, not what the POS happens to hold.
-      const body = itemId
-        ? { item: { id: itemId }, price: Math.round(line.unitPrice * 100) }
-        : { name: line.name, price: Math.round(line.unitPrice * 100) }
+      //
+      // Add-ons and the customer's note travel as the line's note, because
+      // Clover has no modifier groups set up for them to map onto. The price
+      // already includes the add-ons.
+      const note = [
+        (line.modifiers ?? []).join(', '),
+        line.notes ? `Note: ${line.notes}` : ''
+      ].filter(Boolean).join(' · ')
+      const body = {
+        ...(itemId ? { item: { id: itemId } } : { name: line.name }),
+        price: Math.round(line.unitPrice * 100),
+        ...(note ? { note } : {})
+      }
 
       for (let n = 0; n < line.quantity; n++) {
         const lineRes = await cloverFetch(`${cfg.url}/orders/${cloverOrder.id}/line_items`, {
