@@ -394,6 +394,7 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
@@ -461,4 +462,12 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .photo-shimmer { animation: none; }
+}
+@keyframes photo-settle {
+  from { transform: scale(1.08); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes rise-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

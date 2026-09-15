@@ -373,7 +373,7 @@ export default function AfricanCuisineWebsite() {
       setSheetSlug(null)
       setSheetClosing(false)
       setSheetAdded(false)
-    }, 240)
+    }, 320)
   }
 
   const openSheet = (slug: string, pinnedId: string | null = null) => {
@@ -1386,20 +1386,25 @@ export default function AfricanCuisineWebsite() {
           {/* The page behind blurs and dims as the sheet rises. */}
           <div
             className={`absolute inset-0 bg-ink/40 backdrop-blur-[6px] touch-none ${
-              sheetClosing ? 'animate-[veil-out_240ms_ease-in_both]' : 'animate-[veil-in_280ms_ease-out_both]'
+              sheetClosing ? 'animate-[veil-out_320ms_ease-in_both]' : 'animate-[veil-in_450ms_ease-out_both]'
             }`}
             onClick={closeSheet}
           />
+          {/* Opening is choreographed rather than instant: the sheet glides up,
+              the photo settles from a slight zoom, then the name, description,
+              options and price arrive one after another. */}
           <div className={`absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto overscroll-contain shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))] will-change-transform ${
             sheetClosing
-              ? 'animate-[sheet-drop_240ms_cubic-bezier(0.4,0,1,1)_both]'
-              : 'animate-[sheet-rise_380ms_cubic-bezier(0.32,0.72,0,1)_both]'
+              ? 'animate-[sheet-drop_320ms_cubic-bezier(0.4,0,1,1)_both]'
+              : 'animate-[sheet-rise_620ms_cubic-bezier(0.22,1,0.36,1)_both]'
           }`}>
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-sand-100">
-              <DishPhoto
-                src={getImageUrl(sheet.active)}
-                alt={`${sheet.active.baseName} at Taste of African Cuisine`}
-              />
+              <div className="absolute inset-0 animate-[photo-settle_900ms_cubic-bezier(0.22,1,0.36,1)_both]">
+                <DishPhoto
+                  src={getImageUrl(sheet.active)}
+                  alt={`${sheet.active.baseName} at Taste of African Cuisine`}
+                />
+              </div>
               {/* Grab bar: the cue every phone sheet gives that it can be dismissed. */}
               <div aria-hidden className="absolute top-2 left-1/2 -translate-x-1/2 z-10 w-10 h-1 rounded-full bg-sand-50/85 shadow-sm" />
               <button
@@ -1412,13 +1417,13 @@ export default function AfricanCuisineWebsite() {
             </div>
 
             <div className="p-5">
-              <h3 className="font-display text-2xl text-ink leading-tight">{sheet.active.baseName}</h3>
-              <p className="mt-1.5 text-sm text-sand-700">
+              <h3 className="font-display text-2xl text-ink leading-tight animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_200ms_both]">{sheet.active.baseName}</h3>
+              <p className="mt-1.5 text-sm text-sand-700 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_270ms_both]">
                 {sheet.active.baseDescription ?? sheet.active.description}
               </p>
 
               {sheet.variants.length > 1 && (
-                <div className="mt-4">
+                <div className="mt-4 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_340ms_both]">
                   <label htmlFor="sheet-variant" className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-sand-500 mb-1.5">
                     {HEADINGS[sheet.active.variantType ?? 'protein'] ?? 'Choose an option'}
                   </label>
@@ -1437,7 +1442,7 @@ export default function AfricanCuisineWebsite() {
                 </div>
               )}
 
-              <div className="mt-5 flex items-center justify-between gap-4">
+              <div className="mt-5 flex items-center justify-between gap-4 animate-[rise-in_560ms_cubic-bezier(0.22,1,0.36,1)_410ms_both]">
                 <span className="text-2xl font-semibold text-ink tabular-nums">${sheet.active.price.toFixed(2)}</span>
                 <button
                   onClick={addFromSheet}
