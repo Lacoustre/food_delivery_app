@@ -437,3 +437,28 @@ body {
 .legal-body li { margin-bottom: 0.5rem; line-height: 1.65; }
 .legal-body a { color: var(--color-clay); text-decoration: underline; }
 .legal-body strong { font-weight: 600; }
+
+/* ---- Dish sheet and photo loading ----------------------------------------
+   The sheet rises with the curve iOS uses for its own sheets, and drops away
+   on close rather than vanishing. Photos shimmer until they arrive, then fade
+   in. The reduced-motion rule above already shortens every animation to
+   nothing for people who ask for that; the shimmer is switched off outright. */
+@keyframes sheet-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-drop { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes veil-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes veil-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes added-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes photo-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.photo-shimmer {
+  background: linear-gradient(100deg,
+    var(--color-sand-100, #f2ede4) 30%, var(--color-sand-50, #faf7f2) 50%, var(--color-sand-100, #f2ede4) 70%);
+  background-size: 200% 100%;
+  animation: photo-shimmer 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-shimmer { animation: none; }
+}

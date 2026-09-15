@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook, Star } from 'lucide-react'
+import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook, Star, Check } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { googleReviewsService, relativeDate, type GoogleReview } from '@/lib/googleReviewsService'
@@ -55,6 +55,8 @@ export default function AfricanCuisineWebsite() {
   // where they sat on top of the review text, so swiping replaces them.
   const reviewTouchX = useRef<number | null>(null)
   const [sheetAdded, setSheetAdded] = useState(false)
+  // True while the sheet plays its drop-away animation, just before it unmounts.
+  const [sheetClosing, setSheetClosing] = useState(false)
   // The exact dish a sheet was opened on, when it came from outside the menu
   // grid — a favourite. Without it the sheet matched by dish family, so
   // tapping "Waakye with Fried Chicken" with the vegetarian filter on offered
@@ -296,7 +298,7 @@ export default function AfricanCuisineWebsite() {
   // Escape closes the dish sheet the way every other sheet on a phone behaves.
   useEffect(() => {
     if (!sheetSlug) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSheetSlug(null) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSheet() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [sheetSlug])
@@ -356,7 +358,27 @@ export default function AfricanCuisineWebsite() {
     setMobileMenuOpen(false)
   }
 
+  // Every way of dismissing the sheet goes through here, so it always drops
+  // away rather than vanishing: tapping outside, the close button, Escape, and
+  // the automatic close after adding to the cart.
+  // One pending timer at a time (the close after adding, or the drop-away), so
+  // a stale one can never close a sheet opened in the meantime.
+  const sheetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeSheet = () => {
+    if (!sheetSlug || sheetClosing) return
+    setSheetClosing(true)
+    if (sheetTimer.current) clearTimeout(sheetTimer.current)
+    sheetTimer.current = setTimeout(() => {
+      sheetTimer.current = null
+      setSheetSlug(null)
+      setSheetClosing(false)
+      setSheetAdded(false)
+    }, 240)
+  }
+
   const openSheet = (slug: string, pinnedId: string | null = null) => {
+    if (sheetTimer.current) { clearTimeout(sheetTimer.current); sheetTimer.current = null }
+    setSheetClosing(false)
     setSheetAdded(false)
     setSheetPinned(pinnedId)
     setSheetSlug(slug)
@@ -492,7 +514,7 @@ export default function AfricanCuisineWebsite() {
     if (!sheet) return
     await addToCart(sheet.active)
     setSheetAdded(true)
-    setTimeout(() => { setSheetSlug(null); setSheetAdded(false) }, 900)
+    sheetTimer.current = setTimeout(closeSheet, 900)
   }
 
   return (
@@ -1139,12 +1161,6 @@ export default function AfricanCuisineWebsite() {
 
                 const resolve = (slug: string) => resolveGroup(cards.get(slug)!, slug)
 
-                const SHORT: Record<string, string> = {
-                  'Main Dishes': 'Main',
-                  'Side Dishes': 'Sides',
-                  Desserts: 'Desserts',
-                  Drinks: 'Drinks',
-                }
                 const sectionId = (s: string) => `menu-${s.toLowerCase().replace(/\s+/g, '-')}`
 
 
@@ -1193,7 +1209,7 @@ export default function AfricanCuisineWebsite() {
                       className="sticky z-30 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 bg-sand-50/95 backdrop-blur border-b border-sand-200"
                       style={{ top: headerH }}
                     >
-                      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+                      <div className="flex gap-1.5 sm:gap-2 overflow-x-auto [scrollbar-width:none]">
                         {present.map(s => {
                           const on = (activeSection ?? present[0]) === s
                           return (
@@ -1201,11 +1217,11 @@ export default function AfricanCuisineWebsite() {
                               key={s}
                               onClick={() => document.getElementById(sectionId(s))?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                               aria-current={on ? 'true' : undefined}
-                              className={`shrink-0 px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                              className={`shrink-0 flex-auto sm:flex-none px-2 min-[390px]:px-2.5 sm:px-4 py-2 rounded-full text-xs min-[390px]:text-[13px] sm:text-sm font-semibold whitespace-nowrap border transition-colors ${
                                 on ? 'bg-ink text-sand-50 border-ink' : 'bg-white text-ink-soft border-sand-200'
                               }`}
                             >
-                              {SHORT[s] ?? s}
+                              {s}
                             </button>
                           )
                         })}
@@ -1227,10 +1243,10 @@ export default function AfricanCuisineWebsite() {
 
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
                       {visibleSlugs(section).map(slug => {
-                        const { group, variants, active, cheapest, soldOut, allSoldOut } = resolve(slug)
+                        const { group, variants, active, soldOut, allSoldOut } = resolve(slug)
 
                         return (
-                          <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card">
+                          <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card transition-transform duration-150 active:scale-[0.98] motion-reduce:transform-none">
                             <div
                               className="relative aspect-square overflow-hidden bg-sand-100 cursor-pointer"
                               onClick={() => {
@@ -1272,9 +1288,7 @@ export default function AfricanCuisineWebsite() {
                               <span className="mt-auto pt-2 text-sm font-semibold text-ink tabular-nums">
                                 {allSoldOut
                                   ? 'Sold out'
-                                  : variants.length > 1 && Math.max(...group.map(m => m.price)) !== cheapest
-                                    ? `$${cheapest.toFixed(2)}–$${Math.max(...group.map(m => m.price)).toFixed(2)}`
-                                    : `$${active.price?.toFixed(2)}`}
+                                  : `$${active.price?.toFixed(2)}`}
                               </span>
                             </button>
 
@@ -1368,18 +1382,30 @@ export default function AfricanCuisineWebsite() {
           cart; the old Add button opened a separate page where
           you had to choose and press Add a second time. */}
       {sheet && (
-        <div className="sm:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={sheet.active.baseName}>
-          <div className="absolute inset-0 bg-ink/50 touch-none" onClick={() => setSheetSlug(null)} />
-          <div className="absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto overscroll-contain shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className={`sm:hidden fixed inset-0 z-[60] ${sheetClosing ? 'pointer-events-none' : ''}`} role="dialog" aria-modal="true" aria-label={sheet.active.baseName}>
+          {/* The page behind blurs and dims as the sheet rises. */}
+          <div
+            className={`absolute inset-0 bg-ink/40 backdrop-blur-[6px] touch-none ${
+              sheetClosing ? 'animate-[veil-out_240ms_ease-in_both]' : 'animate-[veil-in_280ms_ease-out_both]'
+            }`}
+            onClick={closeSheet}
+          />
+          <div className={`absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto overscroll-contain shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))] will-change-transform ${
+            sheetClosing
+              ? 'animate-[sheet-drop_240ms_cubic-bezier(0.4,0,1,1)_both]'
+              : 'animate-[sheet-rise_380ms_cubic-bezier(0.32,0.72,0,1)_both]'
+          }`}>
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-sand-100">
               <DishPhoto
                 src={getImageUrl(sheet.active)}
                 alt={`${sheet.active.baseName} at Taste of African Cuisine`}
               />
+              {/* Grab bar: the cue every phone sheet gives that it can be dismissed. */}
+              <div aria-hidden className="absolute top-2 left-1/2 -translate-x-1/2 z-10 w-10 h-1 rounded-full bg-sand-50/85 shadow-sm" />
               <button
-                onClick={() => setSheetSlug(null)}
+                onClick={closeSheet}
                 aria-label="Close"
-                className="absolute top-3 right-3 p-2 bg-sand-50/90 rounded-full"
+                className="absolute top-3 right-3 z-10 p-2 bg-sand-50/90 rounded-full"
               >
                 <X className="w-5 h-5 text-ink" />
               </button>
@@ -1424,11 +1450,16 @@ export default function AfricanCuisineWebsite() {
                         : 'bg-sand-200 text-sand-500'
                   }`}
                 >
-                  {sheetAdded
-                    ? 'Added ✓'
-                    : addingToCart === sheet.active.id
-                      ? 'Adding…'
-                      : statusKnown && !isOpen
+                  {sheetAdded ? (
+                    <span className="inline-flex items-center justify-center gap-2 animate-[added-pop_420ms_cubic-bezier(0.34,1.56,0.64,1)_both]">
+                      <Check className="w-5 h-5" /> Added
+                    </span>
+                  ) : addingToCart === sheet.active.id ? (
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <span aria-hidden className="w-4 h-4 rounded-full border-2 border-ink/20 border-t-ink animate-spin" />
+                      Adding…
+                    </span>
+                  ) : statusKnown && !isOpen
                         ? 'Closed'
                         : sheet.soldOut
                           ? 'Sold out'
