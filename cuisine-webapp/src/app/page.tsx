@@ -264,10 +264,9 @@ export default function AfricanCuisineWebsite() {
       return
     }
     
-    if (!user) {
-      window.location.href = '/login'
-      return
-    }
+    // No sign-in needed to fill a cart — checkout asks for it. This used to
+    // send signed-out visitors to the sign-in page, after which they landed on
+    // the homepage with nothing added.
     
     setAddingToCart(meal.id)
     

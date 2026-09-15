@@ -72,7 +72,9 @@ function LoginContent() {
               />
             </div>
             <h1 className="font-display text-3xl text-ink mb-2">Welcome Back!</h1>
-            <p className="text-sand-700">Sign in to order delicious African cuisine</p>
+            <p className="text-sand-700">
+              {redirectTo === 'checkout' ? 'Sign in to finish your order.' : 'Sign in to order delicious African cuisine'}
+            </p>
           </div>
 
           {justConfirmed && !error && (

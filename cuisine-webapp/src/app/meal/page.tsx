@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Minus } from 'lucide-react'
-import { useAuth } from '@/lib/AuthContext'
 import { fetchModifiers, modifiersFor, lineKey, keyOf, type Modifier } from '@/lib/modifiers'
 import { ModifierPicker } from '@/components/ModifierPicker'
 import { mealImageSrc } from '@/lib/mealImage'
@@ -40,7 +39,6 @@ function MealDetailContent() {
   const [addingToCart, setAddingToCart] = useState(false)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   
-  const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -99,11 +97,7 @@ function MealDetailContent() {
   const totalPrice = unitPrice * quantity
 
   const addToCart = async () => {
-    if (!user) {
-      router.push('/login')
-      return
-    }
-
+    // No sign-in needed to fill a cart — checkout asks for it.
     setAddingToCart(true)
     
     try {

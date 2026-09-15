@@ -76,17 +76,11 @@ export default function CartPage() {
   }, [cartItems])
 
   useEffect(() => {
-    // AuthContext starts with loading: true and user: null while it restores
-    // the session from storage. Redirecting on !user alone therefore bounced a
-    // signed-in customer to the login page — reliably on a fresh load or a
-    // refresh of this page, which is exactly when someone returns to their
-    // cart. Wait for the answer before acting on it.
+    // Anyone can see their cart; signing in is asked for at checkout. This
+    // used to send signed-out visitors to the sign-in page. Waiting for auth
+    // to settle keeps the checkout button from flashing the wrong label.
     if (authLoading) return
 
-    if (!user) {
-      router.push('/login')
-      return
-    }
     
     const savedCart = localStorage.getItem('cart')
     if (savedCart) {
@@ -369,11 +363,12 @@ export default function CartPage() {
                 <button 
                   onClick={() => {
                     localStorage.setItem('orderType', orderType)
-                    router.push('/checkout')
+                    // The sign-in page brings them back to checkout afterwards.
+                    router.push(user ? '/checkout' : '/login?redirect=checkout')
                   }}
                   className="w-full bg-gold text-white py-4 rounded-card font-bold text-lg hover:bg-gold-600 transition-all shadow-card mb-4"
                 >
-                  Proceed to Checkout
+                  {user ? 'Proceed to Checkout' : 'Sign in to check out'}
                 </button>
                 
                 <Link
