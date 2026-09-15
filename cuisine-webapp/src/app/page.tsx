@@ -59,6 +59,7 @@ export default function AfricanCuisineWebsite() {
   // Where a swipe on the reviews started. The arrows are hidden on phones,
   // where they sat on top of the review text, so swiping replaces them.
   const reviewTouchX = useRef<number | null>(null)
+  const heroTouch = useRef<{ x: number; y: number } | null>(null)
   const [sheetAdded, setSheetAdded] = useState(false)
   // True while the sheet plays its drop-away animation, just before it unmounts.
   const [sheetClosing, setSheetClosing] = useState(false)
@@ -244,12 +245,14 @@ export default function AfricanCuisineWebsite() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Restarts on every change, not just on a fixed beat, so a dish someone has
+  // just swiped to isn't replaced a second later by the automatic advance.
   useEffect(() => {
-    const interval = setInterval(() => {
+    const timer = setTimeout(() => {
       setCurrentSlide((prev) => (prev + 1) % heroImages.length)
     }, 8000)
-    return () => clearInterval(interval)
-  }, [heroImages.length])
+    return () => clearTimeout(timer)
+  }, [currentSlide, heroImages.length])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -885,12 +888,28 @@ export default function AfricanCuisineWebsite() {
       {/* h-screen pushed everything below the fold on phones and left a lot of
           dimmed photo doing nothing. A capped viewport height with a floor
           keeps the dish visible and the menu within reach. */}
-      <section className="relative min-h-[560px] h-[86svh] max-h-[820px] flex items-end sm:items-center overflow-hidden">
+      {/* Swiped on a phone, the way every other photo carousel there works;
+          arrows are for a mouse. A mostly-vertical drag is left alone, so the
+          page still scrolls from here. */}
+      <section
+        className="relative min-h-[560px] h-[86svh] max-h-[820px] flex items-end sm:items-center overflow-hidden touch-pan-y"
+        onTouchStart={(e) => { heroTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
+        onTouchEnd={(e) => {
+          const start = heroTouch.current
+          heroTouch.current = null
+          if (!start) return
+          const dx = e.changedTouches[0].clientX - start.x
+          const dy = e.changedTouches[0].clientY - start.y
+          if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+          if (dx < 0) nextSlide()
+          else prevSlide()
+        }}
+      >
         {/* Carousel Images */}
         {heroImages.map((image, index) => (
           <div
             key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
+            className={`absolute inset-0 transition-opacity duration-700 ${
               index === currentSlide ? 'opacity-100' : 'opacity-0'
             }`}
           >
@@ -911,7 +930,7 @@ export default function AfricanCuisineWebsite() {
         {/* Navigation Arrows */}
         {/* Paired in the corner rather than pinned to each edge, where they
             landed on top of the headline on narrow screens. */}
-        <div className="absolute bottom-5 right-4 sm:right-6 z-20 flex gap-2">
+        <div className="absolute bottom-5 right-4 sm:right-6 z-20 hidden sm:flex gap-2">
           <button
             onClick={prevSlide}
             aria-label="Previous dish"
