@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { ShoppingCart, Heart, Plus, Clock, Phone, MapPin, Mail, Search, Menu, X, ChevronLeft, ChevronRight, User, LogOut, Instagram, Facebook, Star, Check } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { googleReviewsService, relativeDate, type GoogleReview } from '@/lib/googleReviewsService'
+import { googleReviewsService, relativeDate, GOOGLE_REVIEWS_URL, type GoogleReview } from '@/lib/googleReviewsService'
+import { reviewsService, type ApprovedReview } from '@/lib/reviewsService'
 import { mealsService, type Meal } from '@/lib/mealsService'
 import { restaurantService, type RestaurantStatus } from '@/lib/restaurantService'
 import { orderService } from '@/lib/orderService'
@@ -16,8 +17,6 @@ import { DishPhoto } from '@/components/DishPhoto'
 import { ModifierPicker } from '@/components/ModifierPicker'
 import { fetchModifiers, modifiersFor, lineKey, keyOf, type Modifier, type ChosenModifier } from '@/lib/modifiers'
 
-// The restaurant's Google listing, opened on its reviews tab.
-const GOOGLE_REVIEWS_URL = 'https://www.google.com/maps/place/TASTE+OF+AFRICAN+CUISINE/@41.8244336,-72.4977335,17z/data=!4m17!1m8!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!2sTASTE+OF+AFRICAN+CUISINE!8m2!3d41.8244336!4d-72.4977335!10e9!16s%2Fg%2F11vb0yh4nv!3m7!1s0x89e659d27432c9e5:0x507eb4ac1cfc581d!8m2!3d41.8244336!4d-72.4977335!9m1!1b1!16s%2Fg%2F11vb0yh4nv?entry=ttu&g_ep=EgoyMDI2MDkwOS4wIKXMDSoASAFQAw%3D%3D'
 
 interface CartItem extends Meal {
   lineKey?: string
@@ -162,23 +161,38 @@ export default function AfricanCuisineWebsite() {
     }
   ]
 
-  // Google reviews, when the sync has run. The carousel reads `reviews`, so
-  // switching source needs no change below.
+  // Reviews customers left on their orders here, once the restaurant has
+  // approved them, then Google's when the sync has run (the hardcoded list
+  // until then). The carousel reads `reviews`, so no change is needed below.
   const [googleReviews, setGoogleReviews] = useState<GoogleReview[]>([])
+  const [siteReviews, setSiteReviews] = useState<ApprovedReview[]>([])
 
   useEffect(() => {
     googleReviewsService.getReviews().then(setGoogleReviews).catch(() => {})
+    reviewsService.getApprovedReviews().then(setSiteReviews).catch(() => {})
   }, [])
 
-  const reviews = googleReviews.length
-    ? googleReviews.map(r => ({
-        name: r.reviewerName,
+  const reviews = [
+    ...siteReviews.map(r => {
+      const dishes = r.dishes ? r.dishes.split(', ') : []
+      return {
+        name: r.reviewer,
         review: r.comment,
-        dish: 'Google review',
+        dish: dishes.length ? dishes[0] + (dishes.length > 1 ? ` +${dishes.length - 1}` : '') : 'Order review',
         date: relativeDate(r.createdAt),
         rating: r.rating
-      }))
-    : fallbackReviews
+      }
+    }),
+    ...(googleReviews.length
+      ? googleReviews.map(r => ({
+          name: r.reviewerName,
+          review: r.comment,
+          dish: 'Google review',
+          date: relativeDate(r.createdAt),
+          rating: r.rating
+        }))
+      : fallbackReviews)
+  ]
 
 
   useEffect(() => {
@@ -809,6 +823,10 @@ export default function AfricanCuisineWebsite() {
                 <Link href="/profile" onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
                   <User className="w-4 h-4 text-sand-500" /> Profile
+                </Link>
+                <Link href="/profile#favorites" onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                  <Heart className="w-4 h-4 text-sand-500" /> Favorites
                 </Link>
                 <button
                   onClick={() => { setMobileMenuOpen(false); signOut() }}

@@ -175,6 +175,24 @@ async function sendEmail({ to, subject, html }: {
   return res.json()
 }
 
+/**
+ * The ask for a review, on the email saying the food has arrived, while the
+ * meal is fresh in mind. It goes to every customer, and the review form then
+ * offers Google to everyone, whatever they rated.
+ */
+function reviewBlock(): string {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 4px 0;">
+      <tr><td>
+        <p style="margin:0 0 12px 0;color:${C.ink};">How was everything?</p>
+        <a href="https://tasteofafricancuisine.com/orders"
+           style="display:inline-block;background:${C.gold};color:${C.ink};font-weight:700;text-decoration:none;padding:12px 22px;border-radius:6px;">
+          Rate your order
+        </a>
+      </td></tr>
+    </table>`
+}
+
 /** Under a dish: what the customer added or asked for, and their note. */
 function itemDetail(
   item: { modifiers?: { name: string }[] | null; notes?: string | null },
@@ -418,6 +436,7 @@ export const emailService = {
           </table>
 
           ${data.orderType === 'pickup' && String(data.status).toLowerCase() === 'ready' ? pickupBlock() : ''}
+          ${['completed', 'delivered', 'picked up'].includes(String(data.status).toLowerCase()) ? reviewBlock() : ''}
         `)
       })
       return { success: true, data: result }

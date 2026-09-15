@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Star, MessageCircle, User } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { reviewsService, type Review } from '@/lib/reviewsService'
+import { GOOGLE_WRITE_REVIEW_URL } from '@/lib/googleReviewsService'
 
 interface ReviewsProps {
   orderId: string
@@ -18,6 +19,7 @@ export default function Reviews({ orderId, orderLabel, userCanReview = false }: 
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [justReviewed, setJustReviewed] = useState(false)
 
   useEffect(() => {
     const unsubscribe = reviewsService.onReviewsChange(orderId, setReviews)
@@ -34,6 +36,7 @@ export default function Reviews({ orderId, orderLabel, userCanReview = false }: 
       setRating(0)
       setComment('')
       setShowAddReview(false)
+      setJustReviewed(true)
     } catch (error) {
       console.error('Error adding review:', error)
       alert('Failed to add review. Please try again.')
@@ -135,6 +138,33 @@ export default function Reviews({ orderId, orderLabel, userCanReview = false }: 
             </button>
           </div>
         </form>
+      )}
+
+      {/* Every reviewer is invited, whatever they rated. Google forbids asking
+          only happy customers ("review gating"), and a business can't post a
+          review for anyone — the customer writes it in their own account. */}
+      {/* justReviewed as well: the list refreshes on a live update, which can
+          lag or not arrive, and the thank-you shouldn't wait on it. */}
+      {(justReviewed || reviews.length > 0) && !showAddReview && (
+        <div
+          data-google-invite
+          className={`rounded-2xl p-4 mb-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            justReviewed ? 'bg-kente-50 border-kente-50' : 'bg-white/80 border-orange-100'
+          }`}
+        >
+          <p className="text-gray-800 font-medium">
+            {justReviewed ? 'Thanks for your review. Would you post it on Google too?' : 'Post your review on Google too.'}
+          </p>
+          <a
+            href={GOOGLE_WRITE_REVIEW_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 shrink-0 bg-gray-900 text-white px-4 py-2 rounded-xl font-medium hover:bg-black transition-colors"
+          >
+            <Star className="w-4 h-4" />
+            Review on Google
+          </a>
+        </div>
       )}
 
       {/* Reviews List */}

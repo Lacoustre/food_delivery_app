@@ -26,7 +26,29 @@ function rowToReview(row: any): Review {
   }
 }
 
+/** A review the restaurant approved for the website. */
+export interface ApprovedReview {
+  id: string
+  /** First name and last initial: "Prince N." */
+  reviewer: string
+  rating: number
+  comment: string
+  /** The dishes on the order, comma-separated. */
+  dishes: string | null
+  createdAt: string
+}
+
 export const reviewsService = {
+  // For the homepage. Through a function rather than the table: reviewer
+  // names live in profiles, which only their owner can read, and the
+  // function gives out a first name and initial, nothing more.
+  async getApprovedReviews(max = 12): Promise<ApprovedReview[]> {
+    const { data, error } = await supabase.rpc('approved_reviews', { max_count: max })
+    if (error || !data) return []
+    return (data as { id: string; reviewer: string; rating: number; comment: string; dishes: string | null; created_at: string }[])
+      .map(r => ({ id: r.id, reviewer: r.reviewer, rating: r.rating, comment: r.comment, dishes: r.dishes, createdAt: r.created_at }))
+  },
+
   // Upsert: the table is unique on (order_id, user_id), so re-reviewing an
   // order updates the existing row — same behavior as the mobile app.
   // user_id comes from the mirrored Supabase session (RLS checks it) — the

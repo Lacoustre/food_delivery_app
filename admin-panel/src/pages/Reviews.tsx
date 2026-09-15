@@ -20,6 +20,9 @@ interface Review {
   created_at: string;
   admin_reply: string | null;
   admin_reply_date: string | null;
+  /** Approved reviews appear on the website's homepage. */
+  is_approved: boolean;
+  approved_at: string | null;
   profiles: ProfileRow | ProfileRow[] | null;
 }
 
@@ -35,6 +38,8 @@ export default function Reviews() {
   const [sortBy, setSortBy] = useState("newest");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved">("all");
+  const [approving, setApproving] = useState<string | null>(null);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +73,8 @@ export default function Reviews() {
   };
 
   const filteredReviews = reviews.filter((review) => {
+    if (statusFilter === "pending" && review.is_approved) return false;
+    if (statusFilter === "approved" && !review.is_approved) return false;
     if (selectedRating !== null && Math.round(review.rating || 0) !== selectedRating) {
       return false;
     }
@@ -223,6 +230,30 @@ export default function Reviews() {
       toast.error('Failed to send reply: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Approving publishes a review on the website's homepage (first name and
+  // last initial only). It doesn't touch Google: a business can't post reviews
+  // there for a customer, so the site invites every reviewer to do it.
+  const handleApproval = async (review: Review) => {
+    setApproving(review.id);
+    try {
+      const { data, error } = await supabase
+        .from("order_reviews")
+        .update({ is_approved: !review.is_approved })
+        .eq("id", review.id)
+        .select("id");
+      if (error) throw error;
+      // Row-level security refuses silently — no error, nothing updated.
+      if (!data?.length) throw new Error("update not permitted");
+      toast.success(review.is_approved ? "Removed from the website" : "Published on the website");
+      fetchReviews();
+    } catch (err) {
+      console.error("Error updating approval:", err);
+      toast.error("Could not update the review");
+    } finally {
+      setApproving(null);
     }
   };
 
@@ -500,6 +531,25 @@ export default function Reviews() {
         )}
       </div>
 
+      {/* Approval */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          ["all", "All"],
+          ["pending", `Awaiting approval (${reviews.filter(r => !r.is_approved).length})`],
+          ["approved", `On the website (${reviews.filter(r => r.is_approved).length})`],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setStatusFilter(value)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              statusFilter === value ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -570,6 +620,29 @@ export default function Reviews() {
                     <Calendar className="w-3 h-3 mr-1" />
                     {formatDate(review.created_at)}
                   </span>
+                  {review.is_approved ? (
+                    <span className="inline-flex items-center gap-2 ml-2 text-xs">
+                      <span data-approval className="px-2.5 py-1 rounded-full bg-green-100 text-green-800 font-semibold whitespace-nowrap">
+                        On the website
+                      </span>
+                      <button
+                        onClick={() => handleApproval(review)}
+                        disabled={approving === review.id}
+                        className="text-gray-500 hover:text-gray-800 underline disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      data-approval
+                      onClick={() => handleApproval(review)}
+                      disabled={approving === review.id}
+                      className="ml-2 px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {approving === review.id ? "Approving..." : "Approve"}
+                    </button>
+                  )}
                   <div className="flex items-center space-x-1 ml-2">
                     {review.admin_reply && (
                       <button

@@ -6,6 +6,7 @@ import { User, Mail, Phone, MapPin, Save, ArrowLeft, Camera, Upload, X } from 'l
 import Link from 'next/link'
 import { useAuth } from '@/lib/AuthContext'
 import { authService } from '@/lib/auth'
+import { FavoritesList } from '@/components/FavoritesList'
 
 export default function ProfilePage() {
   const { user, loading: authLoading, userProfile } = useAuth()
@@ -287,6 +288,8 @@ export default function ProfilePage() {
             )}
           </form>
         </div>
+
+        <FavoritesList userId={user.uid} />
       </div>
       </div>
     </div>
