@@ -12,6 +12,7 @@ import { favoritesService } from '@/lib/favoritesService'
 import { useAuth } from '@/lib/AuthContext'
 import OrderNotifications from '@/components/OrderNotifications'
 import { mealImageSrc } from '@/lib/mealImage'
+import { DishPhoto } from '@/components/DishPhoto'
 
 interface CartItem extends Meal {
   quantity: number
@@ -992,13 +993,10 @@ export default function AfricanCuisineWebsite() {
                     {index + 1}
                   </div>
                   
-                  <div className="relative aspect-square overflow-hidden">
-                    <Image
+                  <div className="relative aspect-square overflow-hidden bg-sand-100">
+                    <DishPhoto
                       src={getImageUrl(meal)}
                       alt={`${meal.name} at Taste of African Cuisine`}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      unoptimized
                     />
                     
                     <button
@@ -1217,18 +1215,15 @@ export default function AfricanCuisineWebsite() {
                         return (
                           <div key={slug} className="flex flex-col bg-white border border-sand-200 rounded-card overflow-hidden shadow-card">
                             <div
-                              className="relative aspect-square cursor-pointer"
+                              className="relative aspect-square overflow-hidden bg-sand-100 cursor-pointer"
                               onClick={() => {
                                 if (isPhone()) openSheet(slug)
                                 else window.location.href = `/meal?meal=${encodeURIComponent(JSON.stringify(active))}`
                               }}
                             >
-                              <Image
+                              <DishPhoto
                                 src={getImageUrl(active)}
                                 alt={`${active.baseName} at Taste of African Cuisine`}
-                                fill
-                                className="object-cover"
-                                unoptimized
                                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/images/logo.png' }}
                               />
                               {soldOut && (
@@ -1362,13 +1357,10 @@ export default function AfricanCuisineWebsite() {
         <div className="sm:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={sheet.active.baseName}>
           <div className="absolute inset-0 bg-ink/50 touch-none" onClick={() => setSheetSlug(null)} />
           <div className="absolute inset-x-0 bottom-0 bg-sand-50 rounded-t-2xl max-h-[88svh] overflow-y-auto overscroll-contain shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="relative aspect-[4/3] w-full">
-              <Image
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-sand-100">
+              <DishPhoto
                 src={getImageUrl(sheet.active)}
                 alt={`${sheet.active.baseName} at Taste of African Cuisine`}
-                fill
-                className="object-cover rounded-t-2xl"
-                unoptimized
               />
               <button
                 onClick={() => setSheetSlug(null)}

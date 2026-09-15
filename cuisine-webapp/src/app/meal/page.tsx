@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, Minus } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { mealExtras } from '@/lib/mealExtras'
 import { mealImageSrc } from '@/lib/mealImage'
+import { DishPhoto } from '@/components/DishPhoto'
 
 interface Extra {
   name: string
@@ -268,16 +269,10 @@ function MealDetailContent() {
         <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Image */}
           <div className="relative aspect-[4/3] max-h-[420px] rounded-card overflow-hidden border border-sand-200">
-            <img
+            <DishPhoto
               src={getImageUrl(meal)}
-              alt={meal.name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.currentTarget as HTMLImageElement
-                if (target) {
-                  target.src = '/assets/images/logo.png'
-                }
-              }}
+              alt={`${meal.name} at Taste of African Cuisine`}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/images/logo.png' }}
             />
           </div>
 
