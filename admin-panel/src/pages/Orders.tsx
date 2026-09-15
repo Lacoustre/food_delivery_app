@@ -8,6 +8,7 @@ import { User, Truck } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { netPaid } from "../lib/money";
+import { statusLabel } from "../lib/statusLabel";
 
 const statusFilters = ["all", "pending", "confirmed", "preparing", "ready for pickup", "on the way", "delivered", "picked up", "completed", "cancelled"];
 
@@ -120,7 +121,7 @@ export default function Orders() {
   const refundCancelledOrder = async (orderId: string) => {
     const base = import.meta.env.VITE_WEBAPP_URL;
     if (!base) {
-      toast.warning("Order cancelled, but VITE_WEBAPP_URL is not set — refund it in Stripe by hand.", {
+      toast.warning("Order canceled, but VITE_WEBAPP_URL is not set — refund it in Stripe by hand.", {
         position: "top-center",
         autoClose: 8000
       });
@@ -140,7 +141,7 @@ export default function Orders() {
       const body = await res.json().catch(() => null);
 
       if (res.ok) {
-        toast.success(`Order cancelled and $${Number(body.refundAmount).toFixed(2)} refunded.`, {
+        toast.success(`Order canceled and $${Number(body.refundAmount).toFixed(2)} refunded.`, {
           position: "top-center",
           autoClose: 5000
         });
@@ -149,12 +150,12 @@ export default function Orders() {
 
       // The order is already cancelled at this point. Say exactly what did not
       // happen, so nobody assumes the customer has their money back.
-      toast.warning(`Order cancelled, but the refund did not go through: ${body?.error ?? res.status}`, {
+      toast.warning(`Order canceled, but the refund did not go through: ${body?.error ?? res.status}`, {
         position: "top-center",
         autoClose: 10000
       });
     } catch {
-      toast.warning("Order cancelled, but the refund could not be reached. Refund it in Stripe.", {
+      toast.warning("Order canceled, but the refund could not be reached. Refund it in Stripe.", {
         position: "top-center",
         autoClose: 10000
       });
@@ -431,7 +432,7 @@ export default function Orders() {
           order.order_number || order.id.substring(0, 8),
           getCustomerName(order),
           isPickup ? "Pickup" : "Delivery",
-          order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : "Unknown",
+          statusLabel(order.status),
           netPaid(order).toFixed(2),
           order.created_at ? moment(order.created_at).format("MMM D, YYYY") : "—"
         ];
@@ -535,7 +536,7 @@ export default function Orders() {
                 statusColors[status as keyof typeof statusColors] || "bg-white text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {statusLabel(status)}
             </button>
           );
         })}
@@ -636,7 +637,7 @@ export default function Orders() {
                               };
                               return (
                                 <option key={status} value={status}>
-                                  {icons[status as keyof typeof icons] || ""}{status.charAt(0).toUpperCase() + status.slice(1)}
+                                  {icons[status as keyof typeof icons] || ""}{statusLabel(status)}
                                 </option>
                               );
                             });
@@ -758,7 +759,7 @@ export default function Orders() {
                       cancelled: "bg-red-100 text-red-800"
                     }[selectedOrder.status || "pending"] || "bg-gray-100 text-gray-800"
                   )}`}>
-                    {(selectedOrder.status || "pending") === "pending" ? "Needs Confirmation" : (selectedOrder.status || "pending") === "cancelled" ? "❌ Cancelled" : (selectedOrder.status || "pending") === "completed" ? "✅ Completed" : (selectedOrder.status || "pending").charAt(0).toUpperCase() + (selectedOrder.status || "pending").slice(1)}
+                    {(selectedOrder.status || "pending") === "pending" ? "Needs Confirmation" : (selectedOrder.status || "pending") === "cancelled" ? "❌ Canceled" : (selectedOrder.status || "pending") === "completed" ? "✅ Completed" : (selectedOrder.status || "pending").charAt(0).toUpperCase() + (selectedOrder.status || "pending").slice(1)}
                   </span>
                 </div>
               </div>

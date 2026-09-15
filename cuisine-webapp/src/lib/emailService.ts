@@ -96,7 +96,7 @@ function statusLabel(
     case 'ready for pickup':
       return { title: 'Ready for pickup', blurb: 'Your order is ready to collect.' }
     case 'cancelled':
-      return { title: 'Order cancelled', blurb: 'This order has been cancelled. If you paid by card, the refund has been issued and usually reaches your bank within 5-10 days. Anything unclear, reply to this email.' }
+      return { title: 'Order canceled', blurb: 'This order has been canceled. If you paid by card, the refund has been issued and usually reaches your bank within 5-10 days. Anything unclear, reply to this email.' }
     default:
       return { title: String(status), blurb: '' }
   }

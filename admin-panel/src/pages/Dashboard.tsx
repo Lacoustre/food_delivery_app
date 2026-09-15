@@ -18,6 +18,7 @@ import Loader from "../components/Loader";
 import moment from "moment";
 import { netPaid } from "../lib/money";
 import { openRightNow, type DaySchedule } from "../lib/openState";
+import { statusLabel } from "../lib/statusLabel";
 
 interface OrderItemRow {
   name: string | null;
@@ -469,7 +470,7 @@ export default function Dashboard() {
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                           statusColors[order.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
                         }`}>
-                          {order.status === 'pending' ? 'Needs Confirmation' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          {order.status === 'pending' ? 'Needs Confirmation' : statusLabel(order.status)}
                         </span>
                         <span className="text-sm text-gray-500">
                           {order.created_at ? moment(order.created_at).fromNow() : 'Unknown time'}

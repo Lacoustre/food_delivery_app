@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
 import moment from "moment";
 import { netPaid } from "../lib/money";
+import { statusLabel } from "../lib/statusLabel";
 
 interface User {
   id: string;
@@ -266,7 +267,7 @@ export default function Users() {
                                   order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                                   'bg-yellow-100 text-yellow-800'
                               }`}>
-                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                {statusLabel(order.status)}
                               </span>
                             </div>
                           </div>

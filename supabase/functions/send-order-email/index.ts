@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       const statusMessages: Record<string, string> = {
         "delivered": "Your order has been delivered! Enjoy your meal!",
         "picked up": "Thank you for picking up your order! Enjoy!",
-        "cancelled": "Your order has been cancelled. If you paid by card, the refund has been issued and usually reaches your bank within 5-10 days.",
+        "cancelled": "Your order has been canceled. If you paid by card, the refund has been issued and usually reaches your bank within 5-10 days.",
       };
       const message = statusMessages[status as string] || `Your order status: ${status}`;
       subject = `Order Update #${orderId}`;

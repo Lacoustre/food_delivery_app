@@ -958,7 +958,7 @@ export default function AfricanCuisineWebsite() {
         <div className="page-shell">
           <div className="mb-12 max-w-2xl">
             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 mb-3">Popular right now</p>
-            <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">Customer favourites</h2>
+            <h2 className="font-display text-4xl sm:text-5xl text-ink leading-[1.05] mb-3">Customer favorites</h2>
             <p className="text-sand-700 leading-relaxed">The dishes people come back for.</p>
           </div>
 
@@ -1125,7 +1125,7 @@ export default function AfricanCuisineWebsite() {
                 const resolve = (slug: string) => resolveGroup(cards.get(slug)!, slug)
 
                 const SHORT: Record<string, string> = {
-                  'Main Dishes': 'Mains',
+                  'Main Dishes': 'Main',
                   'Side Dishes': 'Sides',
                   Desserts: 'Desserts',
                   Drinks: 'Drinks',
@@ -1339,7 +1339,7 @@ export default function AfricanCuisineWebsite() {
                         >
                           {expandedSections[section]
                             ? 'Show fewer'
-                            : `See all ${orderedSlugs(section).length} ${(SHORT[section] ?? section).toLowerCase()}`}
+                            : `See all ${section.toLowerCase()}`}
                         </button>
                       </div>
                     )}

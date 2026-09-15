@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy" updated="11 September 2026">
+    <LegalPage title="Privacy" updated="September 11, 2026">
       <p>
         Taste of African Cuisine, 200 Hartford Turnpike, Vernon, CT 06066, runs this
         site and the mobile app. This page describes what we collect when you order,

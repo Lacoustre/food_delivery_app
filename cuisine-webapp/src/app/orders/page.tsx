@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { orderService, type Order } from '@/lib/orderService'
-import { Clock, CheckCircle, Truck, Package, MapPin, Star, ArrowLeft, ChefHat, Phone } from 'lucide-react'
+import { Clock, CheckCircle, Truck, Package, MapPin, Star, ArrowLeft, ChefHat, Phone, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import Reviews from '@/components/Reviews'
 import { useSearchParams } from 'next/navigation'
@@ -41,6 +41,7 @@ function OrdersContent() {
       case 'ready': return <CheckCircle className="w-5 h-5 text-kente" />
       case 'out_for_delivery': return <Truck className="w-5 h-5 text-purple-500" />
       case 'delivered': case 'completed': return <CheckCircle className="w-5 h-5 text-kente" />
+      case 'cancelled': return <XCircle className="w-5 h-5 text-clay" />
     }
   }
 
@@ -52,6 +53,9 @@ function OrdersContent() {
       case 'out_for_delivery': return 'Out for Delivery'
       case 'delivered': return 'Delivered'
       case 'completed': return 'Completed'
+      // Stored as 'cancelled'; shown in American English. This case was
+      // missing altogether, so a canceled order showed a blank status.
+      case 'cancelled': return 'Canceled'
     }
   }
 

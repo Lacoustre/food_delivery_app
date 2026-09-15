@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function Refunds() {
   return (
-    <LegalPage title="Refunds &amp; cancellations" updated="11 September 2026">
+    <LegalPage title="Refunds &amp; cancellations" updated="September 11, 2026">
       <p>
         Food is cooked to order, which is what makes this different from returning a
         product. Once the kitchen has started, the ingredients are used whether or
@@ -17,7 +17,7 @@ export default function Refunds() {
         cannot.
       </p>
 
-      <h2>Cancelling</h2>
+      <h2>Canceling</h2>
       <ul>
         <li>
           <strong>Before we start cooking</strong> — call{' '}
@@ -31,7 +31,7 @@ export default function Refunds() {
         </li>
         <li>
           <strong>Once a courier has collected it</strong> — the order cannot be
-          cancelled.
+          canceled.
         </li>
         <li>
           <strong>Scheduled orders</strong> — cancel any time before we begin

@@ -4,6 +4,7 @@ import moment from 'moment';
 import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
 import { netPaid } from '../lib/money';
+import { statusLabel } from "../lib/statusLabel";
 
 // Scheduled orders are just orders rows with scheduled_for set — there is
 // no separate collection anymore (the old Firestore scheduled_orders one
@@ -170,7 +171,7 @@ export default function ScheduledOrders() {
                       >
                         {STATUS_OPTIONS.map((status) => (
                           <option key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                            {statusLabel(status)}
                           </option>
                         ))}
                       </select>

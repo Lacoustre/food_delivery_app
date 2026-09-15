@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function Terms() {
   return (
-    <LegalPage title="Terms of service" updated="11 September 2026">
+    <LegalPage title="Terms of service" updated="September 11, 2026">
       <p>
         These terms cover ordering from Taste of African Cuisine, 200 Hartford
         Turnpike, Vernon, CT 06066, through this website or our mobile app. Placing
