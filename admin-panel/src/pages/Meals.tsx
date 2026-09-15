@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
-import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign, EyeOff } from "lucide-react";
+import { Search, Plus, Filter, Edit, Trash2, X, Upload, Image as ImageIcon, CheckCircle, XCircle, Copy, TrendingUp, DollarSign, EyeOff, ListPlus } from "lucide-react";
 import { openRightNow, type DaySchedule } from "../lib/openState";
+import AddOnsEditor from "../components/AddOnsEditor";
 
 interface Meal {
   id: string;
@@ -18,6 +19,9 @@ interface Meal {
   image_url: string | null;
   created_at: string;
   category: string | null;
+  /** The dish this option belongs to. Rows sharing one are one menu card. */
+  base_slug: string | null;
+  base_name: string | null;
 }
 
 interface MealAnalytic {
@@ -78,6 +82,24 @@ export default function Meals() {
   useEffect(() => {
     fetchMeals();
   }, [fetchMeals]);
+
+  // Add-ons belong to a dish, which this table shows as one row per option.
+  // Keyed the way the website keys dishes: base_slug, or the meal's own id.
+  const dishOf = (meal: Meal) => meal.base_slug || meal.id;
+  const [addOnsFor, setAddOnsFor] = useState<Meal | null>(null);
+  const [addOnCounts, setAddOnCounts] = useState<Record<string, number>>({});
+  const fetchAddOnCounts = useCallback(async () => {
+    const { data } = await supabase.from("meal_modifiers").select("base_slug");
+    const counts: Record<string, number> = {};
+    (data ?? []).forEach((m: { base_slug: string }) => {
+      counts[m.base_slug] = (counts[m.base_slug] ?? 0) + 1;
+    });
+    setAddOnCounts(counts);
+  }, []);
+
+  useEffect(() => {
+    fetchAddOnCounts();
+  }, [fetchAddOnCounts]);
 
   useEffect(() => {
     const fetchRestaurantStatus = async () => {
@@ -855,6 +877,13 @@ export default function Meals() {
                           Edit
                         </button>
                         <button
+                          onClick={() => setAddOnsFor(meal)}
+                          className="text-amber-700 hover:text-amber-900 transition-colors duration-150 inline-flex items-center gap-1"
+                        >
+                          <ListPlus className="w-4 h-4" />
+                          Add-ons{addOnCounts[dishOf(meal)] ? ` (${addOnCounts[dishOf(meal)]})` : ""}
+                        </button>
+                        <button
                           onClick={() => duplicateMeal(meal)}
                           className="text-green-600 hover:text-green-800 transition-colors duration-150 inline-flex items-center gap-1"
                         >
@@ -1091,6 +1120,16 @@ export default function Meals() {
             </div>
           </div>
         </div>
+      )}
+
+      {addOnsFor && (
+        <AddOnsEditor
+          baseSlug={dishOf(addOnsFor)}
+          dishName={addOnsFor.base_name || addOnsFor.name}
+          optionCount={meals.filter((m) => dishOf(m) === dishOf(addOnsFor) && m.active).length}
+          onClose={() => setAddOnsFor(null)}
+          onSaved={fetchAddOnCounts}
+        />
       )}
     </div>
   );
