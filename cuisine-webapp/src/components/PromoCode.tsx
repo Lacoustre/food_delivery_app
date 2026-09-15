@@ -44,7 +44,7 @@ export default function PromoCode({ orderTotal, onPromoApplied, onPromoRemoved, 
   }
 
   return (
-    <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg border border-orange-200 p-6">
+    <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg border border-orange-200 p-4 sm:p-6">
       <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
         <Tag className="w-5 h-5 text-orange-500" />
         Promo Code
@@ -79,13 +79,13 @@ export default function PromoCode({ orderTotal, onPromoApplied, onPromoRemoved, 
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
               placeholder="Enter promo code"
-              className="flex-1 p-3 border-2 border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+              className="flex-1 min-w-0 p-3 border-2 border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
               onKeyPress={(e) => e.key === 'Enter' && handleApplyPromo()}
             />
             <button
               onClick={handleApplyPromo}
               disabled={!promoCode.trim() || loading}
-              className="bg-orange-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 bg-orange-500 text-white px-4 sm:px-6 py-3 rounded-xl font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Applying...' : 'Apply'}
             </button>

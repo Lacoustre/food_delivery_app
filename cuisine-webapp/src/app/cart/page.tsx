@@ -183,11 +183,11 @@ export default function CartPage() {
             </div>
           </div>
         ) : (
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             {/* Left Column */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6 min-w-0">
               {/* Order Type Selection */}
-              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
                 <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
                   <Navigation className="w-6 h-6 text-gold" />
                   Order Type
@@ -236,7 +236,7 @@ export default function CartPage() {
 
               {/* Pickup Location */}
               {orderType === 'pickup' && (
-                <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+                <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
                   <h3 className="font-display text-2xl text-ink-soft mb-6 flex items-center gap-3">
                     <Store className="w-6 h-6 text-gold" />
                     Pickup Location
@@ -257,7 +257,7 @@ export default function CartPage() {
               )}
 
               {/* Cart Items */}
-              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
                 <div className="flex items-center justify-between mb-8">
                   <h2 className="font-display text-2xl text-ink">Your Items ({cartItems.length})</h2>
                   <button
@@ -270,9 +270,9 @@ export default function CartPage() {
 
                 <div className="space-y-6">
                   {cartItems.map((item) => (
-                    <div key={keyOf(item)} className="bg-white/80 rounded-card p-6 shadow-card border border-gold-50 hover:shadow-card transition-all">
-                      <div className="flex gap-6">
-                        <div className="relative w-20 h-20 rounded-card overflow-hidden flex-shrink-0 shadow-card">
+                    <div key={keyOf(item)} className="bg-white/80 rounded-card p-4 sm:p-6 shadow-card border border-gold-50">
+                      <div className="flex gap-3 sm:gap-5">
+                        <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-card overflow-hidden shrink-0 shadow-card">
                           <img
                             src={item.imageUrl?.replace(/&amp;/g, '&') || '/assets/images/logo.png'}
                             alt={item.name}
@@ -282,49 +282,54 @@ export default function CartPage() {
                             }}
                           />
                         </div>
-                        
-                        <div className="flex-1">
-                          <h3 className="font-bold text-xl text-ink mb-2">{item.name}</h3>
-                          <p className="text-gold-600 font-bold mb-3">{item.category}</p>
+
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-lg sm:text-xl text-ink mb-1 break-words">{item.name}</h3>
+                          <p className="text-gold-600 font-bold text-sm sm:text-base mb-2">{item.category}</p>
                           {lineDetail(item.modifiers, item.notes) && (
-                            <p className="-mt-2 mb-3 text-sm text-sand-700">{lineDetail(item.modifiers, item.notes)}</p>
+                            <p className="mb-2 text-sm text-sand-700 break-words">{lineDetail(item.modifiers, item.notes)}</p>
                           )}
-                          <p className="font-display text-2xl text-gold-600">${item.price.toFixed(2)}</p>
+                          <p className="font-display text-xl sm:text-2xl text-gold-600">${item.price.toFixed(2)}</p>
                         </div>
 
-                        <div className="flex flex-col items-end gap-4">
-                          <button
-                            onClick={() => removeItem(keyOf(item))}
-                            className="p-2 text-clay hover:bg-clay-50 rounded-xl transition-colors"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                          
-                          <div className="flex items-center gap-3 bg-gold-50 rounded-card p-1">
-                            <button
-                              onClick={() => updateQuantity(keyOf(item), item.quantity - 1)}
-                              className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
-                            >
-                              <Minus className="w-4 h-4 text-gold-600" />
-                            </button>
-                            <span className="px-4 py-2 font-bold text-lg min-w-[3rem] text-center text-ink">
-                              {item.quantity}
-                            </span>
-                            <button
-                              onClick={() => updateQuantity(keyOf(item), item.quantity + 1)}
-                              className="p-3 hover:bg-gold-300 rounded-xl transition-colors"
-                            >
-                              <Plus className="w-4 h-4 text-gold-600" />
-                            </button>
-                          </div>
-                        </div>
+                        <button
+                          onClick={() => removeItem(keyOf(item))}
+                          aria-label={`Remove ${item.name}`}
+                          className="self-start shrink-0 p-2 -mr-1 text-clay hover:bg-clay-50 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
-                      
-                      <div className="mt-6 pt-4 border-t border-gold-300 flex justify-between items-center">
-                        <span className="text-sand-700 font-bold">Item Total:</span>
-                        <span className="font-bold text-xl text-ink">
-                          ${(item.price * item.quantity).toFixed(2)}
-                        </span>
+
+                      {/* Quantity and the line total share the bottom row. Beside
+                          the dish they needed about 150px more than a phone has,
+                          which pushed the whole cart off the right of the screen. */}
+                      <div className="mt-4 pt-4 border-t border-gold-300 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-1 bg-gold-50 rounded-card p-1">
+                          <button
+                            onClick={() => updateQuantity(keyOf(item), item.quantity - 1)}
+                            aria-label="One fewer"
+                            className="p-2.5 hover:bg-gold-300 rounded-xl transition-colors"
+                          >
+                            <Minus className="w-4 h-4 text-gold-600" />
+                          </button>
+                          <span data-qty className="px-2 font-bold text-lg min-w-[2.5rem] text-center text-ink">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(keyOf(item), item.quantity + 1)}
+                            aria-label="One more"
+                            className="p-2.5 hover:bg-gold-300 rounded-xl transition-colors"
+                          >
+                            <Plus className="w-4 h-4 text-gold-600" />
+                          </button>
+                        </div>
+                        <div className="text-right">
+                          <span className="hidden sm:inline text-sand-700 font-bold mr-2">Item total</span>
+                          <span className="font-bold text-lg sm:text-xl text-ink whitespace-nowrap">
+                            ${(item.price * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -333,8 +338,8 @@ export default function CartPage() {
             </div>
 
             {/* Order Summary */}
-            <div className="lg:col-span-1">
-              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8 sticky top-8">
+            <div className="lg:col-span-1 min-w-0">
+              <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8 lg:sticky lg:top-8">
                 <h3 className="font-display text-2xl text-ink mb-8">Order Summary</h3>
                 
                 <div className="space-y-4 mb-8">

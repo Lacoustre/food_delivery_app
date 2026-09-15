@@ -731,11 +731,11 @@ function CheckoutContent() {
       </div>
 
       <div className="page-shell px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Left Column - Forms */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* Customer Information */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
               <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
                 <User className="w-6 h-6 text-gold" />
                 Customer Information
@@ -787,7 +787,7 @@ function CheckoutContent() {
             </div>
 
             {/* Delivery Information */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
               <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
                 <MapPin className="w-6 h-6 text-gold" />
                 {orderData.orderType === 'delivery' ? 'Delivery' : 'Pickup'} Information
@@ -796,7 +796,7 @@ function CheckoutContent() {
               {orderData.orderType === 'delivery' ? (
                 <div className="space-y-4">
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <label className="block text-sm font-bold text-ink-soft">Delivery Address *</label>
                       <button
                         type="button"
@@ -874,7 +874,7 @@ function CheckoutContent() {
             </div>
 
             {/* Payment Method */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8">
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8">
               <h3 className="font-display text-2xl text-ink mb-6 flex items-center gap-3">
                 <CreditCard className="w-6 h-6 text-gold" />
                 Payment Method
@@ -983,8 +983,8 @@ function CheckoutContent() {
           </div>
 
           {/* Right Column - Order Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-8 sticky top-8">
+          <div className="lg:col-span-1 min-w-0">
+            <div className="bg-white/60 backdrop-blur-sm rounded-card shadow-card border border-gold-300 p-5 sm:p-8 lg:sticky lg:top-8">
               <h3 className="font-display text-2xl text-ink mb-8">Order Summary</h3>
               
               {/* Items */}
@@ -1001,14 +1001,14 @@ function CheckoutContent() {
                         }}
                       />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium text-ink-soft">{item.name}</div>
                       <div className="text-sm text-sand-700">Qty: {item.quantity}</div>
                       {lineDetail(item.modifiers, item.notes) && (
                         <div className="text-sm text-sand-700">{lineDetail(item.modifiers, item.notes)}</div>
                       )}
                     </div>
-                    <div className="font-bold text-ink-soft">
+                    <div className="font-bold text-ink-soft shrink-0 whitespace-nowrap">
                       ${(item.price * item.quantity).toFixed(2)}
                     </div>
                   </div>
