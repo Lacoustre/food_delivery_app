@@ -18,16 +18,20 @@ export function LegalPage({
 }) {
   return (
     <main className="min-h-screen bg-sand-50">
-      <header className="bg-kente text-sand-50">
-        <div className="page-shell py-10">
+      {/* Plain, on the page's own background. It was a solid green banner,
+          which read as heavier than pages meant simply to be read. The header
+          now shares the text column's width, so the title lines up with the
+          text beneath it instead of starting further left. */}
+      <header className="border-b border-sand-200">
+        <div className="page-shell-narrow py-10">
           <Link
             href="/"
-            className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-300 hover:text-gold-200"
+            className="text-[11px] font-semibold tracking-[0.18em] uppercase text-gold-600 hover:text-ink"
           >
             &larr; Taste of African Cuisine
           </Link>
-          <h1 className="font-display text-4xl sm:text-5xl mt-3">{title}</h1>
-          <p className="text-sand-300 text-sm mt-2">Last updated {updated}</p>
+          <h1 className="font-display text-4xl sm:text-5xl text-ink mt-3">{title}</h1>
+          <p className="text-sand-500 text-sm mt-2">Last updated {updated}</p>
         </div>
       </header>
 
