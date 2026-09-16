@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from '@/lib/AuthContext';
 import { SITE_URL } from './robots';
 import { restaurantSchema } from '@/lib/restaurantSchema';
+import { Analytics } from '@vercel/analytics/next';
 
 // Body and UI. Warm, highly legible, good tabular numerals for prices.
 const dmSans = DM_Sans({
@@ -88,6 +89,9 @@ export default async function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        {/* Vercel Web Analytics: visitors and page views, counted without
+            cookies. Nothing is collected until the site is deployed. */}
+        <Analytics />
       </body>
     </html>
   );
