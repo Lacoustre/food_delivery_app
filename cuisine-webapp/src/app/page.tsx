@@ -60,6 +60,9 @@ export default function AfricanCuisineWebsite() {
   // where they sat on top of the review text, so swiping replaces them.
   const reviewTouchX = useRef<number | null>(null)
   const heroTouch = useRef<{ x: number; y: number } | null>(null)
+  // True while the drawer slides away, just before it unmounts.
+  const [drawerClosing, setDrawerClosing] = useState(false)
+  const drawerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sheetAdded, setSheetAdded] = useState(false)
   // True while the sheet plays its drop-away animation, just before it unmounts.
   const [sheetClosing, setSheetClosing] = useState(false)
@@ -386,9 +389,28 @@ export default function AfricanCuisineWebsite() {
     typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
 
   // Close the drawer, then — once the page is unlocked — go to a section.
-  const closeDrawerTo = (id?: string) => {
+  // Every way out of the drawer goes through here, so it always slides away
+  // rather than vanishing: the backdrop, the X, and every link inside it.
+  // `id` is the section to scroll to once the page is unlocked again.
+  const closeDrawer = (id?: string) => {
     pendingScrollId.current = id ?? null
-    setMobileMenuOpen(false)
+    if (!mobileMenuOpen || drawerClosing) {
+      setMobileMenuOpen(false)
+      return
+    }
+    setDrawerClosing(true)
+    if (drawerTimer.current) clearTimeout(drawerTimer.current)
+    drawerTimer.current = setTimeout(() => {
+      drawerTimer.current = null
+      setDrawerClosing(false)
+      setMobileMenuOpen(false)
+    }, 260)
+  }
+
+  const openDrawer = () => {
+    if (drawerTimer.current) { clearTimeout(drawerTimer.current); drawerTimer.current = null }
+    setDrawerClosing(false)
+    setMobileMenuOpen(true)
   }
 
   // Every way of dismissing the sheet goes through here, so it always drops
@@ -743,13 +765,20 @@ export default function AfricanCuisineWebsite() {
                     </span>
                   )}
                 </Link>
-                <button 
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className={`p-2 rounded-full ${
+                <button
+                  onClick={() => (mobileMenuOpen ? closeDrawer() : openDrawer())}
+                  aria-expanded={mobileMenuOpen}
+                  aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                  className={`relative w-10 h-10 grid place-items-center rounded-full transition-transform active:scale-90 ${
                     navSolid ? 'text-sand-700' : 'text-white'
                   }`}
                 >
-                  {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                  <Menu className={`w-6 h-6 col-start-1 row-start-1 transition-all duration-300 ${
+                    mobileMenuOpen ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'
+                  }`} />
+                  <X className={`w-6 h-6 col-start-1 row-start-1 transition-all duration-300 ${
+                    mobileMenuOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'
+                  }`} />
                 </button>
               </div>
             </div>
@@ -767,108 +796,114 @@ export default function AfricanCuisineWebsite() {
       {mobileMenuOpen && (
         <>
           <div
-            onClick={() => setMobileMenuOpen(false)}
-            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 touch-none ${
+            onClick={() => closeDrawer()}
+            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 backdrop-blur-[2px] touch-none ${
               statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
-            }`}
+            } ${drawerClosing ? 'animate-[veil-out_260ms_ease-in_both]' : 'animate-[veil-in_320ms_ease-out_both]'}`}
           />
           <div
-            className={`md:hidden fixed right-0 bottom-0 z-40 w-[80%] max-w-xs flex flex-col bg-sand-50 border-l border-sand-200 shadow-lift ${
+            className={`md:hidden fixed right-0 bottom-0 z-40 w-[80%] max-w-xs flex flex-col bg-sand-50 border-l border-sand-200 shadow-lift rounded-l-2xl will-change-transform ${
               statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
+            } ${
+              drawerClosing
+                ? 'animate-[drawer-out_260ms_cubic-bezier(0.4,0,1,1)_both]'
+                : 'animate-[drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)_both]'
             }`}
           >
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
 
-            <div className="relative mt-4">
+            <div className="relative mt-4 animate-[drawer-item_420ms_ease-out_both]" style={{ animationDelay: '120ms' }}>
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-sand-500" />
               <input
                 type="text"
                 placeholder="Search dishes"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') closeDrawerTo(searchQuery.trim() ? 'menu' : undefined) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') closeDrawer(searchQuery.trim() ? 'menu' : undefined) }}
                 className="w-full pl-10 pr-4 py-3 text-[15px] rounded-control border border-sand-200 bg-white text-ink placeholder-sand-500 focus:outline-none focus:border-gold"
               />
             </div>
 
             <button
-              onClick={() => closeDrawerTo('menu')}
-              className="mt-4 w-full bg-gold text-ink py-3.5 rounded-control font-semibold hover:bg-gold-300 transition-colors"
+              onClick={() => closeDrawer('menu')}
+              className="mt-4 w-full bg-gold text-ink py-3.5 rounded-control font-semibold hover:bg-gold-300 transition-colors animate-[drawer-item_420ms_ease-out_both]"
+              style={{ animationDelay: '180ms' }}
             >
               Order now
             </button>
 
-            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Browse</p>
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500 animate-[drawer-item_420ms_ease-out_both]" style={{ animationDelay: '240ms' }}>Browse</p>
             {[
               { label: 'Menu', href: '#menu' },
               { label: 'About', href: '#about' },
               { label: 'Contact', href: '#contact' },
-            ].map(item => (
+            ].map((item, i) => (
               <a
                 key={item.label}
                 href={item.href}
-                onClick={(e) => { e.preventDefault(); closeDrawerTo(item.href.slice(1)) }}
-                className="flex items-center justify-between py-3.5 border-b border-sand-200 text-ink font-medium"
+                onClick={(e) => { e.preventDefault(); closeDrawer(item.href.slice(1)) }}
+                style={{ animationDelay: `${270 + i * 45}ms` }}
+                className="flex items-center justify-between py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors animate-[drawer-item_420ms_ease-out_both]"
               >
                 {item.label}
                 <ChevronRight className="w-4 h-4 text-sand-300" />
               </a>
             ))}
 
-            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Account</p>
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500 animate-[drawer-item_420ms_ease-out_both]" style={{ animationDelay: '380ms' }}>Account</p>
             {user ? (
               <>
-                <Link href="/orders" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                <Link href="/orders" onClick={() => closeDrawer()}
+                  className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
                   <Clock className="w-4 h-4 text-sand-500" /> My orders
                 </Link>
-                <Link href="/profile" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                <Link href="/profile" onClick={() => closeDrawer()}
+                  className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
                   <User className="w-4 h-4 text-sand-500" /> Profile
                 </Link>
-                <Link href="/profile#favorites" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+                <Link href="/profile#favorites" onClick={() => closeDrawer()}
+                  className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
                   <Heart className="w-4 h-4 text-sand-500" /> Favorites
                 </Link>
                 <button
-                  onClick={() => { setMobileMenuOpen(false); signOut() }}
+                  onClick={() => { closeDrawer(); signOut() }}
                   disabled={signingOut}
-                  className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-clay font-medium disabled:opacity-60 w-full"
+                  className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-clay font-medium disabled:opacity-60 w-full active:bg-clay-50 transition-colors"
                 >
                   <LogOut className="w-4 h-4" /> {signingOut ? 'Signing out…' : 'Sign out'}
                 </button>
               </>
             ) : (
-              <div className="flex gap-3 mt-3">
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+              <div className="flex gap-3 mt-3 animate-[drawer-item_420ms_ease-out_both]" style={{ animationDelay: '420ms' }}>
+                <Link href="/login" onClick={() => closeDrawer()}
                   className="flex-1 text-center py-3 rounded-control border border-sand-300 text-ink font-semibold">
                   Sign in
                 </Link>
-                <Link href="/register" onClick={() => setMobileMenuOpen(false)}
+                <Link href="/register" onClick={() => closeDrawer()}
                   className="flex-1 text-center py-3 rounded-control bg-kente text-sand-50 font-semibold">
                   Create account
                 </Link>
               </div>
             )}
 
-            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500">Visit us</p>
+            <p className="mt-8 mb-1 text-[11px] font-semibold tracking-[0.14em] uppercase text-sand-500 animate-[drawer-item_420ms_ease-out_both]" style={{ animationDelay: '470ms' }}>Visit us</p>
             <a href="tel:+18608055121"
-              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
               <Phone className="w-4 h-4 text-sand-500" /> (860) 805-5121
             </a>
             <a href="https://maps.google.com/?q=200+Hartford+Turnpike,+Vernon,+CT+06066"
               target="_blank" rel="noopener noreferrer"
-              className="flex items-start gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              className="flex items-start gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
               <MapPin className="w-4 h-4 text-sand-500 mt-0.5 shrink-0" />
               <span>200 Hartford Turnpike<br /><span className="text-sand-500 font-normal text-sm">Vernon, CT 06066</span></span>
             </a>
             <a href="mailto:orders@tasteofafricancuisine.com"
-              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
               <Mail className="w-4 h-4 text-sand-500 shrink-0" />
               <span className="break-all text-[15px]">orders@tasteofafricancuisine.com</span>
             </a>
             <a href={GOOGLE_REVIEWS_URL} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 py-3.5 border-b border-sand-200 text-ink font-medium">
+              className="flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg border-b border-sand-200 text-ink font-medium active:bg-sand-100 transition-colors">
               <Star className="w-4 h-4 text-sand-500 shrink-0" /> Google reviews
             </a>
             <div className="flex items-start gap-3 py-3.5 text-sand-700">
