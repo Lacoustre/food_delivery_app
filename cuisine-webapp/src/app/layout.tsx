@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from '@/lib/AuthContext';
@@ -38,6 +38,9 @@ export const metadata: Metadata = {
   // The site answers on both the apex and www. Without a canonical, Google
   // treats them as two sites competing with each other.
   alternates: { canonical: "/" },
+  // Installed on a phone, this is the name under the icon on the home
+  // screen and how the status bar is drawn.
+  appleWebApp: { capable: true, title: "African Cuisine", statusBarStyle: "default" },
   openGraph: {
     type: "website",
     siteName: "Taste of African Cuisine",
@@ -63,6 +66,12 @@ export const metadata: Metadata = {
     "geo.position": "41.82457;-72.4978",
     ICBM: "41.82457, -72.4978",
   },
+};
+
+// Tints the phone's status bar, and the splash while an installed copy
+// opens.
+export const viewport: Viewport = {
+  themeColor: "#C9982E",
 };
 
 export default async function RootLayout({
