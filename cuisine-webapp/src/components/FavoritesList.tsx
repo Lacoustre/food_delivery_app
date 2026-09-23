@@ -84,7 +84,7 @@ export function FavoritesList({ userId }: { userId: string }) {
                   {(offMenu || soldOut) && (
                     <div className="absolute inset-0 bg-ink/60 flex items-center justify-center p-2">
                       <span className="bg-clay text-sand-50 px-2.5 py-1 rounded-control text-xs font-semibold text-center">
-                        {offMenu ? 'No longer on the menu' : 'Sold out'}
+                        {offMenu ? 'No longer on the menu' : 'Unavailable'}
                       </span>
                     </div>
                   )}

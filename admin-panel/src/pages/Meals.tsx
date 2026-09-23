@@ -497,7 +497,7 @@ export default function Meals() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Sold out</p>
+              <p className="text-sm font-medium text-gray-600">Unavailable</p>
               <p className="text-2xl font-bold text-red-600">{soldOutMeals}</p>
               <p className="text-xs text-gray-500 mt-0.5">on the menu, out of stock</p>
             </div>

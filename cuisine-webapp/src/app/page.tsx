@@ -1354,7 +1354,7 @@ export default function AfricanCuisineWebsite() {
                               />
                               {soldOut && (
                                 <div className="absolute inset-0 bg-ink/65 flex items-center justify-center">
-                                  <span className="bg-clay text-sand-50 px-3 py-1.5 rounded-control text-xs font-semibold">Sold out</span>
+                                  <span className="bg-clay text-sand-50 px-3 py-1.5 rounded-control text-xs font-semibold">Unavailable</span>
                                 </div>
                               )}
                               <button
@@ -1380,7 +1380,7 @@ export default function AfricanCuisineWebsite() {
                               <span className="font-display text-base text-ink leading-tight line-clamp-2">{active.baseName}</span>
                               <span className="mt-auto pt-2 text-sm font-semibold text-ink tabular-nums">
                                 {allSoldOut
-                                  ? 'Sold out'
+                                  ? 'Unavailable'
                                   : `$${active.price?.toFixed(2)}`}
                               </span>
                             </button>
@@ -1414,7 +1414,7 @@ export default function AfricanCuisineWebsite() {
                                     >
                                       {variants.map(v => (
                                         <option key={v.id} value={v.id}>
-                                          {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · sold out' : ''}
+                                          {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · unavailable' : ''}
                                         </option>
                                       ))}
                                     </select>
@@ -1528,7 +1528,7 @@ export default function AfricanCuisineWebsite() {
                   >
                     {sheet.variants.map(v => (
                       <option key={v.id} value={v.id}>
-                        {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · sold out' : ''}
+                        {v.variantLabel}{v.isVegetarian && !/vegetarian/i.test(v.variantLabel ?? '') ? ' · vegetarian' : ''} — ${v.price.toFixed(2)}{v.available === false ? ' · unavailable' : ''}
                       </option>
                     ))}
                   </select>
@@ -1573,7 +1573,7 @@ export default function AfricanCuisineWebsite() {
                   ) : statusKnown && !isOpen
                         ? 'Closed'
                         : sheet.soldOut
-                          ? 'Sold out'
+                          ? 'Unavailable'
                           : 'Add to cart'}
                 </button>
               </div>
