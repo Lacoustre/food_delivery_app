@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
         { auth: { persistSession: false } }
       )
-      await admin.from('pending_orders').upsert({
+      const { error: writeError } = await admin.from('pending_orders').upsert({
         payment_intent_id: paymentIntent.id,
         user_id: caller.uid,
         payload: {
@@ -194,11 +194,27 @@ export async function POST(request: NextRequest) {
           uberQuoteId: uberQuoteId ?? null
         }
       }, { onConflict: 'payment_intent_id' })
+      // supabase-js returns its errors rather than throwing them, so the
+      // try/catch around this never saw a failed write.
+      if (writeError) throw writeError
     } catch (pendingError) {
-      // Losing the backstop must not stop the customer paying. It only means
-      // this one order depends on the browser finishing the job, which is what
-      // happened for every order before this existed.
-      console.error('pending_orders write failed:', pendingError)
+      // The backstop has to exist before the customer can pay. Without it, a
+      // payment that succeeds while the browser dies is money taken with no
+      // order and nothing to rebuild one from. That happened on 2026-09-22:
+      // the customer got no confirmation and paid a second time.
+      //
+      // So refuse the payment instead. An error at checkout is recoverable;
+      // a silent charge is not.
+      console.error('pending_orders write failed — refusing to take payment:', pendingError)
+      try {
+        await stripe.paymentIntents.cancel(paymentIntent.id)
+      } catch (cancelError) {
+        console.error('Could not cancel the unusable payment intent:', cancelError)
+      }
+      return NextResponse.json(
+        { error: 'We could not start this payment. Please try again in a moment.' },
+        { status: 503 }
+      )
     }
 
     // Return the quoted fee so checkout can reconcile its display with what

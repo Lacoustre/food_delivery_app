@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { pushOrderToClover } from '@/lib/clover'
+import { emailService } from '@/lib/emailService'
 
 /**
  * Creates the order when the browser could not.
@@ -96,6 +97,38 @@ export async function POST(request: NextRequest) {
       console.error(
         `ORPHANED PAYMENT ${intent.id}: charged ${intent.amount / 100} with no order and no pending record`
       )
+
+      // A line in a log helps nobody at the counter. Somebody has to know now,
+      // because the customer is out of pocket until they do.
+      try {
+        const { data: settingsRow } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'restaurant')
+          .maybeSingle()
+        const userId = intent.metadata?.supabase_user_id
+        let customerEmail: string | null = null
+        if (userId) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', userId)
+            .maybeSingle()
+          customerEmail = profile?.email ?? null
+        }
+        const to = settingsRow?.value?.email || process.env.RESTAURANT_ALERT_EMAIL
+        if (to) {
+          await emailService.sendOrphanPaymentAlert(
+            { paymentIntentId: intent.id, amount: intent.amount / 100, customerEmail },
+            to
+          )
+        } else {
+          console.error(`No restaurant address configured — ${intent.id} not announced`)
+        }
+      } catch (alertError) {
+        console.error(`Orphan alert failed for ${intent.id}:`, alertError)
+      }
+
       return NextResponse.json(
         { received: true, action: 'none', reason: 'no pending order found' },
         { status: 200 }

@@ -267,6 +267,55 @@ export const emailService = {
    * Deliberately plain. It is read on a phone in a kitchen, usually in a
    * hurry, so what matters is at the top and nothing needs scrolling past.
    */
+  /**
+   * A card payment succeeded with no order behind it. Rare and serious: the
+   * money is taken and the kitchen knows nothing. Until this existed, the
+   * only trace was a line in the server log — the customer it happened to
+   * assumed the payment had failed and paid a second time.
+   */
+  async sendOrphanPaymentAlert(
+    {
+      paymentIntentId,
+      amount,
+      customerEmail
+    }: { paymentIntentId: string; amount: number; customerEmail?: string | null },
+    to: string
+  ) {
+    try {
+      const result = await sendEmail({
+        to,
+        subject: `Payment with no order — ${money(amount)}`,
+        html: layout(
+          `A card payment of ${money(amount)} went through with no order behind it.`,
+          `
+          ${heading('A payment has no order')}
+          <p style="margin:0 0 14px 0;">
+            A customer was charged <strong>${money(amount)}</strong>, but no order was
+            created and nothing has reached the kitchen.
+          </p>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px 0;">
+            <tr>
+              <td style="padding:12px 14px;background:${C.sand};border-left:4px solid ${C.clay};font-size:15px;line-height:1.6;">
+                Stripe payment <strong>${esc(paymentIntentId)}</strong>
+                ${customerEmail ? `<br>${esc(customerEmail)}` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0;color:${C.muted};">
+            Find it in Stripe, call the customer, and either take the order by phone
+            or refund the payment.
+          </p>
+        `)
+      })
+      return { success: true, data: result }
+    } catch (error) {
+      console.error('Orphan payment alert failed:', error)
+      return { success: false, error }
+    }
+  },
+
   async sendNewOrderAlert(
     data: OrderEmailData & { customerPhone?: string; scheduledFor?: string | null; paymentMethod?: string },
     to: string
