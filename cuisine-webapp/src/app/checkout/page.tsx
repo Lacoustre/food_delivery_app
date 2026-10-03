@@ -15,6 +15,7 @@ import { createPaymentIntent, stripePromise } from '@/lib/stripeService'
 import { getAuthHeaders } from '@/lib/authHeaders'
 import { computeOrderTotals } from '@/lib/pricing'
 import { keyOf, lineDetail } from '@/lib/modifiers'
+import { GRAND_OPENING } from '@/lib/grandOpening'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -884,6 +885,7 @@ function CheckoutContent() {
               <div className="mb-6">
                 <PromoCode
                   orderTotal={subtotal + deliveryFee}
+                  autoApplyCode={GRAND_OPENING.code}
                   onPromoApplied={(promotion, discount) => setAppliedPromo({ promotion, discount })}
                   onPromoRemoved={() => setAppliedPromo(undefined)}
                   appliedPromo={appliedPromo}

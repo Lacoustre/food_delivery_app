@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/AuthContext'
 import OrderNotifications from '@/components/OrderNotifications'
 import { mealImageSrc } from '@/lib/mealImage'
 import { DishPhoto } from '@/components/DishPhoto'
+import { GrandOpeningBanner } from '@/components/GrandOpeningBanner'
 import { ModifierPicker } from '@/components/ModifierPicker'
 import { fetchModifiers, modifiersFor, lineKey, keyOf, type Modifier, type ChosenModifier } from '@/lib/modifiers'
 
@@ -583,6 +584,7 @@ export default function AfricanCuisineWebsite() {
           normal flow while the nav was fixed on top of it, so the closed
           notice rendered straight through the middle of the header. */}
       <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
+        <GrandOpeningBanner />
         {statusKnown && !isOpen && (
           <div className="bg-clay-700 text-sand-50 py-2 px-4 text-center text-[13px]">
             {/* One line. It used to read "We're closed right now." followed by
@@ -797,18 +799,16 @@ export default function AfricanCuisineWebsite() {
         <>
           <div
             onClick={() => closeDrawer()}
-            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 backdrop-blur-[2px] touch-none ${
-              statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
-            } ${drawerClosing ? 'animate-[veil-out_260ms_ease-in_both]' : 'animate-[veil-in_320ms_ease-out_both]'}`}
+            className={`md:hidden fixed inset-x-0 bottom-0 z-40 bg-ink/45 backdrop-blur-[2px] touch-none ${drawerClosing ? 'animate-[veil-out_260ms_ease-in_both]' : 'animate-[veil-in_320ms_ease-out_both]'}`}
+            style={{ top: headerH }}
           />
           <div
             className={`md:hidden fixed right-0 bottom-0 z-40 w-[80%] max-w-xs flex flex-col bg-sand-50 border-l border-sand-200 shadow-lift rounded-l-2xl will-change-transform ${
-              statusKnown && !isOpen ? 'top-[6.25rem]' : 'top-16'
-            } ${
               drawerClosing
                 ? 'animate-[drawer-out_260ms_cubic-bezier(0.4,0,1,1)_both]'
                 : 'animate-[drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)_both]'
             }`}
+            style={{ top: headerH }}
           >
           <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
 

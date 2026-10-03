@@ -1,20 +1,40 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Tag, Check, X } from 'lucide-react'
 import { promotionsService, type Promotion } from '@/lib/promotionsService'
 
 interface PromoCodeProps {
   orderTotal: number
+  /** Tried once on open, silently. Nothing shows if it isn't valid today. */
+  autoApplyCode?: string
   onPromoApplied: (promotion: Promotion, discount: number) => void
   onPromoRemoved: () => void
   appliedPromo?: { promotion: Promotion, discount: number }
 }
 
-export default function PromoCode({ orderTotal, onPromoApplied, onPromoRemoved, appliedPromo }: PromoCodeProps) {
+export default function PromoCode({ orderTotal, autoApplyCode, onPromoApplied, onPromoRemoved, appliedPromo }: PromoCodeProps) {
   const [promoCode, setPromoCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // A customer shouldn't have to notice a banner and copy a code to get a
+  // discount the restaurant is giving everyone. The server validates it the
+  // same way whoever typed it, and refuses it outside its dates — in which
+  // case this says nothing at all.
+  const autoTried = useRef(false)
+  useEffect(() => {
+    if (!autoApplyCode || appliedPromo || autoTried.current) return
+    autoTried.current = true
+    promotionsService
+      .validatePromoCode(autoApplyCode, orderTotal)
+      .then(result => {
+        if (result.valid && result.promotion && result.discount !== undefined) {
+          onPromoApplied(result.promotion, result.discount)
+        }
+      })
+      .catch(() => {})
+  }, [autoApplyCode, appliedPromo, orderTotal, onPromoApplied])
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return
